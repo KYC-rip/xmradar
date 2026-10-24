@@ -5,11 +5,12 @@ import { linkedinExtractor } from './linkedin';
 import { mastodonExtractor } from './mastodon';
 import type { ExtractedPost, Extractor } from './types';
 import { xExtractor } from './x';
+import { xArticleExtractor } from './x-article';
 
-export type { ExtractedImage, ExtractedPost } from './types';
+export type { ExtractedArticle, ExtractedImage, ExtractedPost } from './types';
 
-// order matters: mastodon detection is selector-based and could match anywhere
-export const extractors: Extractor[] = [xExtractor, blueskyExtractor, linkedinExtractor, facebookExtractor, mastodonExtractor];
+// order matters: X Articles live at /status/ URLs too, so they go before tweets; mastodon detection is selector-based and could match anywhere
+export const extractors: Extractor[] = [xArticleExtractor, xExtractor, blueskyExtractor, linkedinExtractor, facebookExtractor, mastodonExtractor];
 
 export interface ExtractResult {
   post: ExtractedPost;
@@ -30,6 +31,10 @@ export function extractPost(target: Element | null, doc: Document, opts: { selec
   post ??= genericExtract(target, doc, opts.srcUrl);
   // an explicit selection is the clearest signal of what the user wants to share
   const selection = opts.selection?.trim();
-  if (selection) post = { ...post, text: selection };
+  // (and means "share this fragment as a note", even inside an article)
+  if (selection) {
+    const { article: _article, ...rest } = post;
+    post = { ...rest, text: selection };
+  }
   return { post, fallback };
 }

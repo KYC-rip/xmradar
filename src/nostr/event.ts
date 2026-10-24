@@ -1,4 +1,6 @@
 import { verifyEvent, type Event, type EventTemplate } from 'nostr-tools/pure';
+import type { ExtractedArticle, ExtractedImage } from '../extractors/types';
+import { replaceImages } from '../extractors/html-to-markdown';
 
 export interface PostImage {
   url: string;
@@ -48,6 +50,92 @@ export function buildNote(opts: {
     content: parts.filter(Boolean).join('\n\n'),
     tags,
   };
+}
+
+export const KIND_ARTICLE = 30023;
+export const ARTICLE_WARN_BYTES = 60_000;
+
+/** NIP-23 long-form article. `d` is the tweet ID, so publishing again replaces the earlier version. */
+export function buildArticle(opts: {
+  tweetId: string;
+  title: string;
+  summary: string;
+  markdown: string;
+  cover?: PostImage;
+  images: PostImage[];
+  sourceUrl: string;
+  publishedAt: number;
+  appendSource?: boolean;
+  now?: number;
+}): EventTemplate {
+  const source = normalizeUrl(opts.sourceUrl);
+  const parts = [opts.markdown.trim()];
+  if (opts.appendSource) parts.push(`---\n\nOriginally published on X: ${source}`);
+  const seen = new Set<string>();
+  const media = [...(opts.cover ? [opts.cover] : []), ...opts.images].filter((img) => !seen.has(img.url) && !!seen.add(img.url));
+  const tags = [
+    ['d', `x-${opts.tweetId}`],
+    ['title', opts.title.trim()],
+  ];
+  if (opts.summary.trim()) tags.push(['summary', opts.summary.trim()]);
+  if (opts.cover) tags.push(['image', opts.cover.url]);
+  tags.push(['published_at', String(Math.floor(opts.publishedAt / 1000))], ['r', source], ['alt', `Long-form article: ${opts.title.trim()}`]);
+  tags.push(...media.map(imetaTag), ['client', 'XMRadar']);
+  return { kind: KIND_ARTICLE, created_at: opts.now ?? Math.floor(Date.now() / 1000), content: parts.join('\n\n'), tags };
+}
+
+/**
+ * The composer's article, from what the user kept: `prepared` holds the ticked images with their
+ * final (uploaded or original) URLs. Unticked images leave the Markdown; an unticked cover drops
+ * the image tag.
+ */
+export function articleTemplate(opts: {
+  article: ExtractedArticle;
+  postImages: ExtractedImage[];
+  prepared: Map<ExtractedImage, PostImage>;
+  title: string;
+  summary: string;
+  markdown: string;
+  sourceUrl: string;
+  appendSource?: boolean;
+  now?: number;
+}): EventTemplate {
+  const { article, postImages, prepared } = opts;
+  // original URL → final URL, or null to drop an unticked image from the Markdown
+  const finals = new Map(postImages.map((i) => [i.url, prepared.get(i)?.url ?? null] as const));
+  const coverImg = article.cover && postImages.find((i) => i.url === article.cover!.url);
+  return buildArticle({
+    tweetId: article.id,
+    title: opts.title,
+    summary: opts.summary,
+    markdown: replaceImages(opts.markdown, finals),
+    cover: coverImg ? prepared.get(coverImg) : undefined,
+    images: postImages.filter((i) => i !== coverImg && prepared.has(i)).map((i) => prepared.get(i)!),
+    sourceUrl: opts.sourceUrl,
+    publishedAt: article.publishedAt,
+    appendSource: opts.appendSource,
+    now: opts.now,
+  });
+}
+
+export const wordCount = (markdown: string) => (markdown.replace(/!\[[^\]]*\]\(<[^>]*>\)|\]\(<[^>]*>\)|[#*_>`\\-]/g, ' ').match(/[\p{L}\p{N}][\p{L}\p{N}'’.]*/gu) ?? []).length;
+
+export const articleTooLarge = (content: string) => new TextEncoder().encode(content).length > ARTICLE_WARN_BYTES;
+
+/**
+ * Background-side shape check before publishing: notes, or articles whose `d` matches the
+ * X status they were copied from. The signer prompt stays the real boundary.
+ */
+export function checkPublishable(ev: Event, sourceUrl: string, statusId: (url: string) => string | null): void {
+  if (ev.kind === 1) return;
+  if (ev.kind === KIND_ARTICLE) {
+    const tag = (n: string) => ev.tags.find((t) => t[0] === n)?.[1];
+    const id = statusId(sourceUrl);
+    if (!id || tag('d') !== `x-${id}`) throw new Error('Article ID does not match its X post');
+    if (!tag('title')?.trim()) throw new Error('Article has no title');
+    return;
+  }
+  throw new Error('Refusing to publish this kind of event');
 }
 
 /** BUD-02 upload authorization event. */

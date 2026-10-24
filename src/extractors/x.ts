@@ -1,7 +1,7 @@
 import { absUrl, htmlToText, resolveDisplayedLink } from './html-to-text';
 import type { ExtractedImage, Extractor } from './types';
 
-function fullSizeTwimg(src: string): string {
+export function fullSizeTwimg(src: string): string {
   try {
     const u = new URL(src);
     if (u.hostname === 'pbs.twimg.com' && u.pathname.startsWith('/media/')) u.searchParams.set('name', 'orig');
@@ -40,6 +40,8 @@ export const xExtractor: Extractor = {
       })
       .filter((i) => i.url);
     const permalink = article.querySelector('a[href*="/status/"] time')?.closest('a')?.getAttribute('href');
-    return { site: 'x', text, images, sourceUrl: absUrl(permalink, doc) ?? doc.location.href };
+    // best effort: X may render the shared-article card through a different link
+    const articleCard = !!article.querySelector('a[href*="/article/"]');
+    return { site: 'x', text, images, sourceUrl: absUrl(permalink, doc) ?? doc.location.href, ...(articleCard ? { articleCard } : {}) };
   },
 };

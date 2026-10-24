@@ -1,4 +1,4 @@
-import { neventEncode } from 'nostr-tools/nip19';
+import { naddrEncode, neventEncode } from 'nostr-tools/nip19';
 import { verifyEvent, type Event, type EventTemplate } from 'nostr-tools/pure';
 import { installBridge } from '../bridge';
 import { TokenBucket } from '../identity/bucket';
@@ -11,7 +11,8 @@ import { mergeBadge, resolveHandles, withoutNostr, type Badge } from '../identit
 import { resolveXmrbio, type SeenEntries } from '../identity/xmrbio';
 import type { BgRequest, BgResponse, ImageInfo, OpenComposerMsg, OpenTipMsg, PreparedSetup, ResolveHandlesResult, SetupRequest, SetupStatus, Wrapped } from '../messaging';
 import { uploadBlob } from '../nostr/blossom';
-import { checkBlossomAuth, checkSigned, dedupeKey, sha256Hex } from '../nostr/event';
+import { statusIdFromUrl } from '../extractors/x-article';
+import { KIND_ARTICLE, checkBlossomAuth, checkPublishable, checkSigned, dedupeKey, sha256Hex } from '../nostr/event';
 import { allRelaysFrom, fetchWriteRelays, publishToRelays, readEach } from '../nostr/relays';
 import { assertFetchableImageUrl } from '../nostr/url-guard';
 import { checkSessionSender, isExtensionPageSender, isXUrl } from '../sender';
@@ -222,7 +223,8 @@ async function handle(msg: BgRequest, sender: Browser.runtime.MessageSender): Pr
     }
     case 'publish': {
       await requireSession(msg.sessionId, sender);
-      if (msg.event.kind !== 1 || !verifyEvent(msg.event)) throw new Error('Refusing to publish an invalid event');
+      checkPublishable(msg.event, msg.sourceUrl, statusIdFromUrl);
+      if (!verifyEvent(msg.event)) throw new Error('Refusing to publish an invalid event');
       await pubkeyItem.setValue(msg.event.pubkey);
       const relays = await resolveRelays(msg.event.pubkey);
       const key = await dedupeKey(msg.sourceUrl, msg.text);
@@ -233,7 +235,9 @@ async function handle(msg: BgRequest, sender: Browser.runtime.MessageSender): Pr
         await postedItem.setValue([...posted.filter((k) => k !== key), key].slice(-1000));
       }
       const nevent = neventEncode({ id: msg.event.id, author: msg.event.pubkey, relays: okRelays.slice(0, 3) });
-      return { results, nevent };
+      if (msg.event.kind !== KIND_ARTICLE) return { results, nevent };
+      const identifier = msg.event.tags.find((t) => t[0] === 'd')![1]!;
+      return { results, nevent, naddr: naddrEncode({ kind: KIND_ARTICLE, pubkey: msg.event.pubkey, identifier, relays: okRelays.slice(0, 3) }) };
     }
     case 'check-duplicate': {
       await requireSession(msg.sessionId, sender);

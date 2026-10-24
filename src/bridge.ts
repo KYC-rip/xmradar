@@ -18,7 +18,8 @@ export function installBridge(): void {
   const w = window as unknown as { __s2nBridge?: boolean; nostr?: any };
   if (w.__s2nBridge) return;
   w.__s2nBridge = true;
-  const ALLOWED_KINDS = [1, 24242];
+  // notes, Blossom upload auth, long-form articles (NIP-23)
+  const ALLOWED_KINDS = [1, 24242, 30023];
 
   const waitForSigner = async () => {
     for (let i = 0; i < 30 && !w.nostr; i++) await new Promise((r) => setTimeout(r, 100));

@@ -92,7 +92,7 @@ export type BgResponse<T extends BgRequest['type']> = T extends 'fetch-image'
   : T extends 'upload-image'
     ? { url: string }
     : T extends 'publish'
-      ? { results: RelayResult[]; nevent: string }
+      ? { results: RelayResult[]; nevent: string; naddr?: string }
       : T extends 'check-duplicate'
         ? { duplicate: boolean }
         : T extends 'load-nip65'

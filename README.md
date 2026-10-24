@@ -34,6 +34,10 @@ pnpm dev          # Chrome with hot reload; `pnpm dev:firefox` for Firefox
 - **Append link to original** (default off).
 - **Debug**: shows the unsigned event JSON before signing.
 
+## X Articles (long-form)
+
+Open an X Article on its own page (it has a normal `/status/<id>` link), right-click anywhere in it → **Copy to Nostr**. XMRadar turns the article into Markdown (headings, bold and italic, lists, links, images, separators) and publishes it as a NIP-23 long-form article (kind 30023) with its title, summary, cover image and original date. The cover and inline images are re-uploaded to your Blossom server unless you untick them; an unticked image is removed from the text. The article's ID on Nostr is the tweet ID, so publishing it again replaces the earlier version instead of making a copy. Selecting text first shares just that selection as a normal note. A tweet that only shares an article card still becomes a note, with a hint to open the article.
+
 ## Tip with Monero (Phase 2a)
 
 On x.com, right-click a tweet or profile → **Tip with Monero (look up on xmr.bio)**. XMRadar asks xmr.bio about that one handle (only on this click), checks the response signature against the pinned xmr.bio key, rejects stale or replayed responses, and validates the address (mainnet, Keccak checksum). The popup shows a `monero:` QR code, the address, an optional amount, an "Open in wallet" link and where the data came from. XMRadar never sends or holds funds. Badges on X come in later phases (see PLAN-PHASE2.md).

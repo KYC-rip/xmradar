@@ -23,6 +23,15 @@ describe('bridge', () => {
   it('refuses kinds outside the allowlist', async () => {
     w.nostr = { signEvent: async (t: never) => finalizeEvent(t, sk) };
     await expect(callBridge('signEvent', { kind: 0, content: '{}', tags: [], created_at: 1 })).rejects.toThrow(/rejected/);
+    for (const kind of [3, 10002, 10011, 10133]) {
+      await expect(callBridge('signEvent', { kind, content: '', tags: [], created_at: 1 })).rejects.toThrow(/rejected/);
+    }
+  });
+
+  it('signs long-form articles (kind 30023)', async () => {
+    w.nostr = { signEvent: async (t: never) => finalizeEvent(t, sk) };
+    const signed = await callBridge<{ kind: number }>('signEvent', { kind: 30023, content: '# hi', tags: [['d', 'x-1']], created_at: 1 });
+    expect(signed.kind).toBe(30023);
   });
 
   it('waits for a late signer, then reports when none exists', async () => {

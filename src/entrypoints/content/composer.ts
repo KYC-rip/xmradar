@@ -5,7 +5,7 @@ import { createShadowRootUi } from 'wxt/utils/content-script-ui/shadow-root';
 import { callBridge } from '../../bridge';
 import { extractPost, type ExtractedImage } from '../../extractors';
 import { sendToBackground, type OpenComposerMsg, type RelayResult } from '../../messaging';
-import { blossomAuthTemplate, buildNote, checkSigned, encodeAuthHeader, type PostImage } from '../../nostr/event';
+import { articleTemplate, articleTooLarge, blossomAuthTemplate, buildNote, checkSigned, encodeAuthHeader, wordCount, type PostImage } from '../../nostr/event';
 import { settingsItem } from '../../settings';
 import { h, trapFocus } from './dom';
 
@@ -62,9 +62,18 @@ async function mountComposer(ctx: ContentScriptContext, msg: OpenComposerMsg, ta
         status.textContent = text;
       };
 
-      const textarea = h('textarea', { value: post.text, rows: 8, attrs: { 'aria-label': 'Note text' } });
+      const art = post.article;
+      const textarea = h('textarea', { value: post.text, rows: art ? 16 : 8, attrs: { 'aria-label': art ? 'Article text (Markdown)' : 'Note text' } });
+      const titleInput = h('input', { type: 'text', value: art?.title ?? '', attrs: { 'aria-label': 'Article title', placeholder: 'Title' } });
+      const summaryInput = h('input', { type: 'text', value: art?.summary ?? '', attrs: { 'aria-label': 'Article summary', placeholder: 'Summary (optional)' } });
+      const sizeLine = h('div', { class: 'warn hidden' }, 'This article is over 60 KB. Some relays reject events this large.');
+      const wordsLine = h('div', { class: 'signer' });
       const signerLine = h('div', { class: 'signer' }, 'Connecting to signer…');
-      const dupeLine = h('div', { class: 'warn hidden' }, 'You already posted this to Nostr.');
+      const dupeLine = h(
+        'div',
+        { class: 'warn hidden' },
+        art ? 'You already published this article. Publishing again replaces the earlier version.' : 'You already posted this to Nostr.',
+      );
 
       const selected = new Set<ExtractedImage>(post.images);
       const imageGrid = h(
@@ -81,17 +90,22 @@ async function mountComposer(ctx: ContentScriptContext, msg: OpenComposerMsg, ta
       const appendSource = h('input', { type: 'checkbox', checked: settings.appendSourceLink });
       const debugPre = h('pre', { class: settings.debug ? 'debug' : 'hidden' });
       const results = h('ul', { class: 'results' });
-      const publishBtn = h('button', { class: 'primary', textContent: 'Publish' });
+      const publishBtn = h('button', { class: 'primary', textContent: art ? 'Publish article' : 'Publish' });
       const cancelBtn = h('button', { textContent: 'Cancel' });
 
       const dialog = h(
         'div',
         { class: 'dialog', attrs: { role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Copy post to Nostr' } },
-        h('header', {}, h('h2', { textContent: 'Copy to Nostr' }), h('span', { class: 'site', textContent: post.site })),
+        h('header', {}, h('h2', { textContent: art ? 'Copy article to Nostr' : 'Copy to Nostr' }), h('span', { class: 'site', textContent: art ? 'X Article' : post.site })),
         fallback ? h('div', { class: 'warn' }, msg.selection ? "Couldn't detect a post — using your selection." : "Couldn't detect a post — using page content.") : '',
+        post.articleCard ? h('div', { class: 'warn' }, 'This post shares an X Article. To copy the whole article, open it and use Copy to Nostr there.') : '',
         signerLine,
         dupeLine,
+        art ? titleInput : '',
+        art ? summaryInput : '',
         textarea,
+        art ? wordsLine : '',
+        art ? sizeLine : '',
         post.images.length ? imageGrid : '',
         h(
           'div',
@@ -137,7 +151,14 @@ async function mountComposer(ctx: ContentScriptContext, msg: OpenComposerMsg, ta
           .then((r) => dupeLine.classList.toggle('hidden', !r.duplicate))
           .catch(() => {});
       void checkDuplicate();
+      const checkSize = () => {
+        if (!art) return;
+        sizeLine.classList.toggle('hidden', !articleTooLarge(textarea.value));
+        wordsLine.textContent = `${wordCount(textarea.value).toLocaleString()} words`;
+      };
+      checkSize();
       textarea.addEventListener('input', () => {
+        checkSize();
         clearTimeout(dupeTimer);
         dupeTimer = setTimeout(checkDuplicate, 400);
       });
@@ -177,9 +198,10 @@ async function mountComposer(ctx: ContentScriptContext, msg: OpenComposerMsg, ta
       publishBtn.addEventListener('click', async () => {
         if (done) return close();
         if (busy) return;
+        if (art && (!titleInput.value.trim() || !textarea.value.trim())) return setStatus('The article needs a title and text', 'error');
         if (!textarea.value.trim() && !selected.size) return setStatus('Nothing to post', 'error');
         busy = true;
-        textarea.readOnly = true;
+        textarea.readOnly = titleInput.readOnly = summaryInput.readOnly = true;
         publishBtn.disabled = true;
         publishBtn.classList.add('busy');
         results.replaceChildren();
@@ -188,14 +210,28 @@ async function mountComposer(ctx: ContentScriptContext, msg: OpenComposerMsg, ta
             const err = await connect();
             if (err) throw new Error(err);
           }
-          const images: PostImage[] = [];
+          const prepared = new Map<ExtractedImage, PostImage>();
           for (const img of post.images.filter((i) => selected.has(i))) {
-            setStatus(`Uploading image ${images.length + 1}…`);
-            images.push(await prepareImage(img));
+            setStatus(`Uploading image ${prepared.size + 1}…`);
+            prepared.set(img, await prepareImage(img));
             if (closed) return;
           }
           const text = textarea.value;
-          const template = buildNote({ text, images, sourceUrl: post.sourceUrl, appendSource: appendSource.checked });
+          let template: EventTemplate;
+          if (art) {
+            template = articleTemplate({
+              article: art,
+              postImages: post.images,
+              prepared,
+              title: titleInput.value,
+              summary: summaryInput.value,
+              markdown: text,
+              sourceUrl: post.sourceUrl,
+              appendSource: appendSource.checked,
+            });
+          } else {
+            template = buildNote({ text, images: [...prepared.values()], sourceUrl: post.sourceUrl, appendSource: appendSource.checked });
+          }
           if (settings.debug) debugPre.textContent = JSON.stringify(template, null, 2);
           setStatus('Waiting for signer…');
           const event = await sign(template);
@@ -205,23 +241,24 @@ async function mountComposer(ctx: ContentScriptContext, msg: OpenComposerMsg, ta
           renderResults(res.results);
           if (res.results.some((r) => r.ok)) {
             done = true;
-            const link = `https://njump.me/${res.nevent}`;
+            const ref = res.naddr ?? res.nevent;
+            const link = `https://njump.me/${ref}`;
             status.className = 'status ok';
             status.replaceChildren(
               'Published! ',
               h('a', { href: link, target: '_blank', rel: 'noopener', textContent: 'View on njump' }),
               ' ',
-              h('button', { class: 'link', textContent: 'Copy nevent', onclick: () => void navigator.clipboard.writeText(res.nevent) }),
+              h('button', { class: 'link', textContent: res.naddr ? 'Copy naddr' : 'Copy nevent', onclick: () => void navigator.clipboard.writeText(ref) }),
             );
             publishBtn.textContent = 'Done';
             textarea.readOnly = true;
           } else {
-            setStatus('No relay accepted the note.', 'error');
+            setStatus(`No relay accepted the ${art ? 'article' : 'note'}.`, 'error');
           }
         } catch (e) {
           setStatus((e as Error).message, 'error');
         } finally {
-          if (!done) textarea.readOnly = false;
+          if (!done) textarea.readOnly = titleInput.readOnly = summaryInput.readOnly = false;
           busy = false;
           publishBtn.classList.remove('busy');
           publishBtn.disabled = false;
