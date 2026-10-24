@@ -53,7 +53,7 @@ export function twitterClaims(event: Event, wanted: ReadonlySet<string>): Twitte
 }
 
 /** verifyEvent caches its verdict on the object (and spreads copy it), so check a fresh plain copy. */
-const validEvent = (e: Event) =>
+export const validEvent = (e: Event) =>
   verifyEvent({ id: e.id, pubkey: e.pubkey, created_at: e.created_at, kind: e.kind, tags: e.tags, content: e.content, sig: e.sig });
 
 /** Newest valid event per pubkey. */

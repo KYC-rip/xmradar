@@ -47,3 +47,6 @@ export interface XmrSettings {
 export const xmrSettingsItem = storage.defineItem<XmrSettings>('sync:xmrSettings', {
   fallback: { badges: true, nostrDiscovery: false },
 });
+
+/** The user's own X handle; `proven` once their NIP-39 proof tweet passed. Used to hide their own badge. */
+export const myHandleItem = storage.defineItem<{ handle: string; proven: boolean } | null>('local:myHandle', { fallback: null });

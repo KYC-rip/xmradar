@@ -6,7 +6,7 @@ h1 { font-size: 22px; }
 h2 { font-size: 15px; margin: 0 0 6px; }
 section { margin: 0 0 22px; display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
 .hint { margin: 0; color: var(--muted); font-size: 13px; }
-textarea, input[type='url'] { width: 100%; box-sizing: border-box; font: inherit; padding: 7px 9px; border: 1px solid var(--border); border-radius: 7px; background: transparent; color: inherit; }
+textarea, input[type='url'], input[type='text'] { width: 100%; box-sizing: border-box; font: inherit; padding: 7px 9px; border: 1px solid var(--border); border-radius: 7px; background: transparent; color: inherit; }
 label { display: flex; gap: 6px; align-items: center; width: 100%; }
 button { font: inherit; padding: 6px 13px; border-radius: 7px; border: 1px solid var(--border); background: transparent; color: inherit; cursor: pointer; }
 button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
@@ -16,3 +16,12 @@ code { font-size: 12px; word-break: break-all; }
 .error { color: #c62828; }
 .ok { color: #2e7d32; }
 footer { display: flex; gap: 12px; align-items: center; }
+h3 { font-size: 14px; margin: 10px 0 0; }
+.row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; width: 100%; }
+.row input { flex: 1; min-width: 160px; width: auto; }
+.state { margin: 0; padding-left: 18px; }
+.confirm { width: 100%; box-sizing: border-box; border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
+.diff { margin: 0; font-size: 12px; white-space: pre-wrap; word-break: break-all; max-height: 260px; overflow: auto; }
+.diff .add { color: #2e7d32; }
+.diff .del { color: #c62828; text-decoration: line-through; }
+.results { margin: 0; padding-left: 18px; font-size: 13px; }

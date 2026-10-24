@@ -45,6 +45,46 @@
         </p>
       </section>
 
+      <section id="identity">
+        <h2>Your Monero identity</h2>
+        <p class="hint">
+          Publish your Monero address and link your X account on Nostr, so XMRadar users see a tip badge on your tweets.
+          Each change is signed in a temporary tab, and your signer shows the event before you approve it.
+        </p>
+        <div class="row">Signing key: <code id="id-npub">not connected (use "Test signer" above)</code></div>
+        <ul id="id-state" class="state">
+          <li>Address published: <span id="id-state-address">unknown</span></li>
+          <li>X handle proven: <span id="id-state-handle">unknown</span></li>
+        </ul>
+        <p class="hint">Your badge is live once both are done. <button id="id-refresh">Check status</button></p>
+
+        <h3>1. Your X handle</h3>
+        <div class="row"><span>@</span><input id="id-handle" type="text" spellcheck="false" placeholder="yourhandle" /><button id="id-handle-save">Confirm</button></div>
+
+        <h3>2. Monero address</h3>
+        <input id="id-address" type="text" spellcheck="false" placeholder="4… or 8… (mainnet)" />
+        <div class="row"><button id="id-address-publish">Publish address</button><button id="id-address-remove">Remove my address</button></div>
+
+        <h3>3. Link your X account</h3>
+        <p class="hint">Post the proof tweet from your account, then paste its link here.</p>
+        <div class="row"><button id="id-tweet">Post proof tweet on X</button></div>
+        <input id="id-tweet-url" type="url" placeholder="https://x.com/yourhandle/status/…" />
+        <div class="row"><button id="id-link">Check tweet and link</button><button id="id-unlink">Unlink X</button></div>
+
+        <div id="id-confirm" class="confirm hidden">
+          <h3>Review the change</h3>
+          <div id="id-summary"></div>
+          <pre id="id-diff" class="diff"></pre>
+          <label><input id="id-is-me" type="checkbox" /> <span>Sign as <code id="id-confirm-npub"></code>. This is my key.</span></label>
+          <label id="id-partial-row" class="hidden"><input id="id-partial" type="checkbox" /> <span>Publish anyway. Tags that exist only on the unreadable relays may be lost.</span></label>
+          <div class="row"><button id="id-sign" class="primary" disabled>Sign and publish</button><button id="id-cancel">Cancel</button></div>
+        </div>
+        <ul id="id-results" class="results"></ul>
+        <button id="id-retry" class="hidden">Retry failed relays</button>
+        <span id="id-status" role="status" aria-live="polite"></span>
+        <p class="hint">Also on <a href="https://xmr.bio" target="_blank" rel="noopener noreferrer">xmr.bio</a>: claim or refresh your profile there and use its "Link Nostr" button.</p>
+      </section>
+
       <section>
         <h2>Behaviour</h2>
         <label><input id="append-source" type="checkbox" /> Append link to the original post by default</label>

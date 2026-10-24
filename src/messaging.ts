@@ -1,6 +1,7 @@
 import type { Event } from 'nostr-tools/pure';
 import type { ResolvedIdentity } from './identity/envelope';
 import type { Badge } from './identity/resolve';
+import type { ProofResult } from './identity/nostr';
 import type { AddressCheck } from './xmr/address';
 
 /** background → content */
@@ -27,6 +28,35 @@ export interface ResolveHandlesResult {
   pending: string[];
 }
 
+/** What the options page asks to change; the background validates and fills in the rest. */
+export type SetupRequest =
+  | { type: 'add-address'; address: string }
+  | { type: 'remove-address' }
+  | { type: 'link-x'; tweetUrl: string }
+  | { type: 'unlink-x' };
+
+export interface SetupStatus {
+  pubkey: string;
+  relays: string[];
+  unreadable: string[];
+  /** monero payto in the current kind 10133 */
+  address: { address: string; check: AddressCheck } | null;
+  /** twitter claim for the confirmed handle in the current kind 10011 */
+  link: { handle: string; tweetUrl: string; proof: ProofResult } | null;
+}
+
+export interface PreparedSetup {
+  id: string;
+  kind: number;
+  pubkey: string;
+  before: string[][] | null;
+  after: string[][];
+  /** relays that were read and will be published to */
+  relays: string[];
+  /** relays that couldn't be read; skipped for this change, and tags only stored there may be lost */
+  unreadable: string[];
+}
+
 export interface ImageInfo {
   sha256: string;
   mime: string;
@@ -50,7 +80,12 @@ export type BgRequest =
   | { type: 'load-nip65'; pubkey: string }
   | { type: 'test-signer' }
   | { type: 'xmrbio-resolve'; handle: string }
-  | { type: 'resolve-handles'; handles: string[] };
+  | { type: 'resolve-handles'; handles: string[] }
+  | { type: 'setup-status' }
+  | { type: 'setup-prepare'; action: SetupRequest }
+  | { type: 'setup-sign'; id: string }
+  | { type: 'setup-retry'; id: string }
+  | { type: 'setup-cancel' };
 
 export type BgResponse<T extends BgRequest['type']> = T extends 'fetch-image'
   ? ImageInfo
@@ -70,7 +105,15 @@ export type BgResponse<T extends BgRequest['type']> = T extends 'fetch-image'
                 ? XmrbioResult
                 : T extends 'resolve-handles'
                   ? ResolveHandlesResult
-                  : never;
+                  : T extends 'setup-status'
+                    ? SetupStatus
+                    : T extends 'setup-prepare'
+                      ? PreparedSetup
+                      : T extends 'setup-sign' | 'setup-retry'
+                        ? { results: RelayResult[] }
+                        : T extends 'setup-cancel'
+                          ? null
+                          : never;
 
 /** Every response is wrapped so errors survive the message boundary. */
 export type Wrapped<T> = { ok: true; data: T } | { ok: false; error: string };

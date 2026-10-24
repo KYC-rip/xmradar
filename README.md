@@ -12,17 +12,17 @@ Right-click a post → **Copy post to Nostr** → edit in the preview → **Publ
 
 ```sh
 pnpm install
-pnpm build        # → .output/chrome-mv3 and .output/firefox-mv3
+pnpm build        # → output/chrome-mv3 and output/firefox-mv3
 pnpm test
 pnpm dev          # Chrome with hot reload; `pnpm dev:firefox` for Firefox
 ```
 
 ## Install
 
-**Chrome / Brave / Edge:** open `chrome://extensions`, turn on Developer mode, click *Load unpacked*, and pick `.output/chrome-mv3`.
+**Chrome / Brave / Edge:** open `chrome://extensions`, turn on Developer mode, click *Load unpacked*, and pick `output/chrome-mv3`.
 
 **Firefox (140+):**
-- Quick test: open `about:debugging#/runtime/this-firefox`, click *Load Temporary Add-on*, and pick `.output/firefox-mv3/manifest.json`. Temporary add-ons are removed when Firefox restarts.
+- Quick test: open `about:debugging#/runtime/this-firefox`, click *Load Temporary Add-on*, and pick `output/firefox-mv3/manifest.json`. Temporary add-ons are removed when Firefox restarts.
 - Permanent: run `pnpm zip` and submit the Firefox zip to AMO as **unlisted** (self-distribution; include the source zip, since the build is bundled). Install the signed `.xpi` you get back.
 - Firefox MV3 doesn't grant site access at install time. Open the extension's options page and click **Grant access**, or enable it under *about:addons → XMRadar → Permissions*.
 
@@ -41,6 +41,10 @@ On x.com, right-click a tweet or profile → **Tip with Monero (look up on xmr.b
 ## Monero badges on X (Phase 2b)
 
 With **Discover Monero addresses via Nostr relays** turned on in the options (off by default), tweets get an orange **XMR** badge when the author's npub has published a Monero address (NIP-A3, kind 10133) and links the X handle (NIP-39, kind 10011) with a proof tweet that XMRadar checks itself, through X's oEmbed API and then syndication. Relays and X can see which accounts you're looking at while discovery is on. Clicking a badge opens the tip popup with every source. Without discovery, badges need the xmr.bio directory, which comes in Phase 2d.
+
+## Your Monero identity (Phase 2c)
+
+In the options page, under **Your Monero identity**: run *Test signer*, confirm your X handle, publish your Monero address, then post the proof tweet and paste its link. Each change reads your current Nostr list from every relay, keeps all other tags, shows a diff, and is signed once in a temporary tab (your signer still asks first). Relays that can't be read are skipped, and you have to confirm before publishing without them. Your badge is live for other XMRadar users with discovery on once both steps are done.
 
 ## Security notes
 

@@ -1,4 +1,6 @@
 import { SimplePool } from 'nostr-tools/pool';
+import { Relay } from 'nostr-tools/relay';
+import type { Filter } from 'nostr-tools/filter';
 import type { Event } from 'nostr-tools/pure';
 import type { RelayResult } from '../messaging';
 
@@ -44,4 +46,65 @@ export async function fetchWriteRelays(pubkey: string, lookupRelays: string[]): 
   } finally {
     pool.close(lookupRelays);
   }
+}
+
+/** All relays in a kind-10002 list, read and write. */
+export function allRelaysFrom(list: Event | null): string[] {
+  if (!list) return [];
+  return [...new Set(list.tags.filter((t) => t[0] === 'r' && t[1]).map((t) => t[1]!.replace(/\/+$/, '')))];
+}
+
+/** Events from one relay; throws unless the relay answered with EOSE in time. */
+export type RelayReader = (url: string, filter: Filter, timeoutMs: number) => Promise<Event[]>;
+
+export const readRelay: RelayReader = async (url, filter, timeoutMs) => {
+  const connecting = Relay.connect(url);
+  const relay = await Promise.race([
+    connecting,
+    new Promise<never>((_, rej) => setTimeout(() => rej(new Error('connect timeout')), timeoutMs)),
+  ]).catch((e) => {
+    // close the socket if it connects after we gave up
+    connecting.then((r) => r.close(), () => {});
+    throw e;
+  });
+  try {
+    return await new Promise<Event[]>((resolve, reject) => {
+      const events: Event[] = [];
+      // our own timer: nostr-tools fires oneose on its eoseTimeout too, which would look like success
+      // settle before closing: close() fires onclose synchronously
+      let sub: { close(): void } | undefined;
+      const timer = setTimeout(() => (reject(new Error('no EOSE')), sub?.close()), timeoutMs);
+      sub = relay.subscribe([filter], {
+        eoseTimeout: timeoutMs * 10,
+        onevent: (e) => events.push(e),
+        oneose: () => (clearTimeout(timer), resolve(events), sub?.close()),
+        onclose: (reason) => (clearTimeout(timer), reject(new Error(reason || 'closed'))),
+      });
+    });
+  } finally {
+    relay.close();
+  }
+};
+
+export interface ReadResult {
+  events: Event[];
+  /** relays that answered with EOSE */
+  readable: string[];
+  /** relays that errored or timed out */
+  unreadable: string[];
+}
+
+/** Read every relay separately, so the caller knows exactly which ones it couldn't read (MERGE-2). */
+export async function readEach(relays: string[], filter: Filter, timeoutMs = 5000, reader: RelayReader = readRelay): Promise<ReadResult> {
+  const settled = await Promise.allSettled(relays.map((r) => reader(r, filter, timeoutMs)));
+  const out: ReadResult = { events: [], readable: [], unreadable: [] };
+  settled.forEach((s, i) => {
+    if (s.status === 'fulfilled') {
+      out.readable.push(relays[i]!);
+      out.events.push(...s.value);
+    } else {
+      out.unreadable.push(relays[i]!);
+    }
+  });
+  return out;
 }

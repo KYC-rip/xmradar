@@ -4,7 +4,7 @@ import { normalizeHandle } from '../../identity/envelope';
 import type { Badge } from '../../identity/resolve';
 import { profileSlot, tweetSlot, type BadgeSlot } from '../../identity/x-handle';
 import { sendToBackground } from '../../messaging';
-import { xmrSettingsItem } from '../../settings';
+import { myHandleItem, xmrSettingsItem } from '../../settings';
 import { openTip } from './tip';
 
 const HOST_TAG = 'xmradar-badge';
@@ -72,6 +72,14 @@ export function startBadges(ctx: ContentScriptContext) {
   let inflight = false;
   let enabled = false;
   let observer: MutationObserver | null = null;
+  // no badge on your own account once it's proven (PLAN-PHASE2 §4.6)
+  let ownHandle: string | null = null;
+  const setOwn = (v: { handle: string; proven: boolean } | null) => {
+    ownHandle = v?.proven ? normalizeHandle(v.handle) : null;
+    if (ownHandle) for (const host of document.querySelectorAll<HTMLElement>(HOST_TAG)) if (host.dataset.key?.endsWith(`:${ownHandle}`)) host.remove();
+  };
+  void myHandleItem.getValue().then(setOwn);
+  const unwatchOwn = myHandleItem.watch(setOwn);
 
   const isOurs = (n: Node) => n instanceof Element && n.localName === HOST_TAG;
 
@@ -99,6 +107,7 @@ export function startBadges(ctx: ContentScriptContext) {
     const existing = slot.anchor.querySelector<HTMLElement>(`:scope > ${HOST_TAG}`);
     if (existing?.dataset.key === slot.key) return;
     existing?.remove();
+    if (ownHandle && normalizeHandle(slot.handle) === ownHandle) return;
     const badge = lookup(slot.handle);
     if (badge) {
       if (badge.primary) insert(slot, badge);
@@ -216,6 +225,7 @@ export function startBadges(ctx: ContentScriptContext) {
   });
   ctx.onInvalidated(() => {
     unwatch();
+    unwatchOwn();
     setEnabled(false);
   });
 }

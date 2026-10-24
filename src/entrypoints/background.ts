@@ -1,19 +1,21 @@
 import { neventEncode } from 'nostr-tools/nip19';
-import { verifyEvent } from 'nostr-tools/pure';
+import { verifyEvent, type Event, type EventTemplate } from 'nostr-tools/pure';
 import { installBridge } from '../bridge';
 import { TokenBucket } from '../identity/bucket';
 import { EntryCache } from '../identity/cache';
 import { HANDLE_RE, normalizeHandle } from '../identity/envelope';
-import { verifyTwitterProof, type ProofResult } from '../identity/nostr';
+import { KIND_IDENTITIES, KIND_PAYTO, moneroPayto, parseTweetProof, twitterClaims, verifyTwitterProof, type ProofResult } from '../identity/nostr';
+import { buildMerged, kindFor, newestOwn, tweetUrl, type SetupAction } from '../identity/setup';
+import { validateMoneroAddress } from '../xmr/address';
 import { mergeBadge, resolveHandles, withoutNostr, type Badge } from '../identity/resolve';
 import { resolveXmrbio, type SeenEntries } from '../identity/xmrbio';
-import type { BgRequest, BgResponse, ImageInfo, OpenComposerMsg, OpenTipMsg, ResolveHandlesResult, Wrapped } from '../messaging';
+import type { BgRequest, BgResponse, ImageInfo, OpenComposerMsg, OpenTipMsg, PreparedSetup, ResolveHandlesResult, SetupRequest, SetupStatus, Wrapped } from '../messaging';
 import { uploadBlob } from '../nostr/blossom';
-import { checkBlossomAuth, dedupeKey, sha256Hex } from '../nostr/event';
-import { fetchWriteRelays, publishToRelays } from '../nostr/relays';
+import { checkBlossomAuth, checkSigned, dedupeKey, sha256Hex } from '../nostr/event';
+import { allRelaysFrom, fetchWriteRelays, publishToRelays, readEach } from '../nostr/relays';
 import { assertFetchableImageUrl } from '../nostr/url-guard';
 import { checkSessionSender, isExtensionPageSender, isXUrl } from '../sender';
-import { DEFAULT_RELAYS, postedItem, pubkeyItem, settingsItem, xmrSettingsItem } from '../settings';
+import { DEFAULT_RELAYS, myHandleItem, postedItem, pubkeyItem, settingsItem, xmrSettingsItem } from '../settings';
 import { storage } from 'wxt/utils/storage';
 
 const MENU_ID = 'xmradar';
@@ -257,6 +259,27 @@ async function handle(msg: BgRequest, sender: Browser.runtime.MessageSender): Pr
       if (!isXContentScript(sender) || sender.tab?.id == null) throw new Error('Not allowed');
       return resolveBadges(msg.handles, sender.tab.id);
     }
+    case 'setup-status': {
+      if (!isExtensionPage(sender)) throw new Error('Not allowed');
+      return setupStatus();
+    }
+    case 'setup-prepare': {
+      if (!isExtensionPage(sender)) throw new Error('Not allowed');
+      return setupPrepare(msg.action);
+    }
+    case 'setup-sign': {
+      if (!isExtensionPage(sender)) throw new Error('Not allowed');
+      return setupSign(msg.id);
+    }
+    case 'setup-retry': {
+      if (!isExtensionPage(sender)) throw new Error('Not allowed');
+      return setupRetry(msg.id);
+    }
+    case 'setup-cancel': {
+      if (!isExtensionPage(sender)) throw new Error('Not allowed');
+      await setupItem.setValue(null);
+      return null;
+    }
     case 'xmrbio-resolve': {
       if (!isXContentScript(sender) && !isExtensionPage(sender)) throw new Error('Not allowed');
       const run = resolveQueue.then(async () => {
@@ -335,8 +358,8 @@ async function resolveBadges(handles: string[], tabId: number): Promise<ResolveH
   return { badges: out, pending: misses.slice(granted) };
 }
 
-/** Extension pages have no window.nostr, so ask the signer from a real web page. */
-async function testSigner(): Promise<string> {
+/** Extension pages have no window.nostr, so signer calls run in a throwaway web page tab. */
+async function withSignerTab<T>(run: (tabId: number) => Promise<T>): Promise<T> {
   const tab = await browser.tabs.create({ url: 'https://example.com/', active: true });
   const tabId = tab.id!;
   try {
@@ -347,7 +370,7 @@ async function testSigner(): Promise<string> {
         if (err) reject(err);
         else resolve();
       };
-      const timer = setTimeout(() => done(new Error('Test page did not load')), 15_000);
+      const timer = setTimeout(() => done(new Error('Signer page did not load')), 15_000);
       const listener = (id: number, info: Browser.tabs.OnUpdatedInfo) => {
         if (id === tabId && info.status === 'complete') done();
       };
@@ -355,6 +378,17 @@ async function testSigner(): Promise<string> {
       // the page may have finished loading before the listener was attached
       void browser.tabs.get(tabId).then((t) => t.status === 'complete' && done(), () => {});
     });
+    // the tab is visible, so make sure it's still the page we opened before running anything in it
+    const now = await browser.tabs.get(tabId);
+    if (!now.url?.startsWith('https://example.com/')) throw new Error('The signer tab was navigated away; try again');
+    return await run(tabId);
+  } finally {
+    await browser.tabs.remove(tabId).catch(() => {});
+  }
+}
+
+async function testSigner(): Promise<string> {
+  const pubkey = await withSignerTab(async (tabId) => {
     const [res] = await browser.scripting.executeScript({
       target: { tabId },
       world: 'MAIN',
@@ -371,9 +405,170 @@ async function testSigner(): Promise<string> {
     });
     const out = res?.result as { pubkey?: string; error?: string } | undefined;
     if (!out?.pubkey) throw new Error(out?.error ?? 'Signer test failed');
-    await pubkeyItem.setValue(out.pubkey);
     return out.pubkey;
-  } finally {
-    await browser.tabs.remove(tabId).catch(() => {});
+  });
+  await pubkeyItem.setValue(pubkey);
+  return pubkey;
+}
+
+/**
+ * One-shot signing of exactly this event (PLAN-PHASE2 §4.8). It doesn't go through the page
+ * bridge, whose allowlist stays {1, 24242}; the result is checked against the template.
+ */
+async function signExact(template: EventTemplate, pubkey: string): Promise<Event> {
+  const signed = await withSignerTab(async (tabId) => {
+    const [res] = await browser.scripting.executeScript({
+      target: { tabId },
+      world: 'MAIN',
+      args: [template],
+      func: async (ev: EventTemplate) => {
+        const w = window as unknown as { nostr?: { signEvent(e: EventTemplate): Promise<unknown> } };
+        for (let i = 0; i < 30 && !w.nostr; i++) await new Promise((r) => setTimeout(r, 100));
+        if (!w.nostr) return { error: 'No NIP-07 signer found (install Alby or nos2x, or unlock it)' };
+        try {
+          return { event: await w.nostr.signEvent(ev) };
+        } catch (e) {
+          return { error: String((e as Error)?.message ?? e) };
+        }
+      },
+    });
+    const out = res?.result as { event?: Event; error?: string } | undefined;
+    if (!out?.event) throw new Error(out?.error ?? 'The signer did not sign');
+    return out.event;
+  });
+  checkSigned(template, signed, pubkey);
+  return signed;
+}
+
+// ---- own-account setup (Phase 2c) ----
+
+interface PendingSetup {
+  id: string;
+  action: SetupAction;
+  template: EventTemplate;
+  pubkey: string;
+  relays: string[];
+  /** id of the list the change was built on, re-checked before signing */
+  baseId: string | null;
+  expires: number;
+  signed?: Event;
+  failed?: string[];
+}
+
+const setupItem = storage.defineItem<PendingSetup | null>('session:setupPending', { fallback: null });
+const SETUP_TTL_MS = 10 * 60_000;
+
+async function requirePubkey(): Promise<string> {
+  const pubkey = await pubkeyItem.getValue();
+  if (!pubkey) throw new Error('Connect your signer first');
+  return pubkey;
+}
+
+/** Your NIP-65 relays (read and write), your manual relays, and the defaults, where badge discovery looks. */
+async function setupRelays(pubkey: string): Promise<string[]> {
+  const { relays } = await settingsItem.getValue();
+  const lists = await readEach([...new Set([...DEFAULT_RELAYS, ...relays])], { kinds: [10002], authors: [pubkey] }, 4000);
+  const nip65 = allRelaysFrom(newestOwn(lists.events, 10002, pubkey));
+  return [...new Set([...nip65, ...relays, ...DEFAULT_RELAYS])];
+}
+
+async function setupStatus(): Promise<SetupStatus> {
+  const pubkey = await requirePubkey();
+  const relays = await setupRelays(pubkey);
+  const read = await readEach(relays, { kinds: [KIND_PAYTO, KIND_IDENTITIES], authors: [pubkey] });
+  const payto = newestOwn(read.events, KIND_PAYTO, pubkey);
+  const ids = newestOwn(read.events, KIND_IDENTITIES, pubkey);
+  const mine = await myHandleItem.getValue();
+  const p = payto ? moneroPayto(payto) : null;
+  let link: SetupStatus['link'] = null;
+  if (mine && ids) {
+    const claim = twitterClaims(ids, new Set([normalizeHandle(mine.handle)]))[0];
+    if (claim) {
+      const proof = await cachedVerify(claim.handle, claim.tweetId, pubkey);
+      link = { handle: claim.handle, tweetUrl: tweetUrl(claim.handle, claim.tweetId), proof };
+    }
   }
+  // a deleted or broken proof un-proves the handle; a transient X error doesn't
+  if (mine) {
+    const proven = link?.proof.status === 'verified' ? true : link?.proof.status === 'error' ? mine.proven : false;
+    if (proven !== mine.proven) await myHandleItem.setValue({ handle: mine.handle, proven });
+  }
+  return { pubkey, relays: read.readable, unreadable: read.unreadable, address: p ? { address: p.address, check: p.check } : null, link };
+}
+
+async function setupPrepare(req: SetupRequest): Promise<PreparedSetup> {
+  const pubkey = await requirePubkey();
+  let action: SetupAction;
+  if (req.type === 'add-address') {
+    const check = validateMoneroAddress(req.address.trim());
+    if (!check.ok) throw new Error(`Not a valid Monero mainnet address (${check.reason})`);
+    action = { type: 'add-address', address: req.address.trim() };
+  } else if (req.type === 'remove-address') {
+    action = { type: 'remove-address' };
+  } else {
+    const mine = await myHandleItem.getValue();
+    if (!mine) throw new Error('Confirm your X handle first');
+    const handle = normalizeHandle(mine.handle);
+    if (req.type === 'unlink-x') {
+      action = { type: 'unlink-x', handle };
+    } else {
+      const tweetId = parseTweetProof(req.tweetUrl.trim(), handle);
+      if (!tweetId) throw new Error(`Paste the link to your proof tweet: it must be a tweet by @${handle} (x.com/${handle}/status/…)`);
+      const proof = await verifyTwitterProof(handle, tweetId, pubkey);
+      if (proof.status === 'error') throw new Error(`Couldn't reach X to check the tweet (${proof.reason}). Try again in a moment.`);
+      if (proof.status === 'failed') throw new Error(`The tweet doesn't prove the link: ${proof.reason}. It must be posted by @${handle} and contain your npub.`);
+      action = { type: 'link-x', handle, tweetId };
+    }
+  }
+  const kind = kindFor(action);
+  const read = await readEach(await setupRelays(pubkey), { kinds: [kind], authors: [pubkey] });
+  // relays we couldn't read might hold a newer list; skip them rather than overwrite it blind
+  if (!read.readable.length) throw new Error("Couldn't read your current list from any relay, so nothing was published. Try again.");
+  const current = newestOwn(read.events, kind, pubkey);
+  const template = buildMerged(current, action);
+  const id = crypto.randomUUID();
+  await setupItem.setValue({ id, action, template, pubkey, relays: read.readable, baseId: current?.id ?? null, expires: Date.now() + SETUP_TTL_MS });
+  return { id, kind, pubkey, before: current?.tags ?? null, after: template.tags, relays: read.readable, unreadable: read.unreadable };
+}
+
+async function setupPending(id: string): Promise<PendingSetup> {
+  const pending = await setupItem.getValue();
+  if (pending && pending.expires < Date.now()) await setupItem.setValue(null);
+  if (!pending || pending.id !== id || pending.expires < Date.now()) throw new Error('This change expired. Start it again.');
+  return pending;
+}
+
+async function setupPublish(pending: PendingSetup, event: Event, relays: string[]) {
+  const results = await publishToRelays(relays, event);
+  const failed = results.filter((r) => !r.ok).map((r) => r.relay);
+  await setupItem.setValue({ ...pending, signed: event, failed });
+  if (results.some((r) => r.ok) && (pending.action.type === 'link-x' || pending.action.type === 'unlink-x')) {
+    await myHandleItem.setValue({ handle: pending.action.handle, proven: pending.action.type === 'link-x' });
+  }
+  return { results };
+}
+
+async function setupSign(id: string) {
+  const pending = await setupPending(id);
+  if (pending.signed) throw new Error('Already signed; use "retry failed relays"');
+  if (pending.action.type === 'link-x' || pending.action.type === 'unlink-x') {
+    const mine = await myHandleItem.getValue();
+    if (!mine || normalizeHandle(mine.handle) !== pending.action.handle) throw new Error('Your confirmed X handle changed. Start this step again.');
+  }
+  // the list may have changed (another device) since it was reviewed; never sign over a newer one
+  const kind = pending.template.kind;
+  const recheck = await readEach(pending.relays, { kinds: [kind], authors: [pending.pubkey] });
+  if (!recheck.readable.length) throw new Error("Couldn't re-read your list before signing. Try again.");
+  if ((newestOwn(recheck.events, kind, pending.pubkey)?.id ?? null) !== pending.baseId) {
+    await setupItem.setValue(null);
+    throw new Error('Your list changed since you reviewed it. Review the change again.');
+  }
+  const event = await signExact(pending.template, pending.pubkey);
+  return setupPublish(pending, event, pending.relays);
+}
+
+async function setupRetry(id: string) {
+  const pending = await setupPending(id);
+  if (!pending.signed || !pending.failed?.length) throw new Error('Nothing to retry');
+  return setupPublish(pending, pending.signed, pending.failed);
 }

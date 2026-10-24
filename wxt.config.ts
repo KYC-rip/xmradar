@@ -2,6 +2,8 @@ import { defineConfig } from 'wxt';
 
 export default defineConfig({
   srcDir: 'src',
+  // visible in Finder, unlike the default .output
+  outDir: 'output',
   // Firefox defaults to MV2; MAIN-world scripting and the same code path need MV3 (Firefox 140+)
   manifestVersion: 3,
   manifest: {
