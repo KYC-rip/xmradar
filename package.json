@@ -1,0 +1,24 @@
+{
+  "name": "xmradar",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "wxt",
+    "dev:firefox": "wxt -b firefox",
+    "build": "wxt build && wxt build -b firefox",
+    "zip": "wxt zip && wxt zip -b firefox",
+    "compile": "tsc --noEmit",
+    "test": "vitest run",
+    "postinstall": "wxt prepare"
+  },
+  "dependencies": {
+    "nostr-tools": "2.25.2"
+  },
+  "devDependencies": {
+    "happy-dom": "21.0.4",
+    "typescript": "7.0.2",
+    "vitest": "5.0.5",
+    "wxt": "0.21.4"
+  }
+}

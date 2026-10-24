@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>XMRadar options</title>
+    <meta name="manifest.open_in_tab" content="true" />
+  </head>
+  <body>
+    <main>
+      <h1>XMRadar</h1>
+
+      <section id="perm" class="warn hidden">
+        The extension needs access to all sites to read posts and fetch images.
+        <button id="grant">Grant access</button>
+      </section>
+
+      <section>
+        <h2>Signer</h2>
+        <p class="hint">Signing uses your NIP-07 extension (Alby, nos2x…). Your key never touches XMRadar.</p>
+        <button id="test-signer">Test signer</button>
+        <code id="npub"></code>
+      </section>
+
+      <section>
+        <h2>Relays</h2>
+        <p class="hint">One per line. Leave empty to use your NIP-65 write relays, falling back to defaults.</p>
+        <textarea id="relays" rows="5" placeholder="wss://relay.damus.io"></textarea>
+        <button id="load-nip65">Load from my NIP-65 list</button>
+      </section>
+
+      <section>
+        <h2>Images</h2>
+        <label>Blossom server <input id="blossom" type="url" /></label>
+      </section>
+
+      <section>
+        <h2>Behaviour</h2>
+        <label><input id="append-source" type="checkbox" /> Append link to the original post by default</label>
+        <label><input id="debug" type="checkbox" /> Show event JSON before signing (debug)</label>
+      </section>
+
+      <footer>
+        <button id="save" class="primary">Save</button>
+        <span id="status"></span>
+      </footer>
+    </main>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>
