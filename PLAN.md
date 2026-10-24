@@ -154,6 +154,8 @@ tests/fixtures/*.html, tests/*.test.ts
   - Pin dependency versions.
 
 ## Future (not MVP): X ↔ Nostr identity badge and tips
+
+> Superseded by **[PLAN-PHASE2.md](PLAN-PHASE2.md)**, which uses xmr.bio + NIP-A3 + NIP-39. The notes below are the original sketch.
 - **Binding**: use NIP-39 external identities. The user's profile claims `twitter:<handle>`, and the proof is a tweet that contains their npub. The extension can build the claim and pre-fill the proof tweet.
 - **Badge**: a content script on x.com looks up the author handle of each visible tweet and finds the matching Nostr profile by querying relays for the `i` tag, with a local cache. It verifies the proof tweet (author == handle, text contains the npub) before showing a Nostr icon. Without verification, anyone could claim any handle.
 - **Tips**:
