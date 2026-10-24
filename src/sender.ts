@@ -22,3 +22,15 @@ export function checkSessionSender(sessions: SessionLike[], sessionId: string, s
   if (!session || session.expires < now) throw new Error('Composer session expired — reopen it');
   if (sender.tab?.id !== session.tabId) throw new Error('Session belongs to another tab');
 }
+
+export const isXHost = (host: string) => /^(?:www\.|mobile\.)?(?:x|twitter)\.com$/.test(host);
+
+/** True for https pages on x.com / twitter.com (and their www/mobile hosts). */
+export function isXUrl(url: string | undefined): boolean {
+  try {
+    const u = new URL(url ?? '');
+    return u.protocol === 'https:' && isXHost(u.hostname);
+  } catch {
+    return false;
+  }
+}

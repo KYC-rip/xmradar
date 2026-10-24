@@ -13,7 +13,10 @@
     "postinstall": "wxt prepare"
   },
   "dependencies": {
-    "nostr-tools": "2.25.2"
+    "@noble/curves": "2.0.1",
+    "@noble/hashes": "2.0.1",
+    "nostr-tools": "2.25.2",
+    "qrcode-generator": "1.5.2"
   },
   "devDependencies": {
     "happy-dom": "21.0.4",

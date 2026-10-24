@@ -62,10 +62,47 @@ button.primary { background: #7b3fe4; border-color: #7b3fe4; color: #fff; }
 button:disabled { opacity: 0.6; cursor: progress; }
 button.link { border: 0; padding: 0; background: none; color: #7b3fe4; text-decoration: underline; }
 a { color: #7b3fe4; }
+.row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+input[type='text'] {
+  flex: 1;
+  min-width: 140px;
+  font: inherit;
+  padding: 7px 10px;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  color: inherit;
+  background: #fff;
+}
+.tip { display: flex; flex-direction: column; gap: 10px; }
+.qr-box { display: flex; justify-content: center; }
+.qr { width: 220px; height: 220px; border-radius: 6px; }
+.addr {
+  font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+  word-break: break-all;
+  background: #f4f3f8;
+  padding: 8px 10px;
+  border-radius: 6px;
+  user-select: all;
+}
+.small { font-size: 12px; color: #6b6880; }
+a.button {
+  display: inline-block;
+  padding: 7px 14px;
+  border-radius: 8px;
+  text-decoration: none;
+}
+a.button.primary { background: #7b3fe4; color: #fff; }
+a.button[aria-disabled='true'] { opacity: 0.5; pointer-events: none; }
+.source-panel { font-size: 13px; }
+.source-panel summary { cursor: pointer; }
+.sources { margin: 6px 0; padding-left: 18px; word-break: break-all; }
 @media (prefers-color-scheme: dark) {
   .backdrop { color: #ececf1; }
   .dialog { background: #1f1e26; }
-  textarea, button { background: #2a2933; border-color: #45434f; }
+  textarea, button, input[type='text'] { background: #2a2933; border-color: #45434f; }
+  .addr { background: #2a2933; }
+  .small { color: #a9a6b8; }
+  a.button.primary { background: #8f5cf0; }
   .signer, .site { color: #a9a6b8; }
   .debug { background: #2a2933; }
   .warn { background: #3d3214; color: #f0d589; }

@@ -7,20 +7,9 @@ import { extractPost, type ExtractedImage } from '../../extractors';
 import { sendToBackground, type OpenComposerMsg, type RelayResult } from '../../messaging';
 import { blossomAuthTemplate, buildNote, checkSigned, encodeAuthHeader, type PostImage } from '../../nostr/event';
 import { settingsItem } from '../../settings';
+import { h, trapFocus } from './dom';
 
 let open = false;
-
-type Props<K extends keyof HTMLElementTagNameMap> = Partial<HTMLElementTagNameMap[K]> & { class?: string; attrs?: Record<string, string> };
-
-function h<K extends keyof HTMLElementTagNameMap>(tag: K, props: Props<K> = {}, ...children: (Node | string)[]) {
-  const el = document.createElement(tag);
-  const { class: cls, attrs, ...rest } = props;
-  if (cls) el.className = cls;
-  for (const [k, v] of Object.entries(attrs ?? {})) el.setAttribute(k, v);
-  Object.assign(el, rest);
-  el.append(...children);
-  return el;
-}
 
 const short = (npub: string) => `${npub.slice(0, 12)}…${npub.slice(-6)}`;
 
@@ -119,18 +108,9 @@ async function mountComposer(ctx: ContentScriptContext, msg: OpenComposerMsg, ta
 
       cancelBtn.addEventListener('click', close);
       dialog.parentElement!.addEventListener('click', (e) => e.target === e.currentTarget && close());
+      trapFocus(dialog, close);
       dialog.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape') close();
         if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) publishBtn.click();
-        if (e.key === 'Tab') {
-          // keep focus inside the dialog
-          const focusable = [...dialog.querySelectorAll<HTMLElement>('textarea, input, button, a[href]')].filter((el) => !(el as HTMLButtonElement).disabled);
-          const first = focusable[0];
-          const last = focusable[focusable.length - 1];
-          const active = (dialog.getRootNode() as ShadowRoot).activeElement;
-          if (e.shiftKey && active === first) (e.preventDefault(), last?.focus());
-          else if (!e.shiftKey && active === last) (e.preventDefault(), first?.focus());
-        }
       });
       setTimeout(() => textarea.focus(), 0);
 

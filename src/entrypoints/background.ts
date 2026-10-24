@@ -1,16 +1,19 @@
 import { neventEncode } from 'nostr-tools/nip19';
 import { verifyEvent } from 'nostr-tools/pure';
 import { installBridge } from '../bridge';
-import type { BgRequest, BgResponse, ImageInfo, OpenComposerMsg, Wrapped } from '../messaging';
+import { resolveXmrbio, type SeenEntries } from '../identity/xmrbio';
+import type { BgRequest, BgResponse, ImageInfo, OpenComposerMsg, OpenTipMsg, Wrapped } from '../messaging';
 import { uploadBlob } from '../nostr/blossom';
 import { checkBlossomAuth, dedupeKey, sha256Hex } from '../nostr/event';
 import { fetchWriteRelays, publishToRelays } from '../nostr/relays';
 import { assertFetchableImageUrl } from '../nostr/url-guard';
-import { checkSessionSender, isExtensionPageSender } from '../sender';
+import { checkSessionSender, isExtensionPageSender, isXUrl } from '../sender';
 import { DEFAULT_RELAYS, postedItem, pubkeyItem, settingsItem } from '../settings';
 import { storage } from 'wxt/utils/storage';
 
 const MENU_ID = 'xmradar';
+const TIP_MENU_ID = 'xmradar-tip';
+const X_PATTERNS = ['https://x.com/*', 'https://twitter.com/*', 'https://mobile.x.com/*', 'https://mobile.twitter.com/*'];
 const SESSION_TTL_MS = 15 * 60_000;
 const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
 const NIP65_TTL_MS = 60 * 60_000;
@@ -23,6 +26,9 @@ interface Session {
 
 // storage.session survives MV3 service-worker suspension, unlike module state
 const sessionsItem = storage.defineItem<Session[]>('session:composerSessions', { fallback: [] });
+const resolveSeen = storage.defineItem<SeenEntries>('local:xmrbioResolveSeen', { fallback: [] });
+// resolves run one at a time so concurrent lookups can't overwrite each other's replay guard entry
+let resolveQueue: Promise<unknown> = Promise.resolve();
 const nip65Cache = storage.defineItem<{ pubkey: string; relays: string[]; at: number } | null>('local:nip65Cache', { fallback: null });
 
 // image bytes between fetch-image and upload-image; refetched if the worker was suspended
@@ -36,9 +42,20 @@ export default defineBackground(() => {
       title: 'Copy post to Nostr',
       contexts: ['page', 'selection', 'image', 'link'],
     });
+    browser.contextMenus.create({
+      id: TIP_MENU_ID,
+      title: 'Tip with Monero (look up on xmr.bio)',
+      contexts: ['page', 'selection', 'image', 'link'],
+      documentUrlPatterns: X_PATTERNS,
+    });
   });
 
   browser.contextMenus.onClicked.addListener((info, tab) => {
+    if (info.menuItemId === TIP_MENU_ID && tab?.id != null) {
+      const msg: OpenTipMsg = { type: 'open-tip' };
+      void deliver(tab.id, info.frameId ?? 0, msg).catch((e) => notify(`Could not open the tip popup: ${(e as Error).message}`));
+      return;
+    }
     if (info.menuItemId !== MENU_ID || !tab) return;
     void openComposer(tab, info.frameId ?? 0, {
       selection: info.selectionText,
@@ -91,16 +108,20 @@ async function openComposer(tab: Browser.tabs.Tab, frameId: number, extra: Omit<
 
   const msg: OpenComposerMsg = { type: 'open-composer', sessionId: session.id, ...extra };
   try {
+    await deliver(tabId, frameId, msg);
+  } catch (e) {
+    await endSession(session.id);
+    notify(`Could not open the composer here: ${(e as Error).message}`);
+  }
+}
+
+async function deliver(tabId: number, frameId: number, msg: OpenComposerMsg | OpenTipMsg) {
+  try {
     await browser.tabs.sendMessage(tabId, msg, { frameId });
   } catch {
     // content script missing: page loaded before install/reload, or frame not covered
-    try {
-      await browser.scripting.executeScript({ target: { tabId, frameIds: [frameId] }, files: ['/content-scripts/content.js'] });
-      await browser.tabs.sendMessage(tabId, msg, { frameId });
-    } catch (e) {
-      await endSession(session.id);
-      notify(`Could not open the composer here: ${(e as Error).message}`);
-    }
+    await browser.scripting.executeScript({ target: { tabId, frameIds: [frameId] }, files: ['/content-scripts/content.js'] });
+    await browser.tabs.sendMessage(tabId, msg, { frameId });
   }
 }
 
@@ -113,6 +134,9 @@ async function requireSession(sessionId: string, sender: Browser.runtime.Message
 }
 
 const isExtensionPage = (sender: Browser.runtime.MessageSender) => isExtensionPageSender(sender, browser.runtime.id, browser.runtime.getURL('/'));
+
+// the tab URL covers the popup opening inside an embedded frame on x.com
+const isXContentScript = (sender: Browser.runtime.MessageSender) => sender.id === browser.runtime.id && (isXUrl(sender.url) || isXUrl(sender.tab?.url));
 
 async function loadImage(url: string): Promise<{ bytes: ArrayBuffer; mime: string }> {
   assertFetchableImageUrl(url);
@@ -207,6 +231,17 @@ async function handle(msg: BgRequest, sender: Browser.runtime.MessageSender): Pr
     case 'test-signer': {
       if (!isExtensionPage(sender)) throw new Error('Not allowed');
       return { pubkey: await testSigner() };
+    }
+    case 'xmrbio-resolve': {
+      if (!isXContentScript(sender) && !isExtensionPage(sender)) throw new Error('Not allowed');
+      const run = resolveQueue.then(async () => {
+        const stored = await resolveSeen.getValue();
+        const { result, seen } = await resolveXmrbio(msg.handle, Array.isArray(stored) ? stored : []);
+        await resolveSeen.setValue(seen);
+        return result;
+      });
+      resolveQueue = run.catch(() => {});
+      return run;
     }
   }
 }

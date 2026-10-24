@@ -1,4 +1,6 @@
 import type { Event } from 'nostr-tools/pure';
+import type { ResolvedIdentity } from './identity/envelope';
+import type { AddressCheck } from './xmr/address';
 
 /** background → content */
 export interface OpenComposerMsg {
@@ -9,6 +11,13 @@ export interface OpenComposerMsg {
   /** true when triggered by keyboard command rather than a right-click */
   fromCommand?: boolean;
 }
+
+/** background → content: open the Monero tip popup */
+export interface OpenTipMsg {
+  type: 'open-tip';
+}
+
+export type XmrbioResult = { found: false } | { found: true; identity: ResolvedIdentity; check: AddressCheck };
 
 export interface ImageInfo {
   sha256: string;
@@ -31,7 +40,8 @@ export type BgRequest =
   | { type: 'check-duplicate'; sessionId: string; sourceUrl: string; text: string }
   | { type: 'close-session'; sessionId: string }
   | { type: 'load-nip65'; pubkey: string }
-  | { type: 'test-signer' };
+  | { type: 'test-signer' }
+  | { type: 'xmrbio-resolve'; handle: string };
 
 export type BgResponse<T extends BgRequest['type']> = T extends 'fetch-image'
   ? ImageInfo
@@ -47,7 +57,9 @@ export type BgResponse<T extends BgRequest['type']> = T extends 'fetch-image'
             ? { pubkey: string }
             : T extends 'close-session'
               ? null
-              : never;
+              : T extends 'xmrbio-resolve'
+                ? XmrbioResult
+                : never;
 
 /** Every response is wrapped so errors survive the message boundary. */
 export type Wrapped<T> = { ok: true; data: T } | { ok: false; error: string };

@@ -34,6 +34,10 @@ pnpm dev          # Chrome with hot reload; `pnpm dev:firefox` for Firefox
 - **Append link to original** (default off).
 - **Debug**: shows the unsigned event JSON before signing.
 
+## Tip with Monero (Phase 2a)
+
+On x.com, right-click a tweet or profile → **Tip with Monero (look up on xmr.bio)**. XMRadar asks xmr.bio about that one handle (only on this click), checks the response signature against the pinned xmr.bio key, rejects stale or replayed responses, and validates the address (mainnet, Keccak checksum). The popup shows a `monero:` QR code, the address, an optional amount, an "Open in wallet" link and where the data came from. XMRadar never sends or holds funds. Badges on X come in later phases (see PLAN-PHASE2.md).
+
 ## Security notes
 
 - The bridge to `window.nostr` runs in the page's own JavaScript world. Page scripts can see and imitate those messages, so the real security boundary is your signer's approval prompt.

@@ -1,5 +1,7 @@
-import type { OpenComposerMsg } from '../../messaging';
+import { handleFromTarget } from '../../identity/x-handle';
+import type { OpenComposerMsg, OpenTipMsg } from '../../messaging';
 import { openComposer } from './composer';
+import { openTip } from './tip';
 import './style.css';
 
 export default defineContentScript({
@@ -17,7 +19,11 @@ export default defineContentScript({
     // a plain assignment is cheap enough not to need throttling
     document.addEventListener('pointerover', (e) => (lastHover = e.target as Element), { capture: true, passive: true });
 
-    browser.runtime.onMessage.addListener((msg: OpenComposerMsg) => {
+    browser.runtime.onMessage.addListener((msg: OpenComposerMsg | OpenTipMsg) => {
+      if (msg?.type === 'open-tip') {
+        void openTip(ctx, handleFromTarget(lastContextTarget, location));
+        return;
+      }
       if (msg?.type !== 'open-composer') return;
       const selection = msg.selection ?? window.getSelection()?.toString();
       let target = msg.fromCommand ? lastHover : lastContextTarget;
