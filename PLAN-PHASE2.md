@@ -172,7 +172,8 @@ show diff(current?.tags, tags)  → user confirms → one-shot sign → verify �
 These are in the separate repo `~/Projects/kyc-rip`, a live production API. **Nothing there changes until it's explicitly approved.** It will get its own plan and review.
 
 - **K1 `GET /v1/bio/directory`.**
-  - Envelope as in §3. Payload: `{v:1, generated_at, entries:[{handle, address, verified_at, address_updated_at, x_proof?:{method, tweet_id?}, nostr?:{npub, method, event?}}]}`.
+  - Envelope as in §3. Payload as shipped by K1: `{v:1, service:'xmr.bio', generated_at, count, entries:[{handle, address, verified_at, address_updated_at?, x_proof?:{method, tweet_id?}, nostr?:{npub, method, event_id?}}]}`. Fields marked `?` arrive with K4/K2/K3; the 2d validator requires only `handle, address, verified_at` and ignores unknown fields.
+  - Contract (PLAN-KYCRIP K1): 404 = not live yet; 503 = no build or corrupt, keep the cached copy; `X-Directory-Stale: 1` = use it but say "may be out of date"; an older `generated_at` than the one held is ignored silently.
   - Cached at the edge for 10 min. Past roughly 5k entries, switch to a sharded or bloom-filter variant.
 - **K2 Deterministic X proof.**
   - `POST /verify` accepts `tweet_url`. **If it's given, the deterministic check (oEmbed/syndication: author equals handle, text contains token) is mandatory.** If it fails, the request fails, with **no Grok fallback**.
