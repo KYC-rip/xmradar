@@ -1,7 +1,8 @@
-import { decode as nip19Decode } from 'nostr-tools/nip19';
+import { decode as nip19Decode, npubEncode } from 'nostr-tools/nip19';
 import type { ContentScriptContext } from 'wxt/utils/content-script-context';
 import { createShadowRootUi } from 'wxt/utils/content-script-ui/shadow-root';
 import { HANDLE_RE, normalizeHandle, toTimestamp, type ResolvedIdentity } from '../../identity/envelope';
+import type { Badge, BadgeEntry } from '../../identity/resolve';
 import { sendToBackground } from '../../messaging';
 import { isValidAmount, moneroUri, type AddressCheck } from '../../xmr/address';
 import { qrPath } from '../../xmr/qr';
@@ -21,6 +22,7 @@ const keyFingerprint = (key: string) => `${key.slice(0, 8)}…${key.slice(-8)}`;
 /** Only allowlisted link templates, each value validated before it goes into the URL. */
 const links = {
   xmrbio: (handle: string) => (HANDLE_RE.test(handle) ? `https://xmr.bio/${handle}` : null),
+  tweet: (handle: string, id: string | undefined) => (HANDLE_RE.test(handle) && id && /^\d{1,20}$/.test(id) ? `https://x.com/${handle}/status/${id}` : null),
   njump: (npub: string) => {
     try {
       return nip19Decode(npub).type === 'npub' ? `https://njump.me/${npub}` : null;
@@ -50,18 +52,19 @@ function qrSvg(text: string): SVGSVGElement {
   return svg;
 }
 
-export async function openTip(ctx: ContentScriptContext, handle: string | null) {
+/** From a badge, `badge` is shown right away and xmr.bio is only asked on click. */
+export async function openTip(ctx: ContentScriptContext, handle: string | null, badge?: Badge) {
   if (open) return;
   open = true;
   try {
-    await mountTip(ctx, handle);
+    await mountTip(ctx, handle, badge);
   } catch (e) {
     open = false;
     window.alert(`XMRadar: ${(e as Error).message}`);
   }
 }
 
-async function mountTip(ctx: ContentScriptContext, detected: string | null) {
+async function mountTip(ctx: ContentScriptContext, detected: string | null, badge?: Badge) {
   const previousFocus = document.activeElement as HTMLElement | null;
   let closed = false;
 
@@ -111,7 +114,8 @@ async function mountTip(ctx: ContentScriptContext, detected: string | null) {
         if (busy) return;
         busy = true;
         lookupBtn.disabled = true;
-        result.replaceChildren();
+        // a badge's sources stay on screen unless xmr.bio actually answers with a profile
+        if (!badge?.primary) result.replaceChildren();
         setStatus(`Asking xmr.bio about @${handle}…`);
         try {
           const res = await sendToBackground({ type: 'xmrbio-resolve', handle });
@@ -122,7 +126,14 @@ async function mountTip(ctx: ContentScriptContext, detected: string | null) {
           }
           setStatus('');
           title.textContent = `Tip @${res.identity.handle}`;
-          result.replaceChildren(renderIdentity(res.identity, res.check));
+          // xmr.bio is primary; Nostr claims from the badge stay listed below it
+          const others = badge && normalizeHandle(badge.handle) === handle ? badge : undefined;
+          const differs = others?.entries.some((e) => e.verified && e.check.ok && e.address !== res.identity.address);
+          result.replaceChildren(
+            differs ? h('div', { class: 'warn' }, 'Addresses differ between xmr.bio and Nostr. Check the sources below before sending.') : '',
+            renderIdentity(res.identity, res.check),
+            others ? badgePanel(others) : '',
+          );
         } catch (e) {
           setStatus(`Could not check xmr.bio: ${(e as Error).message}`, 'error');
         } finally {
@@ -133,8 +144,13 @@ async function mountTip(ctx: ContentScriptContext, detected: string | null) {
       lookupBtn.addEventListener('click', () => void lookup());
       handleInput.addEventListener('keydown', (e) => e.key === 'Enter' && void lookup());
 
-      // the menu item itself says "look up on xmr.bio", so a detected handle is checked right away
-      if (detected) void lookup();
+      if (badge?.primary) {
+        title.textContent = `Tip @${detected ?? badge.handle}`;
+        result.replaceChildren(renderBadge(badge));
+      } else if (detected) {
+        // the menu item itself says "look up on xmr.bio", so a detected handle is checked right away
+        void lookup();
+      }
       setTimeout(() => (detected ? closeBtn : handleInput).focus(), 0);
     },
     onRemove() {
@@ -152,15 +168,26 @@ async function mountTip(ctx: ContentScriptContext, detected: string | null) {
 }
 
 export function renderIdentity(id: ResolvedIdentity, check: AddressCheck): HTMLElement {
+  return renderPayment(id.address, check, 'xmr.bio', sourcePanel(id));
+}
+
+export function renderBadge(badge: Badge): HTMLElement {
+  const p = badge.primary!;
+  const el = renderPayment(p.address, p.check, p.source === 'xmrbio' ? 'xmr.bio' : 'Nostr', badgePanel(badge));
+  if (badge.differ) el.prepend(h('div', { class: 'warn' }, 'This account has published more than one address. Check the sources below before sending.'));
+  return el;
+}
+
+function renderPayment(address: string, check: AddressCheck, sourceLabel: string, panel: HTMLElement): HTMLElement {
   const wrap = h('div', { class: 'tip' });
-  const addrBox = h('code', { class: 'addr', textContent: id.address });
+  const addrBox = h('code', { class: 'addr', textContent: address });
 
   if (!check.ok) {
-    wrap.append(h('div', { class: 'warn' }, `xmr.bio lists an invalid address for this account (${check.reason}). Don't send to it.`), addrBox);
+    wrap.append(h('div', { class: 'warn' }, `${sourceLabel} lists an invalid address for this account (${check.reason}). Don't send to it.`), addrBox);
   } else {
     const copyBtn = h('button', { textContent: 'Copy address' });
     copyBtn.addEventListener('click', () => {
-      navigator.clipboard.writeText(id.address).then(
+      navigator.clipboard.writeText(address).then(
         () => (copyBtn.textContent = 'Copied'),
         () => {
           // clipboard can be blocked; select the address so it can be copied by hand
@@ -184,7 +211,7 @@ export function renderIdentity(id: ResolvedIdentity, check: AddressCheck): HTMLE
         return;
       }
       amountErr.textContent = '';
-      const uri = moneroUri(id.address, { amount: value || undefined });
+      const uri = moneroUri(address, { amount: value || undefined });
       qrBox.replaceChildren(qrSvg(uri));
       walletLink.href = uri;
       walletLink.removeAttribute('aria-disabled');
@@ -202,8 +229,47 @@ export function renderIdentity(id: ResolvedIdentity, check: AddressCheck): HTMLE
     );
   }
 
-  wrap.append(sourcePanel(id));
+  wrap.append(panel);
   return wrap;
+}
+
+const shortAddr = (a: string) => `${a.slice(0, 8)}…${a.slice(-8)}`;
+
+function entryLine(handle: string, e: BadgeEntry, primary: boolean): HTMLElement {
+  const li = h('li', {});
+  if (e.source === 'nostr' && e.pubkey) {
+    let npub = '';
+    try {
+      npub = npubEncode(e.pubkey);
+    } catch {
+      // not a valid pubkey: shown without a link
+    }
+    const url = npub ? links.njump(npub) : null;
+    li.append('Nostr ', url ? h('a', { href: url, target: '_blank', rel: 'noopener noreferrer', textContent: `${npub.slice(0, 12)}…${npub.slice(-6)}` }) : h('span', { textContent: e.pubkey }));
+  } else {
+    li.append(e.source === 'xmrbio' ? 'xmr.bio' : e.source);
+  }
+  li.append(`: ${shortAddr(e.address)}`);
+  if (primary) li.append(h('strong', { textContent: ' (shown above)' }));
+  const tweet = links.tweet(handle, e.tweetId);
+  const status = !e.check.ok ? `invalid address (${e.check.reason})` : e.verified ? `linked to @${handle} by a proof tweet, checked by XMRadar (${e.method})` : `unverified: ${e.note ?? 'no proof'}`;
+  li.append(h('div', { class: 'small' }, status, tweet ? ' · ' : '', tweet ? h('a', { href: tweet, target: '_blank', rel: 'noopener noreferrer', textContent: 'proof tweet' }) : ''));
+  if (e.createdAt) li.append(h('div', { class: 'small' }, `claim published ${new Date(e.createdAt * 1000).toLocaleString()}`));
+  return li;
+}
+
+export function badgePanel(badge: Badge): HTMLElement {
+  // badges arrive through messaging as copies, so compare by content rather than identity
+  const p = badge.primary;
+  const isPrimary = (e: BadgeEntry) => !!p && e.source === p.source && e.pubkey === p.pubkey && e.address === p.address && e.tweetId === p.tweetId;
+  const list = h('ul', { class: 'sources' }, ...badge.entries.map((e) => entryLine(badge.handle, e, isPrimary(e))));
+  return h(
+    'details',
+    { class: 'source-panel', open: badge.differ },
+    h('summary', { textContent: `Sources (${badge.entries.length})` }),
+    list,
+    h('div', { class: 'small' }, 'This shows addresses the account published. XMRadar never sends or holds funds.'),
+  );
 }
 
 function sourcePanel(id: ResolvedIdentity): HTMLElement {

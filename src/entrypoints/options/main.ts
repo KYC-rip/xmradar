@@ -1,6 +1,6 @@
 import { npubEncode } from 'nostr-tools/nip19';
 import { sendToBackground } from '../../messaging';
-import { DEFAULT_BLOSSOM, parseRelayList, pubkeyItem, settingsItem } from '../../settings';
+import { DEFAULT_BLOSSOM, parseRelayList, pubkeyItem, settingsItem, xmrSettingsItem } from '../../settings';
 import './style.css';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -8,6 +8,8 @@ const relaysEl = $<HTMLTextAreaElement>('relays');
 const blossomEl = $<HTMLInputElement>('blossom');
 const appendEl = $<HTMLInputElement>('append-source');
 const debugEl = $<HTMLInputElement>('debug');
+const badgesEl = $<HTMLInputElement>('xmr-badges');
+const discoveryEl = $<HTMLInputElement>('xmr-discovery');
 const statusEl = $('status');
 const npubEl = $('npub');
 
@@ -29,6 +31,9 @@ async function load() {
   blossomEl.value = s.blossomServer;
   appendEl.checked = s.appendSourceLink;
   debugEl.checked = s.debug;
+  const x = await xmrSettingsItem.getValue();
+  badgesEl.checked = x.badges;
+  discoveryEl.checked = x.nostrDiscovery;
   await showPubkey();
   // Firefox MV3 doesn't grant host permissions at install time
   if (!(await browser.permissions.contains(ALL_SITES))) $('perm').classList.remove('hidden');
@@ -43,6 +48,7 @@ $('save').addEventListener('click', async () => {
   if (!/^https:\/\//.test(blossom)) return setStatus('Blossom server must be an https:// URL', true);
   const relays = parseRelayList(relaysEl.value);
   await settingsItem.setValue({ relays, blossomServer: blossom, appendSourceLink: appendEl.checked, debug: debugEl.checked });
+  await xmrSettingsItem.setValue({ badges: badgesEl.checked, nostrDiscovery: discoveryEl.checked });
   relaysEl.value = relays.join('\n');
   setStatus('Saved');
 });

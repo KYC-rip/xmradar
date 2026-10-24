@@ -35,6 +35,17 @@
       </section>
 
       <section>
+        <h2>Monero on X</h2>
+        <label><input id="xmr-badges" type="checkbox" /> Show Monero badges on X</label>
+        <label><input id="xmr-discovery" type="checkbox" /> Discover Monero addresses via Nostr relays</label>
+        <p class="hint">
+          Discovery looks up NIP-39 claims and NIP-A3 payment addresses for the accounts on your screen.
+          Relays and X can see which accounts you're looking at. Off by default.
+          Without it, badges need the xmr.bio directory, which isn't available yet; right-click → "Tip with Monero" works either way.
+        </p>
+      </section>
+
+      <section>
         <h2>Behaviour</h2>
         <label><input id="append-source" type="checkbox" /> Append link to the original post by default</label>
         <label><input id="debug" type="checkbox" /> Show event JSON before signing (debug)</label>

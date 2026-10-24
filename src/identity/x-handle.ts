@@ -29,3 +29,29 @@ export function handleFromTarget(target: Element | null, loc: { hostname: string
   }
   return fromPath(loc.pathname);
 }
+
+export interface BadgeSlot {
+  handle: string;
+  /** `tweetId:handle` for tweets, `profile:handle` for a profile header; X reuses DOM nodes, so the slot is keyed by content */
+  key: string;
+  /** where the badge goes */
+  anchor: Element;
+}
+
+/** Author handle and slot for a timeline tweet. */
+export function tweetSlot(article: Element): BadgeSlot | null {
+  const anchor = article.querySelector('[data-testid="User-Name"]');
+  const handle = fromPath(anchor?.querySelector('a[href^="/"]')?.getAttribute('href'));
+  if (!anchor || !handle) return null;
+  const status = anchor.querySelector('a[href*="/status/"]')?.getAttribute('href') ?? '';
+  const tweetId = /\/status\/(\d{1,20})/.exec(status)?.[1] ?? 'x';
+  return { handle, key: `${tweetId}:${handle.toLowerCase()}`, anchor };
+}
+
+/** The profile header ("Name @handle" above the bio) on a profile page. */
+export function profileSlot(doc: Document, loc: { hostname: string; pathname: string }): BadgeSlot | null {
+  if (!isXHost(loc.hostname)) return null;
+  const handle = fromPath(loc.pathname);
+  const anchor = doc.querySelector('[data-testid="UserName"]');
+  return handle && anchor ? { handle, key: `profile:${handle.toLowerCase()}`, anchor } : null;
+}

@@ -156,7 +156,7 @@ show diff(current?.tags, tags)  → user confirms → one-shot sign → verify �
 ### 4.9 Background additions
 - `resolve-handles`, from x-badges:
   - Requires `sender.id === runtime.id` and a sender URL on x.com/twitter.com, with at most 200 handles per call.
-  - **Token bucket per tab** (burst 20, refills 1 per second). **Cache hits cost no tokens.** When the bucket is empty, the request is queued (up to 2s) and never silently dropped.
+  - **Token bucket per tab**, for relay (source B) lookups only: burst 50, refills 2 per second (superseded by RATE-2 in §7b). **Cache hits cost no tokens.** When the bucket is empty, handles carry over and are never silently dropped.
 - `refresh-directory` (alarm).
 - `setup-*` messages: session-gated, as in Phase 1.
 - New permission: `alarms`. Host access already covers `publish.twitter.com`, `cdn.syndication.twimg.com` and `api.kyc.rip`.

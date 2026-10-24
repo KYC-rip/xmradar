@@ -35,3 +35,15 @@ export function parseRelayList(text: string): string[] {
   }
   return [...out];
 }
+
+export interface XmrSettings {
+  /** Show Monero badges on X. */
+  badges: boolean;
+  /** Look up NIP-39/NIP-A3 claims on relays for handles on screen (relays and X can see which handles). */
+  nostrDiscovery: boolean;
+}
+
+// a separate item, so settings saved before Phase 2 need no migration
+export const xmrSettingsItem = storage.defineItem<XmrSettings>('sync:xmrSettings', {
+  fallback: { badges: true, nostrDiscovery: false },
+});

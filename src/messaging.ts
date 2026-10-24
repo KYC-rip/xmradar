@@ -1,5 +1,6 @@
 import type { Event } from 'nostr-tools/pure';
 import type { ResolvedIdentity } from './identity/envelope';
+import type { Badge } from './identity/resolve';
 import type { AddressCheck } from './xmr/address';
 
 /** background → content */
@@ -18,6 +19,13 @@ export interface OpenTipMsg {
 }
 
 export type XmrbioResult = { found: false } | { found: true; identity: ResolvedIdentity; check: AddressCheck };
+
+export interface ResolveHandlesResult {
+  /** [normalized handle, badge]; handles without a source map to a badge with no primary */
+  badges: [string, Badge][];
+  /** handles over the rate limit, to ask about again later */
+  pending: string[];
+}
 
 export interface ImageInfo {
   sha256: string;
@@ -41,7 +49,8 @@ export type BgRequest =
   | { type: 'close-session'; sessionId: string }
   | { type: 'load-nip65'; pubkey: string }
   | { type: 'test-signer' }
-  | { type: 'xmrbio-resolve'; handle: string };
+  | { type: 'xmrbio-resolve'; handle: string }
+  | { type: 'resolve-handles'; handles: string[] };
 
 export type BgResponse<T extends BgRequest['type']> = T extends 'fetch-image'
   ? ImageInfo
@@ -59,7 +68,9 @@ export type BgResponse<T extends BgRequest['type']> = T extends 'fetch-image'
               ? null
               : T extends 'xmrbio-resolve'
                 ? XmrbioResult
-                : never;
+                : T extends 'resolve-handles'
+                  ? ResolveHandlesResult
+                  : never;
 
 /** Every response is wrapped so errors survive the message boundary. */
 export type Wrapped<T> = { ok: true; data: T } | { ok: false; error: string };

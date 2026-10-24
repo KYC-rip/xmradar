@@ -1,14 +1,19 @@
 import { neventEncode } from 'nostr-tools/nip19';
 import { verifyEvent } from 'nostr-tools/pure';
 import { installBridge } from '../bridge';
+import { TokenBucket } from '../identity/bucket';
+import { EntryCache } from '../identity/cache';
+import { HANDLE_RE, normalizeHandle } from '../identity/envelope';
+import { verifyTwitterProof, type ProofResult } from '../identity/nostr';
+import { mergeBadge, resolveHandles, withoutNostr, type Badge } from '../identity/resolve';
 import { resolveXmrbio, type SeenEntries } from '../identity/xmrbio';
-import type { BgRequest, BgResponse, ImageInfo, OpenComposerMsg, OpenTipMsg, Wrapped } from '../messaging';
+import type { BgRequest, BgResponse, ImageInfo, OpenComposerMsg, OpenTipMsg, ResolveHandlesResult, Wrapped } from '../messaging';
 import { uploadBlob } from '../nostr/blossom';
 import { checkBlossomAuth, dedupeKey, sha256Hex } from '../nostr/event';
 import { fetchWriteRelays, publishToRelays } from '../nostr/relays';
 import { assertFetchableImageUrl } from '../nostr/url-guard';
 import { checkSessionSender, isExtensionPageSender, isXUrl } from '../sender';
-import { DEFAULT_RELAYS, postedItem, pubkeyItem, settingsItem } from '../settings';
+import { DEFAULT_RELAYS, postedItem, pubkeyItem, settingsItem, xmrSettingsItem } from '../settings';
 import { storage } from 'wxt/utils/storage';
 
 const MENU_ID = 'xmradar';
@@ -17,6 +22,12 @@ const X_PATTERNS = ['https://x.com/*', 'https://twitter.com/*', 'https://mobile.
 const SESSION_TTL_MS = 15 * 60_000;
 const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
 const NIP65_TTL_MS = 60 * 60_000;
+const BADGE_TTL_MS = 6 * 3600_000;
+// a "no badge" answer may come from relays that were briefly down, so it is rechecked sooner
+const NO_BADGE_TTL_MS = 3600_000;
+const PROOF_OK_TTL_MS = 7 * 86400_000;
+const PROOF_FAIL_TTL_MS = 86400_000;
+const MAX_HANDLES_PER_CALL = 200;
 
 interface Session {
   id: string;
@@ -30,6 +41,14 @@ const resolveSeen = storage.defineItem<SeenEntries>('local:xmrbioResolveSeen', {
 // resolves run one at a time so concurrent lookups can't overwrite each other's replay guard entry
 let resolveQueue: Promise<unknown> = Promise.resolve();
 const nip65Cache = storage.defineItem<{ pubkey: string; relays: string[]; at: number } | null>('local:nip65Cache', { fallback: null });
+
+type CacheEntries<V> = [string, { v: V; at: number }][];
+const badgeCacheItem = storage.defineItem<CacheEntries<Badge>>('local:badgeCache', { fallback: [] });
+const proofCacheItem = storage.defineItem<CacheEntries<ProofResult>>('local:proofCache', { fallback: [] });
+let caches: Promise<{ badges: EntryCache<Badge>; proofs: EntryCache<ProofResult> }> | null = null;
+let persistTimer: ReturnType<typeof setTimeout> | undefined;
+// RATE-2: only relay (source B) lookups are throttled; burst 50, refill 2/s, per tab
+const buckets = new Map<number, TokenBucket>();
 
 // image bytes between fetch-image and upload-image; refetched if the worker was suspended
 const imageCache = new Map<string, { bytes: ArrayBuffer; mime: string }>();
@@ -68,6 +87,8 @@ export default defineBackground(() => {
     tab ??= (await browser.tabs.query({ active: true, currentWindow: true }))[0];
     if (tab) void openComposer(tab, 0, { fromCommand: true });
   });
+
+  browser.tabs.onRemoved.addListener((tabId) => buckets.delete(tabId));
 
   browser.runtime.onMessage.addListener((msg: BgRequest, sender, sendResponse) => {
     handle(msg, sender).then(
@@ -232,6 +253,10 @@ async function handle(msg: BgRequest, sender: Browser.runtime.MessageSender): Pr
       if (!isExtensionPage(sender)) throw new Error('Not allowed');
       return { pubkey: await testSigner() };
     }
+    case 'resolve-handles': {
+      if (!isXContentScript(sender) || sender.tab?.id == null) throw new Error('Not allowed');
+      return resolveBadges(msg.handles, sender.tab.id);
+    }
     case 'xmrbio-resolve': {
       if (!isXContentScript(sender) && !isExtensionPage(sender)) throw new Error('Not allowed');
       const run = resolveQueue.then(async () => {
@@ -244,6 +269,70 @@ async function handle(msg: BgRequest, sender: Browser.runtime.MessageSender): Pr
       return run;
     }
   }
+}
+
+function loadCaches() {
+  caches ??= Promise.all([badgeCacheItem.getValue(), proofCacheItem.getValue()]).then(([b, p]) => ({
+    badges: new EntryCache(b),
+    proofs: new EntryCache(p),
+  }));
+  return caches;
+}
+
+function persistCaches() {
+  clearTimeout(persistTimer);
+  persistTimer = setTimeout(async () => {
+    const { badges, proofs } = await loadCaches();
+    await Promise.all([badgeCacheItem.setValue(badges.entries()), proofCacheItem.setValue(proofs.entries())]);
+  }, 1000);
+}
+
+async function cachedVerify(handle: string, tweetId: string, pubkey: string): Promise<ProofResult> {
+  const { proofs } = await loadCaches();
+  const key = `${handle}:${tweetId}:${pubkey}`;
+  const ttl = (r: ProofResult) => (r.status === 'verified' ? PROOF_OK_TTL_MS : PROOF_FAIL_TTL_MS);
+  const hit = proofs.get(key, Date.now(), ttl);
+  if (hit) return hit;
+  const result = await verifyTwitterProof(handle, tweetId, pubkey);
+  // network errors aren't cached, so the next sighting tries again
+  if (result.status !== 'error') proofs.set(key, result, Date.now());
+  return result;
+}
+
+async function resolveBadges(handles: string[], tabId: number): Promise<ResolveHandlesResult> {
+  const { badges: enabled, nostrDiscovery } = await xmrSettingsItem.getValue();
+  if (!enabled) return { badges: [], pending: [] };
+  const valid = [...new Set(handles.filter((h) => typeof h === 'string' && HANDLE_RE.test(h)))].slice(0, MAX_HANDLES_PER_CALL);
+  const { badges: cache } = await loadCaches();
+  const now = Date.now();
+  const out: [string, Badge][] = [];
+  const misses: string[] = [];
+  for (const h of valid) {
+    const hit = cache.get(normalizeHandle(h), now, (b) => (b.primary ? BADGE_TTL_MS : NO_BADGE_TTL_MS));
+    if (!hit) misses.push(h);
+    // with discovery off, Nostr entries cached earlier must not come back
+    else out.push([hit.handle, nostrDiscovery ? hit : withoutNostr(hit)]);
+  }
+  if (!misses.length) return { badges: out, pending: [] };
+  if (!nostrDiscovery) {
+    // no other passive source until the signed directory (Phase 2d)
+    for (const h of misses) out.push([normalizeHandle(h), mergeBadge(h, [])]);
+    return { badges: out, pending: [] };
+  }
+  let bucket = buckets.get(tabId);
+  if (!bucket) buckets.set(tabId, (bucket = new TokenBucket(50, 2)));
+  const granted = bucket.take(misses.length);
+  const batch = misses.slice(0, granted);
+  if (batch.length) {
+    const { relays } = await settingsItem.getValue();
+    const found = await resolveHandles(batch, { discovery: true, relays: [...new Set([...DEFAULT_RELAYS, ...relays])], verify: cachedVerify });
+    for (const [key, badge] of found) {
+      cache.set(key, badge, Date.now());
+      out.push([key, badge]);
+    }
+    persistCaches();
+  }
+  return { badges: out, pending: misses.slice(granted) };
 }
 
 /** Extension pages have no window.nostr, so ask the signer from a real web page. */

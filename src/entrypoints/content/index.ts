@@ -1,7 +1,9 @@
 import { handleFromTarget } from '../../identity/x-handle';
 import type { OpenComposerMsg, OpenTipMsg } from '../../messaging';
+import { isXHost } from '../../sender';
 import { openComposer } from './composer';
 import { openTip } from './tip';
+import { startBadges } from './x-badges';
 import './style.css';
 
 export default defineContentScript({
@@ -12,6 +14,8 @@ export default defineContentScript({
     const w = window as unknown as { __s2nContent?: boolean };
     if (w.__s2nContent) return;
     w.__s2nContent = true;
+
+    if (window === window.top && isXHost(location.hostname)) startBadges(ctx);
 
     let lastContextTarget: Element | null = null;
     let lastHover: Element | null = null;

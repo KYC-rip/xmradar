@@ -38,6 +38,10 @@ pnpm dev          # Chrome with hot reload; `pnpm dev:firefox` for Firefox
 
 On x.com, right-click a tweet or profile → **Tip with Monero (look up on xmr.bio)**. XMRadar asks xmr.bio about that one handle (only on this click), checks the response signature against the pinned xmr.bio key, rejects stale or replayed responses, and validates the address (mainnet, Keccak checksum). The popup shows a `monero:` QR code, the address, an optional amount, an "Open in wallet" link and where the data came from. XMRadar never sends or holds funds. Badges on X come in later phases (see PLAN-PHASE2.md).
 
+## Monero badges on X (Phase 2b)
+
+With **Discover Monero addresses via Nostr relays** turned on in the options (off by default), tweets get an orange **XMR** badge when the author's npub has published a Monero address (NIP-A3, kind 10133) and links the X handle (NIP-39, kind 10011) with a proof tweet that XMRadar checks itself, through X's oEmbed API and then syndication. Relays and X can see which accounts you're looking at while discovery is on. Clicking a badge opens the tip popup with every source. Without discovery, badges need the xmr.bio directory, which comes in Phase 2d.
+
 ## Security notes
 
 - The bridge to `window.nostr` runs in the page's own JavaScript world. Page scripts can see and imitate those messages, so the real security boundary is your signer's approval prompt.
