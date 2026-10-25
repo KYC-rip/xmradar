@@ -85,6 +85,29 @@
         <p class="hint">Also on <a href="https://xmr.bio" target="_blank" rel="noopener noreferrer">xmr.bio</a>: claim or refresh your profile there and use its "Link Nostr" button.</p>
       </section>
 
+      <section id="burner">
+        <h2>Burner email</h2>
+        <p class="hint">
+          Throwaway addresses from kyc.rip GhostMail. XMRadar sends GhostMail only the address and its access token, nothing about the page you're on.
+          kyc.rip can read mail sent to the address until it expires.
+        </p>
+        <div class="row">Address: <code id="burner-email">none</code> <button id="burner-copy" class="hidden">Copy</button></div>
+        <div class="row hint" id="burner-meta"></div>
+        <div class="row">
+          <button id="burner-create">Get a 60-minute address</button>
+          <button id="burner-burn" class="hidden">Burn now</button>
+          <button id="burner-forget" class="hidden">Forget</button>
+        </div>
+        <details id="burner-import-box">
+          <summary>Use a paid inbox from kyc.rip/mail</summary>
+          <p class="hint">Paid inboxes last longer and use better-reputation domains. XMRadar only reads them; "Forget" removes them here and leaves them on kyc.rip.</p>
+          <input id="burner-import-email" type="text" spellcheck="false" autocomplete="off" placeholder="address@vigilbox.xyz" />
+          <input id="burner-import-token" type="password" autocomplete="off" placeholder="Access token" />
+          <button id="burner-import">Import</button>
+        </details>
+        <span id="burner-status" role="status" aria-live="polite"></span>
+      </section>
+
       <section>
         <h2>Behaviour</h2>
         <label><input id="append-source" type="checkbox" /> Append link to the original post by default</label>

@@ -85,7 +85,16 @@ export type BgRequest =
   | { type: 'setup-prepare'; action: SetupRequest }
   | { type: 'setup-sign'; id: string }
   | { type: 'setup-retry'; id: string }
-  | { type: 'setup-cancel' };
+  | { type: 'setup-cancel' }
+  | { type: 'burner-import'; email: string; token: string }
+  | { type: 'burner-burn' }
+  | { type: 'burner-forget' };
+
+/** Port name for creating a free burner inbox; the open port keeps the worker busy during the proof of work. */
+export const BURNER_CREATE_PORT = 'burner-create';
+
+/** background → options, on the burner-create port */
+export type BurnerCreateEvent = { type: 'progress'; hashes: number } | { type: 'done'; email: string } | { type: 'error'; message: string };
 
 export type BgResponse<T extends BgRequest['type']> = T extends 'fetch-image'
   ? ImageInfo
@@ -111,9 +120,11 @@ export type BgResponse<T extends BgRequest['type']> = T extends 'fetch-image'
                       ? PreparedSetup
                       : T extends 'setup-sign' | 'setup-retry'
                         ? { results: RelayResult[] }
-                        : T extends 'setup-cancel'
+                        : T extends 'setup-cancel' | 'burner-burn' | 'burner-forget'
                           ? null
-                          : never;
+                          : T extends 'burner-import'
+                            ? { email: string }
+                            : never;
 
 /** Every response is wrapped so errors survive the message boundary. */
 export type Wrapped<T> = { ok: true; data: T } | { ok: false; error: string };

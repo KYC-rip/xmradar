@@ -356,11 +356,15 @@ Optional kyc-rip follow-ups:
 
 ## 9. Conditions from review round 2 (passed 8.2), part of the build
 
-- **TOKEN-STORAGE-BOUNDARY:** call
-  `storage.local.setAccessLevel({accessLevel: 'TRUSTED_CONTEXTS'})` at
-  background start, where the browser supports it. The options page is a
-  trusted context, but by rule it never reads `burner:inbox`.
-  - Test: a content-script context can't read the token.
+- **TOKEN-STORAGE-BOUNDARY (as built in B1):** the token lives in the extension
+  origin's IndexedDB (`xmradar-burner`), not `storage.local`.
+  - Why not `setAccessLevel`: `x-badges` reads `storage.local`, so restricting
+    it to trusted contexts would break content scripts, and Firefox doesn't
+    support the call.
+  - Why IndexedDB works: content scripts run under the page's origin and
+    can't open this database.
+  - `local:burnerInbox` holds no token, so the options page may read it.
+  - Tests: meta never contains the token.
 - **GUARD-TTL:** the tick guard is `{at}`.
   - A guard older than 60 s counts as free.
   - It's cleared in a `finally` block.

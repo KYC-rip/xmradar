@@ -25,3 +25,5 @@ h3 { font-size: 14px; margin: 10px 0 0; }
 .diff .add { color: #2e7d32; }
 .diff .del { color: #c62828; text-decoration: line-through; }
 .results { margin: 0; padding-left: 18px; font-size: 13px; }
+input[type='password'] { width: 100%; box-sizing: border-box; font: inherit; padding: 7px 9px; border: 1px solid var(--border); border-radius: 7px; background: transparent; color: inherit; }
+details { width: 100%; display: flex; flex-direction: column; gap: 6px; }

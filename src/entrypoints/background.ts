@@ -9,6 +9,7 @@ import { buildMerged, kindFor, newestOwn, tweetUrl, type SetupAction } from '../
 import { validateMoneroAddress } from '../xmr/address';
 import { mergeBadge, resolveHandles, withoutNostr, type Badge } from '../identity/resolve';
 import { resolveXmrbio, type SeenEntries } from '../identity/xmrbio';
+import { BURNER_CREATE_PORT, type BurnerCreateEvent } from '../messaging';
 import type { BgRequest, BgResponse, ImageInfo, OpenComposerMsg, OpenTipMsg, PreparedSetup, ResolveHandlesResult, SetupRequest, SetupStatus, Wrapped } from '../messaging';
 import { uploadBlob } from '../nostr/blossom';
 import { statusIdFromUrl } from '../extractors/x-article';
@@ -18,6 +19,8 @@ import { assertFetchableImageUrl } from '../nostr/url-guard';
 import { checkSessionSender, isExtensionPageSender, isXUrl } from '../sender';
 import { DEFAULT_RELAYS, myHandleItem, postedItem, pubkeyItem, settingsItem, xmrSettingsItem } from '../settings';
 import { storage } from 'wxt/utils/storage';
+import { activeInbox, burnerInboxItem, burnFreeInbox, createFreeInbox, forgetImportedInbox, importInbox, type BurnerDeps } from '../burner/service';
+import { idbTokenStore } from '../burner/token-store';
 
 const MENU_ID = 'xmradar';
 const TIP_MENU_ID = 'xmradar-tip';
@@ -56,6 +59,8 @@ const buckets = new Map<number, TokenBucket>();
 // image bytes between fetch-image and upload-image; refetched if the worker was suspended
 const imageCache = new Map<string, { bytes: ArrayBuffer; mime: string }>();
 
+const burner: BurnerDeps = { meta: { get: () => burnerInboxItem.getValue(), set: (v) => burnerInboxItem.setValue(v) }, tokens: idbTokenStore };
+
 export default defineBackground(() => {
   browser.runtime.onInstalled.addListener(async () => {
     await browser.contextMenus.removeAll();
@@ -92,6 +97,21 @@ export default defineBackground(() => {
   });
 
   browser.tabs.onRemoved.addListener((tabId) => buckets.delete(tabId));
+
+  // drop an inbox that expired while the worker was asleep
+  void activeInbox(burner).catch(() => {});
+
+  browser.runtime.onConnect.addListener((port) => {
+    if (port.name !== BURNER_CREATE_PORT) return;
+    if (!port.sender || !isExtensionPage(port.sender)) return port.disconnect();
+    let open = true;
+    port.onDisconnect.addListener(() => (open = false));
+    const post = (m: BurnerCreateEvent) => open && port.postMessage(m);
+    createFreeInbox(burner, (hashes) => post({ type: 'progress', hashes })).then(
+      (inbox) => post({ type: 'done', email: inbox.email }),
+      (e) => post({ type: 'error', message: e instanceof Error ? e.message : String(e) }),
+    );
+  });
 
   browser.runtime.onMessage.addListener((msg: BgRequest, sender, sendResponse) => {
     handle(msg, sender).then(
@@ -294,6 +314,21 @@ async function handle(msg: BgRequest, sender: Browser.runtime.MessageSender): Pr
       });
       resolveQueue = run.catch(() => {});
       return run;
+    }
+    case 'burner-import': {
+      if (!isExtensionPage(sender)) throw new Error('Not allowed');
+      const inbox = await importInbox(burner, String(msg.email), String(msg.token));
+      return { email: inbox.email };
+    }
+    case 'burner-burn': {
+      if (!isExtensionPage(sender)) throw new Error('Not allowed');
+      await burnFreeInbox(burner);
+      return null;
+    }
+    case 'burner-forget': {
+      if (!isExtensionPage(sender)) throw new Error('Not allowed');
+      await forgetImportedInbox(burner);
+      return null;
     }
   }
 }

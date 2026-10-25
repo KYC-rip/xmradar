@@ -1,6 +1,7 @@
 import { npubEncode } from 'nostr-tools/nip19';
 import { sendToBackground } from '../../messaging';
 import { DEFAULT_BLOSSOM, parseRelayList, pubkeyItem, settingsItem, xmrSettingsItem } from '../../settings';
+import { initBurner } from './burner';
 import { initIdentity } from './identity';
 import './style.css';
 
@@ -81,3 +82,4 @@ $('load-nip65').addEventListener('click', async () => {
 
 void load();
 void initIdentity();
+void initBurner();
