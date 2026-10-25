@@ -5,7 +5,7 @@ import { TokenBucket } from '../identity/bucket';
 import { EntryCache } from '../identity/cache';
 import { HANDLE_RE, normalizeHandle } from '../identity/envelope';
 import { KIND_IDENTITIES, KIND_PAYTO, moneroPayto, parseTweetProof, twitterClaims, verifyTwitterProof, type ProofResult } from '../identity/nostr';
-import { buildMerged, kindFor, newestOwn, tweetUrl, type SetupAction } from '../identity/setup';
+import { buildMerged, kindFor, newestOwn, setupTargets, tweetUrl, type SetupAction } from '../identity/setup';
 import { validateMoneroAddress } from '../xmr/address';
 import { mergeBadge, resolveHandles, withoutNostr, type Badge } from '../identity/resolve';
 import { resolveXmrbio, type SeenEntries } from '../identity/xmrbio';
@@ -17,7 +17,7 @@ import { KIND_ARTICLE, checkBlossomAuth, checkPublishable, checkSigned, dedupeKe
 import { allRelaysFrom, fetchWriteRelays, publishToRelays, readEach } from '../nostr/relays';
 import { assertFetchableImageUrl } from '../nostr/url-guard';
 import { checkSessionSender, isExtensionPageSender, isXUrl } from '../sender';
-import { DEFAULT_RELAYS, myHandleItem, postedItem, pubkeyItem, settingsItem, xmrSettingsItem } from '../settings';
+import { DEFAULT_RELAYS, INDEX_RELAYS, withoutIndex, myHandleItem, postedItem, pubkeyItem, settingsItem, xmrSettingsItem } from '../settings';
 import { storage } from 'wxt/utils/storage';
 import { activeInbox, burnerInboxItem, burnFreeInbox, createFreeInbox, forgetImportedInbox, importInbox, type BurnerDeps } from '../burner/service';
 import { idbTokenStore } from '../burner/token-store';
@@ -207,11 +207,12 @@ async function imageDim(bytes: ArrayBuffer, mime: string): Promise<string | unde
 }
 
 async function resolveRelays(pubkey: string): Promise<string[]> {
-  const { relays } = await settingsItem.getValue();
+  // index relays refuse notes, so they're dropped from every source of post relays
+  const relays = withoutIndex((await settingsItem.getValue()).relays);
   if (relays.length) return relays;
   const cached = await nip65Cache.getValue();
   if (cached?.pubkey === pubkey && Date.now() - cached.at < NIP65_TTL_MS && cached.relays.length) return cached.relays;
-  const fromNip65 = await fetchWriteRelays(pubkey, DEFAULT_RELAYS).catch(() => []);
+  const fromNip65 = withoutIndex(await fetchWriteRelays(pubkey, [...DEFAULT_RELAYS, ...INDEX_RELAYS]).catch(() => []));
   if (fromNip65.length) {
     await nip65Cache.setValue({ pubkey, relays: fromNip65, at: Date.now() });
     return fromNip65;
@@ -271,7 +272,7 @@ async function handle(msg: BgRequest, sender: Browser.runtime.MessageSender): Pr
     case 'load-nip65': {
       if (!isExtensionPage(sender)) throw new Error('Not allowed');
       const { relays } = await settingsItem.getValue();
-      const found = await fetchWriteRelays(msg.pubkey, [...new Set([...DEFAULT_RELAYS, ...relays])]);
+      const found = withoutIndex(await fetchWriteRelays(msg.pubkey, [...new Set([...DEFAULT_RELAYS, ...INDEX_RELAYS, ...relays])]));
       if (found.length) await nip65Cache.setValue({ pubkey: msg.pubkey, relays: found, at: Date.now() });
       return { relays: found };
     }
@@ -386,7 +387,7 @@ async function resolveBadges(handles: string[], tabId: number): Promise<ResolveH
   const batch = misses.slice(0, granted);
   if (batch.length) {
     const { relays } = await settingsItem.getValue();
-    const found = await resolveHandles(batch, { discovery: true, relays: [...new Set([...DEFAULT_RELAYS, ...relays])], verify: cachedVerify });
+    const found = await resolveHandles(batch, { discovery: true, relays: [...new Set([...DEFAULT_RELAYS, ...INDEX_RELAYS, ...relays])], verify: cachedVerify });
     for (const [key, badge] of found) {
       cache.set(key, badge, Date.now());
       out.push([key, badge]);
@@ -502,12 +503,12 @@ async function requirePubkey(): Promise<string> {
   return pubkey;
 }
 
-/** Your NIP-65 relays (read and write), your manual relays, and the defaults, where badge discovery looks. */
+/** Your NIP-65 relays (read and write), your manual relays, the defaults and the index relays, where badge discovery looks. */
 async function setupRelays(pubkey: string): Promise<string[]> {
   const { relays } = await settingsItem.getValue();
-  const lists = await readEach([...new Set([...DEFAULT_RELAYS, ...relays])], { kinds: [10002], authors: [pubkey] }, 4000);
+  const lists = await readEach([...new Set([...DEFAULT_RELAYS, ...INDEX_RELAYS, ...relays])], { kinds: [10002], authors: [pubkey] }, 4000);
   const nip65 = allRelaysFrom(newestOwn(lists.events, 10002, pubkey));
-  return [...new Set([...nip65, ...relays, ...DEFAULT_RELAYS])];
+  return [...new Set([...nip65, ...relays, ...DEFAULT_RELAYS, ...INDEX_RELAYS])];
 }
 
 async function setupStatus(): Promise<SetupStatus> {
@@ -565,8 +566,10 @@ async function setupPrepare(req: SetupRequest): Promise<PreparedSetup> {
   const current = newestOwn(read.events, kind, pubkey);
   const template = buildMerged(current, action);
   const id = crypto.randomUUID();
-  await setupItem.setValue({ id, action, template, pubkey, relays: read.readable, baseId: current?.id ?? null, expires: Date.now() + SETUP_TTL_MS });
-  return { id, kind, pubkey, before: current?.tags ?? null, after: template.tags, relays: read.readable, unreadable: read.unreadable };
+  const targets = setupTargets(kind, read.readable);
+  if (!targets.length) throw new Error("Couldn't read your current list from a relay that accepts it, so nothing was published. Try again.");
+  await setupItem.setValue({ id, action, template, pubkey, relays: targets, baseId: current?.id ?? null, expires: Date.now() + SETUP_TTL_MS });
+  return { id, kind, pubkey, before: current?.tags ?? null, after: template.tags, relays: targets, unreadable: read.unreadable };
 }
 
 async function setupPending(id: string): Promise<PendingSetup> {

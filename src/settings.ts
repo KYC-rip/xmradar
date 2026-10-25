@@ -1,6 +1,14 @@
 import { storage } from 'wxt/utils/storage';
 
 export const DEFAULT_RELAYS = ['wss://relay.damus.io', 'wss://nos.lol', 'wss://relay.primal.net'];
+/**
+ * Relays that keep profiles and relay/payment lists but refuse notes: read for relay
+ * lists, identity setup and badge discovery. Only kind 10133 is published to them
+ * (10011 support is unverified), and never posts.
+ */
+export const INDEX_RELAYS = ['wss://purplepag.es'];
+const isIndexRelay = (url: string) => INDEX_RELAYS.includes(url.trim().replace(/\/+$/, '').toLowerCase());
+export const withoutIndex = (relays: string[]) => relays.filter((r) => !isIndexRelay(r));
 export const DEFAULT_BLOSSOM = 'https://blossom.primal.net';
 
 export interface Settings {

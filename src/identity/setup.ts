@@ -1,5 +1,6 @@
 import type { Event, EventTemplate } from 'nostr-tools/pure';
 import { validateMoneroAddress } from '../xmr/address';
+import { withoutIndex } from '../settings';
 import { HANDLE_RE, normalizeHandle } from './envelope';
 import { KIND_IDENTITIES, KIND_PAYTO, validEvent } from './nostr';
 
@@ -8,6 +9,9 @@ export type SetupAction =
   | { type: 'remove-address' }
   | { type: 'link-x'; handle: string; tweetId: string }
   | { type: 'unlink-x'; handle: string };
+
+/** Where a setup event goes: the relays it was read from, minus index relays unless it's the payment list. */
+export const setupTargets = (kind: number, readable: string[]) => (kind === KIND_PAYTO ? readable : withoutIndex(readable));
 
 export const kindFor = (a: SetupAction) => (a.type === 'add-address' || a.type === 'remove-address' ? KIND_PAYTO : KIND_IDENTITIES);
 

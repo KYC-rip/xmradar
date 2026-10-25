@@ -1,6 +1,7 @@
 import { finalizeEvent, generateSecretKey, getPublicKey, type Event } from 'nostr-tools/pure';
 import { describe, expect, it } from 'vitest';
-import { buildMerged, isTarget, newestOwn, tagDiff } from '../src/identity/setup';
+import { buildMerged, isTarget, newestOwn, setupTargets, tagDiff } from '../src/identity/setup';
+import { withoutIndex } from '../src/settings';
 import { checkSigned } from '../src/nostr/event';
 import { readEach, type RelayReader } from '../src/nostr/relays';
 
@@ -126,5 +127,19 @@ describe('one-shot signing check', () => {
     const good = finalizeEvent({ ...template }, sk);
     expect(() => checkSigned(template, { ...good, sig: '00'.repeat(64) }, pk)).toThrow(/signature/);
     expect(() => checkSigned(template, { ...good, created_at: 1 }, pk)).toThrow(/modified/);
+  });
+});
+
+describe('index relays', () => {
+  const read = ['wss://relay.damus.io', 'wss://purplepag.es', 'wss://nos.lol'];
+
+  it('never carry posts, whatever the spelling', () => {
+    expect(withoutIndex(['wss://nos.lol', 'wss://PurplePag.es/', ' wss://purplepag.es '])).toEqual(['wss://nos.lol']);
+  });
+
+  it('get the payment list but not the identity list', () => {
+    expect(setupTargets(10133, read)).toEqual(read);
+    expect(setupTargets(10011, read)).toEqual(['wss://relay.damus.io', 'wss://nos.lol']);
+    expect(setupTargets(10011, ['wss://purplepag.es'])).toEqual([]);
   });
 });
