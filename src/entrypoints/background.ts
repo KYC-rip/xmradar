@@ -10,7 +10,8 @@ import { validateMoneroAddress } from '../xmr/address';
 import { mergeBadge, resolveHandles, withoutNostr, type Badge } from '../identity/resolve';
 import { resolveXmrbio, type SeenEntries } from '../identity/xmrbio';
 import { BURNER_CREATE_PORT, type BurnerCreateEvent } from '../messaging';
-import type { BgRequest, BgResponse, ImageInfo, OpenComposerMsg, OpenTipMsg, PreparedSetup, ResolveHandlesResult, SetupRequest, SetupStatus, Wrapped } from '../messaging';
+import type { BgRequest, BgResponse, ImageInfo, OpenComposerMsg, OpenTipMsg, PreparedSetup, ResolveHandlesResult, SetupRequest, SetupStatus, Wrapped, XmrbioResult, XmrbioStatus } from '../messaging';
+import { setupStatusLast, xmrbioLinked } from '../identity/status';
 import { uploadBlob } from '../nostr/blossom';
 import { statusIdFromUrl } from '../extractors/x-article';
 import { KIND_ARTICLE, checkBlossomAuth, checkPublishable, checkSigned, dedupeKey, sha256Hex } from '../nostr/event';
@@ -19,8 +20,9 @@ import { assertFetchableImageUrl } from '../nostr/url-guard';
 import { checkSessionSender, isExtensionPageSender, isXUrl } from '../sender';
 import { DEFAULT_RELAYS, INDEX_RELAYS, withoutIndex, myHandleItem, postedItem, pubkeyItem, settingsItem, xmrSettingsItem } from '../settings';
 import { storage } from 'wxt/utils/storage';
-import { activeInbox, burnerInboxItem, burnFreeInbox, createFreeInbox, forgetImportedInbox, importInbox, type BurnerDeps } from '../burner/service';
+import { activeInbox, burnerCreatingItem, burnerInboxItem, burnerLastErrorItem, burnFreeInbox, createFreeInbox, forgetImportedInbox, importInbox, type BurnerDeps } from '../burner/service';
 import { idbTokenStore } from '../burner/token-store';
+import { trackCreate } from '../burner/tracked';
 
 const MENU_ID = 'xmradar';
 const TIP_MENU_ID = 'xmradar-tip';
@@ -107,7 +109,12 @@ export default defineBackground(() => {
     let open = true;
     port.onDisconnect.addListener(() => (open = false));
     const post = (m: BurnerCreateEvent) => open && port.postMessage(m);
-    createFreeInbox(burner, (hashes) => post({ type: 'progress', hashes })).then(
+    // the create doesn't depend on the port: a popup that closes finds the result in storage
+    trackCreate(() => createFreeInbox(burner, (hashes) => post({ type: 'progress', hashes })), {
+      creating: burnerCreatingItem,
+      lastError: burnerLastErrorItem,
+      ping: () => browser.runtime.getPlatformInfo(),
+    }).then(
       (inbox) => post({ type: 'done', email: inbox.email }),
       (e) => post({ type: 'error', message: e instanceof Error ? e.message : String(e) }),
     );
@@ -307,14 +314,7 @@ async function handle(msg: BgRequest, sender: Browser.runtime.MessageSender): Pr
     }
     case 'xmrbio-resolve': {
       if (!isXContentScript(sender) && !isExtensionPage(sender)) throw new Error('Not allowed');
-      const run = resolveQueue.then(async () => {
-        const stored = await resolveSeen.getValue();
-        const { result, seen } = await resolveXmrbio(msg.handle, Array.isArray(stored) ? stored : []);
-        await resolveSeen.setValue(seen);
-        return result;
-      });
-      resolveQueue = run.catch(() => {});
-      return run;
+      return resolveQueued(msg.handle);
     }
     case 'burner-import': {
       if (!isExtensionPage(sender)) throw new Error('Not allowed');
@@ -511,7 +511,36 @@ async function setupRelays(pubkey: string): Promise<string[]> {
   return [...new Set([...nip65, ...relays, ...DEFAULT_RELAYS, ...INDEX_RELAYS])];
 }
 
+/** One xmr.bio /resolve at a time, so the freshness guard sees responses in order. */
+function resolveQueued(handle: string): Promise<XmrbioResult> {
+  const run = resolveQueue.then(async () => {
+    const stored = await resolveSeen.getValue();
+    const { result, seen } = await resolveXmrbio(handle, Array.isArray(stored) ? stored : []);
+    await resolveSeen.setValue(seen);
+    return result;
+  });
+  resolveQueue = run.catch(() => {});
+  return run;
+}
+
+/** The user's own handle on xmr.bio, for the status panel (a click, never passive). */
+async function xmrbioStatus(handle: string, pubkey: string): Promise<XmrbioStatus> {
+  try {
+    const r = await resolveQueued(handle);
+    if (!r.found) return { found: false };
+    return { found: true, address: r.identity.address, check: r.check, linked: xmrbioLinked(r.identity.proofs, pubkey) };
+  } catch (e) {
+    return { found: 'error', reason: e instanceof Error ? e.message : String(e) };
+  }
+}
+
 async function setupStatus(): Promise<SetupStatus> {
+  const status = await readSetupStatus();
+  await setupStatusLast.setValue({ at: Date.now(), status });
+  return status;
+}
+
+async function readSetupStatus(): Promise<SetupStatus> {
   const pubkey = await requirePubkey();
   const relays = await setupRelays(pubkey);
   const read = await readEach(relays, { kinds: [KIND_PAYTO, KIND_IDENTITIES], authors: [pubkey] });
@@ -519,6 +548,7 @@ async function setupStatus(): Promise<SetupStatus> {
   const ids = newestOwn(read.events, KIND_IDENTITIES, pubkey);
   const mine = await myHandleItem.getValue();
   const p = payto ? moneroPayto(payto) : null;
+  const xmrbio = mine ? xmrbioStatus(mine.handle, pubkey) : Promise.resolve(null);
   let link: SetupStatus['link'] = null;
   if (mine && ids) {
     const claim = twitterClaims(ids, new Set([normalizeHandle(mine.handle)]))[0];
@@ -532,7 +562,7 @@ async function setupStatus(): Promise<SetupStatus> {
     const proven = link?.proof.status === 'verified' ? true : link?.proof.status === 'error' ? mine.proven : false;
     if (proven !== mine.proven) await myHandleItem.setValue({ handle: mine.handle, proven });
   }
-  return { pubkey, relays: read.readable, unreadable: read.unreadable, address: p ? { address: p.address, check: p.check } : null, link };
+  return { pubkey, relays: read.readable, unreadable: read.unreadable, address: p ? { address: p.address, check: p.check } : null, link, xmrbio: await xmrbio };
 }
 
 async function setupPrepare(req: SetupRequest): Promise<PreparedSetup> {

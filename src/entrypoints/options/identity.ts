@@ -3,12 +3,11 @@ import { HANDLE_RE, normalizeHandle } from '../../identity/envelope';
 import { tagDiff } from '../../identity/setup';
 import { sendToBackground, type PreparedSetup, type RelayResult, type SetupRequest } from '../../messaging';
 import { myHandleItem, pubkeyItem } from '../../settings';
+import { mountIdentityStatus } from '../../ui/identity-status';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
 const npubEl = $('id-npub');
-const stateAddress = $('id-state-address');
-const stateHandle = $('id-state-handle');
 const handleEl = $<HTMLInputElement>('id-handle');
 const addressEl = $<HTMLInputElement>('id-address');
 const tweetUrlEl = $<HTMLInputElement>('id-tweet-url');
@@ -27,14 +26,13 @@ const statusEl = $('id-status');
 const KIND_NAMES: Record<number, string> = { 10133: 'payment addresses (kind 10133)', 10011: 'external identities (kind 10011)' };
 
 let prepared: PreparedSetup | null = null;
+const status = mountIdentityStatus($('identity-status'));
 let busy = false;
 
 function setStatus(text: string, kind: 'ok' | 'error' | '' = '') {
   statusEl.textContent = text;
   statusEl.className = kind;
 }
-
-const shortAddr = (a: string) => `${a.slice(0, 10)}…${a.slice(-8)}`;
 
 async function guard(label: string, fn: () => Promise<void>) {
   if (busy) return;
@@ -52,22 +50,6 @@ async function guard(label: string, fn: () => Promise<void>) {
 async function showKey() {
   const pk = await pubkeyItem.getValue();
   npubEl.textContent = pk ? npubEncode(pk) : 'not connected (use "Test signer" above)';
-}
-
-async function refresh() {
-  await guard('Reading your current Nostr lists…', async () => {
-    const s = await sendToBackground({ type: 'setup-status' });
-    stateAddress.textContent = !s.address ? 'no' : s.address.check.ok ? `yes, ${shortAddr(s.address.address)}` : `invalid address published (${s.address.check.reason})`;
-    stateAddress.className = s.address?.check.ok ? 'ok' : '';
-    const mine = await myHandleItem.getValue();
-    if (!mine) stateHandle.textContent = 'confirm your handle first';
-    else if (!s.link) stateHandle.textContent = `@${mine.handle} is not linked yet`;
-    else if (s.link.proof.status === 'verified') stateHandle.textContent = `yes, @${s.link.handle}`;
-    else if (s.link.proof.status === 'error') stateHandle.textContent = `linked, but X couldn't be reached to check the tweet (${s.link.proof.reason})`;
-    else stateHandle.textContent = `linked, but the proof tweet fails: ${s.link.proof.reason}`;
-    stateHandle.className = s.link?.proof.status === 'verified' ? 'ok' : '';
-    setStatus(s.unreadable.length ? `Read ${s.relays.length} relays; couldn't read ${s.unreadable.join(', ')}.` : `Read ${s.relays.length} relays.`, 'ok');
-  });
 }
 
 function showDiff(p: PreparedSetup) {
@@ -132,11 +114,6 @@ const prepare = (action: SetupRequest) =>
     setStatus('Check the change, then sign it.');
   });
 
-$('id-refresh').addEventListener('click', () => {
-  if (!confirmBox.classList.contains('hidden')) hideDiff();
-  void refresh();
-});
-
 $('id-handle-save').addEventListener('click', async () => {
   const handle = normalizeHandle(handleEl.value);
   if (!HANDLE_RE.test(handle)) return setStatus('Enter your X handle (letters, digits and _ only).', 'error');
@@ -177,7 +154,8 @@ signBtn.addEventListener('click', () => {
       confirmBox.classList.add('hidden');
       const failed = showResults(results);
       const ok = failed < results.length;
-      setStatus(!ok ? 'No relay accepted the event.' : `${failed ? 'Published, but some relays failed.' : 'Published.'} "Check status" shows the result.`, ok ? 'ok' : 'error');
+      setStatus(!ok ? 'No relay accepted the event.' : failed ? 'Published, but some relays failed.' : 'Published.', ok ? 'ok' : 'error');
+      if (ok) void status.refresh();
     } finally {
       updateSign();
     }
@@ -191,6 +169,7 @@ retryBtn.addEventListener('click', () => {
     const { results } = await sendToBackground({ type: 'setup-retry', id: p.id });
     const failed = showResults(results);
     setStatus(failed ? 'Some relays still failed.' : 'Published.', failed ? 'error' : 'ok');
+    if (failed < results.length) void status.refresh();
   });
 });
 

@@ -34,17 +34,6 @@
         <label>Blossom server <input id="blossom" type="url" /></label>
       </section>
 
-      <section>
-        <h2>Monero on X</h2>
-        <label><input id="xmr-badges" type="checkbox" /> Show Monero badges on X</label>
-        <label><input id="xmr-discovery" type="checkbox" /> Discover Monero addresses via Nostr relays</label>
-        <p class="hint">
-          Discovery looks up NIP-39 claims and NIP-A3 payment addresses for the accounts on your screen.
-          Relays and X can see which accounts you're looking at. Off by default.
-          Without it, badges need the xmr.bio directory, which isn't available yet; right-click → "Tip with Monero" works either way.
-        </p>
-      </section>
-
       <section id="identity">
         <h2>Your Monero identity</h2>
         <p class="hint">
@@ -52,11 +41,12 @@
           Each change is signed in a temporary tab, and your signer shows the event before you approve it.
         </p>
         <div class="row">Signing key: <code id="id-npub">not connected (use "Test signer" above)</code></div>
-        <ul id="id-state" class="state">
-          <li>Address published: <span id="id-state-address">unknown</span></li>
-          <li>X handle proven: <span id="id-state-handle">unknown</span></li>
-        </ul>
-        <p class="hint">Your badge is live once both are done. <button id="id-refresh">Check status</button></p>
+        <div id="identity-status">
+          <ul data-status="lines" class="state"></ul>
+          <div class="row"><button data-status="check">Check status</button> <span data-status="when" class="hint"></span></div>
+          <span data-status="message" role="status" aria-live="polite"></span>
+        </div>
+        <p class="hint">Badge switches ("Show Monero badges on X", Nostr discovery) are in the XMRadar toolbar popup.</p>
 
         <h3>1. Your X handle</h3>
         <div class="row"><span>@</span><input id="id-handle" type="text" spellcheck="false" placeholder="yourhandle" /><button id="id-handle-save">Confirm</button></div>
@@ -91,21 +81,21 @@
           Throwaway addresses from kyc.rip GhostMail. XMRadar sends GhostMail only the address and its access token, nothing about the page you're on.
           kyc.rip can read mail sent to the address until it expires.
         </p>
-        <div class="row">Address: <code id="burner-email">none</code> <button id="burner-copy" class="hidden">Copy</button></div>
-        <div class="row hint" id="burner-meta"></div>
+        <div class="row">Address: <code data-burner="email">none</code> <button data-burner="copy" class="hidden">Copy</button></div>
+        <div class="row hint" data-burner="meta"></div>
         <div class="row">
-          <button id="burner-create">Get a 60-minute address</button>
-          <button id="burner-burn" class="hidden">Burn now</button>
-          <button id="burner-forget" class="hidden">Forget</button>
+          <button data-burner="create">Get a 60-minute address</button>
+          <button data-burner="burn" class="hidden">Burn now</button>
+          <button data-burner="forget" class="hidden">Forget</button>
         </div>
-        <details id="burner-import-box">
+        <details data-burner="import-box">
           <summary>Use a paid inbox from kyc.rip/mail</summary>
           <p class="hint">Paid inboxes last longer and use better-reputation domains. XMRadar only reads them; "Forget" removes them here and leaves them on kyc.rip.</p>
-          <input id="burner-import-email" type="text" spellcheck="false" autocomplete="off" placeholder="address@vigilbox.xyz" />
-          <input id="burner-import-token" type="password" autocomplete="off" placeholder="Access token" />
-          <button id="burner-import">Import</button>
+          <input data-burner="import-email" type="text" spellcheck="false" autocomplete="off" placeholder="address@vigilbox.xyz" />
+          <input data-burner="import-token" type="password" autocomplete="off" placeholder="Access token" />
+          <button data-burner="import">Import</button>
         </details>
-        <span id="burner-status" role="status" aria-live="polite"></span>
+        <span data-burner="status" role="status" aria-live="polite"></span>
       </section>
 
       <section>

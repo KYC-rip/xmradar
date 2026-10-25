@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>XMRadar</title>
+  </head>
+  <body>
+    <div role="tablist" aria-label="XMRadar" id="tabs">
+      <button role="tab" id="tab-monero" data-tab="monero" aria-controls="panel-monero">Monero</button>
+      <button role="tab" id="tab-burner" data-tab="burner" aria-controls="panel-burner">Burner</button>
+    </div>
+
+    <section role="tabpanel" id="panel-monero" aria-labelledby="tab-monero" hidden>
+      <div id="xmr-toggles">
+        <label><input data-xmr="badges" type="checkbox" /> Show Monero badges on X</label>
+        <label><input data-xmr="discovery" type="checkbox" /> Discover addresses via Nostr relays</label>
+        <p class="hint">Discovery lets relays and X see which accounts you're looking at.</p>
+      </div>
+      <div id="identity-status">
+        <h2>Your Monero identity</h2>
+        <ul data-status="lines" class="state"></ul>
+        <div class="row"><button data-status="check">Check status</button> <span data-status="when" class="hint"></span></div>
+        <span data-status="message" role="status" aria-live="polite"></span>
+        <button data-open="identity" class="link">Set up…</button>
+      </div>
+    </section>
+
+    <section role="tabpanel" id="panel-burner" aria-labelledby="tab-burner" hidden>
+      <div id="burner">
+        <p class="hint">Throwaway addresses from kyc.rip GhostMail.</p>
+        <div class="row">Address: <code data-burner="email">none</code> <button data-burner="copy" class="hidden">Copy</button></div>
+        <div class="row hint" data-burner="meta"></div>
+        <div class="row">
+          <button data-burner="create">Get a 60-minute address</button>
+          <button data-burner="burn" class="hidden">Burn now</button>
+          <button data-burner="forget" class="hidden">Forget</button>
+        </div>
+        <span data-burner="status" role="status" aria-live="polite"></span>
+        <button data-open="burner" class="link">Use a paid inbox…</button>
+      </div>
+    </section>
+
+    <footer><button data-open="" class="link">All settings</button></footer>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

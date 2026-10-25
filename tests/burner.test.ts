@@ -1,5 +1,5 @@
 import { sha256 } from '@noble/hashes/sha2.js';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { burnInbox, createFree, fetchInbox, FreeLimitedError, GhostMailError, InboxGoneError, probeFree, type FetchFn } from '../src/burner/ghostmail';
@@ -281,7 +281,9 @@ describe('token boundary', () => {
     if (seen.has(entry)) return seen;
     seen.add(entry);
     const src = readFileSync(entry, 'utf8');
-    for (const m of src.matchAll(/^import\s+(?!type\b)[^'"]*['"](\.{1,2}\/[^'"]+)['"]/gm)) {
+    // static imports, and import('…') for the popup's lazily loaded panels
+    const specs = [...src.matchAll(/^import\s+(?!type\b)[^'"]*['"](\.{1,2}\/[^'"]+)['"]/gm), ...src.matchAll(/\bimport\(\s*['"](\.{1,2}\/[^'"]+)['"]\s*\)/g)];
+    for (const m of specs) {
       const spec = m[1]!;
       if (/\.(css|html|json)$/.test(spec)) continue;
       reachable(resolve(dirname(entry), spec.endsWith('.ts') ? spec : `${spec}.ts`), seen);
@@ -289,9 +291,18 @@ describe('token boundary', () => {
     return seen;
   }
 
-  it('the options page cannot reach the IndexedDB token store', () => {
-    const files = [...reachable(resolve(__dirname, '../src/entrypoints/options/main.ts'))];
+  it.each(['options', 'popup'])('the %s page cannot reach the IndexedDB token store', (page) => {
+    const files = [...reachable(resolve(__dirname, `../src/entrypoints/${page}/main.ts`))];
+    expect(files.some((f) => f.endsWith('ui/burner-panel.ts'))).toBe(true);
     expect(files.some((f) => f.endsWith('burner/service.ts'))).toBe(true);
     expect(files.filter((f) => f.endsWith('burner/token-store.ts'))).toEqual([]);
+  });
+
+  it('only token-store.ts names the database or opens IndexedDB', () => {
+    const src = resolve(__dirname, '../src');
+    const hits = readdirSync(src, { recursive: true, encoding: 'utf8' })
+      .filter((f) => /\.(ts|html)$/.test(f))
+      .filter((f) => /xmradar-burner|indexedDB/.test(readFileSync(resolve(src, f), 'utf8')));
+    expect(hits).toEqual(['burner/token-store.ts']);
   });
 });

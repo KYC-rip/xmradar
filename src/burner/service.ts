@@ -1,6 +1,7 @@
 import { storage } from 'wxt/utils/storage';
 import { burnInbox, createFree, fetchInbox, FreeLimitedError, InboxGoneError, isMailAddress, probeFree, type FetchFn } from './ghostmail';
 import { randomSeed, solvePow } from './pow';
+import type { CreatingState, LastError } from './tracked';
 import type { TokenStore } from './token-store';
 
 /** Polling window after create/import/fill (PLAN-BURNER B3). */
@@ -18,6 +19,9 @@ export interface BurnerInbox {
 }
 
 export const burnerInboxItem = storage.defineItem<BurnerInbox | null>('local:burnerInbox', { fallback: null });
+/** Written by the background only; extension pages read them (session storage is closed to content scripts). */
+export const burnerCreatingItem = storage.defineItem<CreatingState | null>('session:burnerCreating', { fallback: null });
+export const burnerLastErrorItem = storage.defineItem<LastError | null>('session:burnerLastError', { fallback: null });
 
 export interface MetaStore {
   get(): Promise<BurnerInbox | null>;

@@ -1,29 +1,4 @@
-:root { color-scheme: light dark; --accent: #7b3fe4; --muted: #6b6880; --border: #ccc; --bg: #fff; --fg: #1c1b22; }
-@media (prefers-color-scheme: dark) { :root { --muted: #a9a6b8; --border: #45434f; --bg: #1a1920; --fg: #ececf1; } }
-body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.5 system-ui, -apple-system, sans-serif; }
 main { max-width: 620px; margin: 0 auto; padding: 24px 16px 48px; }
 h1 { font-size: 22px; }
-h2 { font-size: 15px; margin: 0 0 6px; }
 section { margin: 0 0 22px; display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
-.hint { margin: 0; color: var(--muted); font-size: 13px; }
-textarea, input[type='url'], input[type='text'] { width: 100%; box-sizing: border-box; font: inherit; padding: 7px 9px; border: 1px solid var(--border); border-radius: 7px; background: transparent; color: inherit; }
-label { display: flex; gap: 6px; align-items: center; width: 100%; }
-button { font: inherit; padding: 6px 13px; border-radius: 7px; border: 1px solid var(--border); background: transparent; color: inherit; cursor: pointer; }
-button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
-code { font-size: 12px; word-break: break-all; }
-.warn { background: #fff4d6; color: #6b4e00; padding: 10px 12px; border-radius: 8px; }
-.hidden { display: none; }
-.error { color: #c62828; }
-.ok { color: #2e7d32; }
 footer { display: flex; gap: 12px; align-items: center; }
-h3 { font-size: 14px; margin: 10px 0 0; }
-.row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; width: 100%; }
-.row input { flex: 1; min-width: 160px; width: auto; }
-.state { margin: 0; padding-left: 18px; }
-.confirm { width: 100%; box-sizing: border-box; border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
-.diff { margin: 0; font-size: 12px; white-space: pre-wrap; word-break: break-all; max-height: 260px; overflow: auto; }
-.diff .add { color: #2e7d32; }
-.diff .del { color: #c62828; text-decoration: line-through; }
-.results { margin: 0; padding-left: 18px; font-size: 13px; }
-input[type='password'] { width: 100%; box-sizing: border-box; font: inherit; padding: 7px 9px; border: 1px solid var(--border); border-radius: 7px; background: transparent; color: inherit; }
-details { width: 100%; display: flex; flex-direction: column; gap: 6px; }

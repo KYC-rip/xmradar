@@ -43,7 +43,14 @@ export interface SetupStatus {
   address: { address: string; check: AddressCheck } | null;
   /** twitter claim for the confirmed handle in the current kind 10011 */
   link: { handle: string; tweetUrl: string; proof: ProofResult } | null;
+  /** the confirmed handle on xmr.bio; null when no handle is confirmed */
+  xmrbio: XmrbioStatus | null;
 }
+
+export type XmrbioStatus =
+  | { found: false }
+  | { found: true; address: string; check: AddressCheck; /** xmr.bio holds a nostr proof for this pubkey */ linked: boolean }
+  | { found: 'error'; reason: string };
 
 export interface PreparedSetup {
   id: string;

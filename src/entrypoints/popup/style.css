@@ -1,0 +1,9 @@
+body { width: 340px; padding: 10px 12px 12px; box-sizing: border-box; }
+[role='tablist'] { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 10px; }
+[role='tab'] { border: 0; border-bottom: 2px solid transparent; border-radius: 0; padding: 6px 10px; }
+[role='tab'][aria-selected='true'] { border-bottom-color: var(--accent); font-weight: 600; }
+[role='tabpanel'] > div { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; margin-bottom: 12px; }
+h2 { font-size: 14px; margin: 4px 0 0; }
+.state li { font-size: 13px; }
+button.link { border: 0; padding: 0; color: var(--accent); text-decoration: underline; }
+footer { border-top: 1px solid var(--border); padding-top: 8px; }
