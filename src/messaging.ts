@@ -120,11 +120,13 @@ export type BgResponse<T extends BgRequest['type']> = T extends 'fetch-image'
                       ? PreparedSetup
                       : T extends 'setup-sign' | 'setup-retry'
                         ? { results: RelayResult[] }
-                        : T extends 'setup-cancel' | 'burner-burn' | 'burner-forget'
+                        : T extends 'setup-cancel' | 'burner-forget'
                           ? null
                           : T extends 'burner-import'
                             ? { email: string }
-                            : never;
+                            : T extends 'burner-burn'
+                              ? { burned: boolean }
+                              : never;
 
 /** Every response is wrapped so errors survive the message boundary. */
 export type Wrapped<T> = { ok: true; data: T } | { ok: false; error: string };

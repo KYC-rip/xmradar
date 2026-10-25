@@ -322,8 +322,7 @@ async function handle(msg: BgRequest, sender: Browser.runtime.MessageSender): Pr
     }
     case 'burner-burn': {
       if (!isExtensionPage(sender)) throw new Error('Not allowed');
-      await burnFreeInbox(burner);
-      return null;
+      return burnFreeInbox(burner);
     }
     case 'burner-forget': {
       if (!isExtensionPage(sender)) throw new Error('Not allowed');

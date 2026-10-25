@@ -2,7 +2,8 @@
  * Inbox tokens live in the extension origin's IndexedDB, not storage.local:
  * content scripts can read storage.local (x-badges does), but they run under
  * the page's origin and can't open this database (PLAN-BURNER §9
- * TOKEN-STORAGE-BOUNDARY).
+ * TOKEN-STORAGE-BOUNDARY). Extension pages share the origin, so only the
+ * background imports this module; a test keeps it out of the options page.
  */
 
 export interface TokenStore {
@@ -29,12 +30,15 @@ function openDb(): Promise<IDBDatabase> {
   return dbPromise;
 }
 
+/** Resolves when the transaction commits, so a write that aborts later (quota) is not taken as stored. */
 async function run<T>(mode: IDBTransactionMode, op: (s: IDBObjectStore) => IDBRequest): Promise<T> {
   const db = await openDb();
   return new Promise((resolve, reject) => {
-    const req = op(db.transaction(STORE, mode).objectStore(STORE));
-    req.onsuccess = () => resolve(req.result as T);
-    req.onerror = () => reject(req.error);
+    const tx = db.transaction(STORE, mode);
+    const req = op(tx.objectStore(STORE));
+    tx.oncomplete = () => resolve(req.result as T);
+    tx.onerror = () => reject(tx.error ?? req.error);
+    tx.onabort = () => reject(tx.error ?? new Error('IndexedDB write aborted'));
   });
 }
 

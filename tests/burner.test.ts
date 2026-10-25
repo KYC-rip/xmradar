@@ -1,4 +1,6 @@
 import { sha256 } from '@noble/hashes/sha2.js';
+import { readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { burnInbox, createFree, fetchInbox, FreeLimitedError, GhostMailError, InboxGoneError, probeFree, type FetchFn } from '../src/burner/ghostmail';
 import { checkPow, leadingZeroBits, randomSeed, solvePow } from '../src/burner/pow';
@@ -155,7 +157,10 @@ describe('burner service', () => {
     const api = fakeApi({ 'POST /api/free': () => [429, { email: 'dead1234@ros.rip' }] });
     const { d } = deps(api.fetchFn);
     d.pow = async () => ((mined = true), '1');
-    await expect(createFreeInbox(d)).rejects.toThrow(/already has a free address \(dead1234@ros\.rip\).*within an hour/);
+    const err = (await createFreeInbox(d).catch((e: Error) => e)) as Error;
+    expect(err.message).toMatch(/already has a free address .*within an hour/);
+    // behind a shared network the address can be someone else's
+    expect(err.message).not.toContain('dead1234');
     expect(mined).toBe(false);
     expect(api.calls).toHaveLength(1);
   });
@@ -170,6 +175,32 @@ describe('burner service', () => {
     const inbox = await createFreeInbox(d);
     expect(inbox.email).toBe('a1b2c3d4@ros.rip');
     expect(inbox.lastSeenIds).toEqual(['old']);
+  });
+
+  it('a 429 for our address whose inbox has expired drops the token and reports the limit', async () => {
+    const api = fakeApi({
+      'POST /api/free': () => [429, { email: 'a1b2c3d4@ros.rip' }],
+      'GET /api/inbox': () => [200, { emails: [], expiresAt: NOW - 1, tier: 'BASIC' }],
+    });
+    const { d, tokens, meta } = deps(api.fetchFn);
+    await tokens.set('a1b2c3d4@ros.rip', 'kept');
+    await expect(createFreeInbox(d)).rejects.toThrow(/within an hour/);
+    expect(tokens.map.size).toBe(0);
+    expect(meta()).toBeNull();
+  });
+
+  it('only one inbox action runs at a time', async () => {
+    let release!: () => void;
+    const api = fakeApi({ 'POST /api/free': (b) => (b.seed ? [200, { email: 'a1b2c3d4@ros.rip', token: 'tok', expiresAt: NOW + 3_600_000 }] : [400, {}]) });
+    const { d } = deps(api.fetchFn);
+    d.pow = () => new Promise((r) => (release = () => r('1')));
+    const creating = createFreeInbox(d);
+    await new Promise((r) => setTimeout(r, 0));
+    await expect(importInbox(d, 'me@vigilpro.xyz', 'tok')).rejects.toThrow(/Busy: getting an address/);
+    await expect(burnFreeInbox(d)).rejects.toThrow(/Busy/);
+    release();
+    await creating;
+    expect(await burnFreeInbox({ ...d, fetchFn: fakeApi({ 'POST /api/inbox/burn': () => [200, {}] }).fetchFn })).toEqual({ burned: true });
   });
 
   it('a lost create response is not retried', async () => {
@@ -214,7 +245,7 @@ describe('burner service', () => {
     const api = fakeApi({ 'POST /api/inbox/burn': () => [200, { success: true }] });
     const free = deps(api.fetchFn, inboxOf());
     await free.tokens.set('a1b2c3d4@ros.rip', 'tok');
-    await burnFreeInbox(free.d);
+    expect(await burnFreeInbox(free.d)).toEqual({ burned: true });
     expect(api.calls).toEqual([{ method: 'POST', path: '/api/inbox/burn', body: { email: 'a1b2c3d4@ros.rip', token: 'tok' } }]);
     expect(free.meta()).toBeNull();
 
@@ -222,6 +253,14 @@ describe('burner service', () => {
     await paid.tokens.set('me@vigilpro.xyz', 'tok');
     await expect(burnFreeInbox(paid.d)).rejects.toThrow(/can only be forgotten/);
     expect(api.calls).toHaveLength(1);
+  });
+
+  it('burn without a token removes only the local copy and says so', async () => {
+    const api = fakeApi({});
+    const free = deps(api.fetchFn, inboxOf());
+    expect(await burnFreeInbox(free.d)).toEqual({ burned: false });
+    expect(free.meta()).toBeNull();
+    expect(api.calls).toHaveLength(0);
   });
 
   it('forget removes an imported inbox without any network call', async () => {
@@ -233,5 +272,26 @@ describe('burner service', () => {
     expect(paid.tokens.map.size).toBe(0);
     expect(api.calls).toHaveLength(0);
     await expect(forgetImportedInbox(deps(api.fetchFn, inboxOf()).d)).rejects.toThrow(/Burn/);
+  });
+});
+
+describe('token boundary', () => {
+  /** Relative imports reachable from a source file. */
+  function reachable(entry: string, seen = new Set<string>()): Set<string> {
+    if (seen.has(entry)) return seen;
+    seen.add(entry);
+    const src = readFileSync(entry, 'utf8');
+    for (const m of src.matchAll(/^import\s+(?!type\b)[^'"]*['"](\.{1,2}\/[^'"]+)['"]/gm)) {
+      const spec = m[1]!;
+      if (/\.(css|html|json)$/.test(spec)) continue;
+      reachable(resolve(dirname(entry), spec.endsWith('.ts') ? spec : `${spec}.ts`), seen);
+    }
+    return seen;
+  }
+
+  it('the options page cannot reach the IndexedDB token store', () => {
+    const files = [...reachable(resolve(__dirname, '../src/entrypoints/options/main.ts'))];
+    expect(files.some((f) => f.endsWith('burner/service.ts'))).toBe(true);
+    expect(files.filter((f) => f.endsWith('burner/token-store.ts'))).toEqual([]);
   });
 });

@@ -58,9 +58,12 @@ function create(): Promise<void> {
   return new Promise((resolve, reject) => {
     const port = browser.runtime.connect({ name: BURNER_CREATE_PORT });
     let settled = false;
+    // the proof of work gives up at 45 s; past this the background has stopped answering
+    const timer = setTimeout(() => finish(new Error('Getting an address timed out. Try again.')), 90_000);
     const finish = (err?: Error) => {
       if (settled) return;
       settled = true;
+      clearTimeout(timer);
       port.disconnect();
       if (err) reject(err);
       else resolve();
@@ -95,8 +98,8 @@ export async function initBurner() {
   burnBtn.addEventListener('click', () =>
     guard('Burning…', async () => {
       if (!confirm('Burn this address? Its mail is deleted on GhostMail and it stops working.')) return setStatus('');
-      await sendToBackground({ type: 'burner-burn' });
-      setStatus('Burned', 'ok');
+      const { burned } = await sendToBackground({ type: 'burner-burn' });
+      setStatus(burned ? 'Burned' : 'Removed here. GhostMail keeps the inbox until it expires.', 'ok');
     }),
   );
   forgetBtn.addEventListener('click', () =>

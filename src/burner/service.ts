@@ -1,5 +1,5 @@
 import { storage } from 'wxt/utils/storage';
-import { burnInbox, createFree, fetchInbox, FreeLimitedError, isMailAddress, probeFree, type FetchFn } from './ghostmail';
+import { burnInbox, createFree, fetchInbox, FreeLimitedError, InboxGoneError, isMailAddress, probeFree, type FetchFn } from './ghostmail';
 import { randomSeed, solvePow } from './pow';
 import type { TokenStore } from './token-store';
 
@@ -32,12 +32,9 @@ export interface BurnerDeps {
   pow?: (seed: string, onProgress?: (hashes: number) => void) => Promise<string>;
 }
 
-export function limitedMessage(email: string | null): string {
-  return (
-    `Your network already has a free address${email ? ` (${email})` : ''} that this browser can't open. ` +
-    'A new one is possible within an hour. Paid inboxes at kyc.rip/mail have no wait.'
-  );
-}
+// the 429's address isn't shown: behind a shared network it can be someone else's
+export const LIMITED_MESSAGE =
+  "Your network already has a free address that this browser can't open. " + 'A new one is possible within an hour. Paid inboxes at kyc.rip/mail have no wait.';
 
 async function clear(d: BurnerDeps, email: string) {
   await d.tokens.delete(email);
@@ -65,23 +62,43 @@ async function save(d: BurnerDeps, inbox: BurnerInbox, token: string): Promise<B
 /** 429 carries the network's active address. If this browser holds its token, carry on with it. */
 async function recoverLimited(d: BurnerDeps, e: FreeLimitedError): Promise<BurnerInbox> {
   const token = e.email ? await d.tokens.get(e.email) : null;
-  if (!e.email || !token) throw new Error(limitedMessage(e.email));
-  const inbox = await fetchInbox(e.email, token, d.fetchFn);
+  if (!e.email || !token) throw new Error(LIMITED_MESSAGE);
+  const inbox = await fetchInbox(e.email, token, d.fetchFn).catch(async (err) => {
+    if (err instanceof InboxGoneError) await d.tokens.delete(e.email!);
+    throw err instanceof InboxGoneError ? new Error(LIMITED_MESSAGE) : err;
+  });
   const now = (d.now ?? Date.now)();
+  if (inbox.expiresAt <= now) {
+    await d.tokens.delete(e.email);
+    throw new Error(LIMITED_MESSAGE);
+  }
   return save(d, { email: e.email, expiresAt: inbox.expiresAt, tier: 'FREE', source: 'free', lastSeenIds: inbox.emails.map((m) => m.id).slice(0, SEEN_CAP), watchUntil: now + WATCH_MS }, token);
 }
 
-let creating = false;
+let busy: string | null = null;
+
+/**
+ * create/import/burn/forget run one at a time, so a burn or import can't be
+ * overwritten by a create that was still mining. A worker restart drops the
+ * in-flight create without saving, which is why a module flag is enough.
+ */
+async function exclusive<T>(what: string, fn: () => Promise<T>): Promise<T> {
+  if (busy) throw new Error(`Busy: ${busy}. Try again in a moment.`);
+  busy = what;
+  try {
+    return await fn();
+  } finally {
+    busy = null;
+  }
+}
 
 /**
  * Free 60-minute inbox. Never retried automatically: if the response is lost
  * after GhostMail created the inbox, a retry only gets a 429 without the token
  * (PLAN-BURNER CREATE-RETRY-LOSS).
  */
-export async function createFreeInbox(d: BurnerDeps, onProgress?: (hashes: number) => void): Promise<BurnerInbox> {
-  if (creating) throw new Error('Already getting an address');
-  creating = true;
-  try {
+export function createFreeInbox(d: BurnerDeps, onProgress?: (hashes: number) => void): Promise<BurnerInbox> {
+  return exclusive('getting an address', async () => {
     if (await activeInbox(d)) throw new Error('You already have an active address. Burn or forget it first.');
     try {
       await probeFree(d.fetchFn);
@@ -93,13 +110,15 @@ export async function createFreeInbox(d: BurnerDeps, onProgress?: (hashes: numbe
       if (e instanceof FreeLimitedError) return await recoverLimited(d, e);
       throw e;
     }
-  } finally {
-    creating = false;
-  }
+  });
 }
 
 /** A paid inbox bought at kyc.rip/mail. Existing mail is marked seen so it doesn't notify. */
-export async function importInbox(d: BurnerDeps, rawEmail: string, rawToken: string): Promise<BurnerInbox> {
+export function importInbox(d: BurnerDeps, rawEmail: string, rawToken: string): Promise<BurnerInbox> {
+  return exclusive('importing', () => importUnlocked(d, rawEmail, rawToken));
+}
+
+async function importUnlocked(d: BurnerDeps, rawEmail: string, rawToken: string): Promise<BurnerInbox> {
   const email = rawEmail.trim().toLowerCase();
   const token = rawToken.trim();
   if (!isMailAddress(email)) throw new Error('That is not an email address');
@@ -111,20 +130,29 @@ export async function importInbox(d: BurnerDeps, rawEmail: string, rawToken: str
   return save(d, { email, expiresAt: inbox.expiresAt, tier: inbox.tier, source: 'imported', lastSeenIds: inbox.emails.map((m) => m.id).slice(0, SEEN_CAP), watchUntil: now + WATCH_MS }, token);
 }
 
-/** Free inboxes only. GhostMail deletes paid tier inboxes with just the token, so imported ones are never burned from here. */
-export async function burnFreeInbox(d: BurnerDeps): Promise<void> {
-  const m = await activeInbox(d);
-  if (!m) return;
-  if (m.source !== 'free') throw new Error('Imported inboxes can only be forgotten here. Manage paid inboxes at kyc.rip/mail.');
-  const token = await d.tokens.get(m.email);
-  if (token) await burnInbox(m.email, token, d.fetchFn);
-  await clear(d, m.email);
+/**
+ * Free inboxes only. GhostMail deletes paid tier inboxes with just the token,
+ * so imported ones are never burned from here. `burned: false` means only the
+ * local copy went (no token), and GhostMail keeps the inbox until it expires.
+ */
+export function burnFreeInbox(d: BurnerDeps): Promise<{ burned: boolean }> {
+  return exclusive('burning', async () => {
+    const m = await activeInbox(d);
+    if (!m) return { burned: false };
+    if (m.source !== 'free') throw new Error('Imported inboxes can only be forgotten here. Manage paid inboxes at kyc.rip/mail.');
+    const token = await d.tokens.get(m.email);
+    if (token) await burnInbox(m.email, token, d.fetchFn);
+    await clear(d, m.email);
+    return { burned: !!token };
+  });
 }
 
 /** Imported inboxes only: removes them from XMRadar, nothing is sent to GhostMail. */
-export async function forgetImportedInbox(d: BurnerDeps): Promise<void> {
-  const m = await activeInbox(d);
-  if (!m) return;
-  if (m.source !== 'imported') throw new Error('Burn a free address instead');
-  await clear(d, m.email);
+export function forgetImportedInbox(d: BurnerDeps): Promise<void> {
+  return exclusive('forgetting', async () => {
+    const m = await activeInbox(d);
+    if (!m) return;
+    if (m.source !== 'imported') throw new Error('Burn a free address instead');
+    await clear(d, m.email);
+  });
 }

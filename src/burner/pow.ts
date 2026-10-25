@@ -41,12 +41,23 @@ export interface PowOptions {
  */
 export async function solvePow(seed: string, opts: PowOptions = {}): Promise<string> {
   const { bits = POW_BITS, chunk = 50_000, deadlineMs = 45_000, onProgress, now = Date.now } = opts;
-  const enc = new TextEncoder();
+  const prefix = new TextEncoder().encode(`${seed}:`);
+  // prefix + up to 16 ASCII digits, rewritten in place for each nonce
+  const buf = new Uint8Array(prefix.length + 16);
+  buf.set(prefix);
   const deadline = now() + deadlineMs;
   for (let nonce = 0; ; ) {
     const end = nonce + chunk;
     for (; nonce < end; nonce++) {
-      if (leadingZeroBits(sha256(enc.encode(`${seed}:${nonce}`))) >= bits) return String(nonce);
+      let len = prefix.length;
+      let n = nonce;
+      const start = len;
+      do {
+        buf[len++] = 48 + (n % 10);
+        n = Math.floor(n / 10);
+      } while (n > 0);
+      buf.subarray(start, len).reverse();
+      if (leadingZeroBits(sha256(buf.subarray(0, len))) >= bits) return String(nonce);
     }
     onProgress?.(nonce);
     if (now() > deadline) throw new Error('Proof of work took too long on this device. Try again.');
