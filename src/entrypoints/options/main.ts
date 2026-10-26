@@ -1,4 +1,5 @@
 import { npubEncode } from 'nostr-tools/nip19';
+import { currentBuild } from '../../build-info';
 import { sendToBackground } from '../../messaging';
 import { patchSettings, pubkeyItem, settingsItem } from '../../settings';
 import { mountBurnerPanel } from '../../ui/burner-panel';
@@ -62,6 +63,10 @@ $('load-nip65').addEventListener('click', async () => {
     setStatus($('relay-error'), (e as Error).message, 'error');
   }
 });
+
+const build = currentBuild();
+$('build-info').textContent = build.label;
+if (build.url) $<HTMLAnchorElement>('build-info').href = build.url;
 
 void showPubkey();
 pubkeyItem.watch(() => void showPubkey());

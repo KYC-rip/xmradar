@@ -17,12 +17,33 @@ pnpm test
 pnpm dev          # Chrome with hot reload; `pnpm dev:firefox` for Firefox
 ```
 
+## Releases
+
+Releases are made only by CI: push a tag `vX.Y.Z` that matches `package.json` on a commit in `main`, and `.github/workflows/release.yml` builds, tests and attaches `xmradar-<version>-{chrome,firefox,sources}.zip` and `SHA256SUMS` to a GitHub release. The 4th version part is the CI run number (`0.1.0.142`), shown in the options sidebar as `v0.1.0 · build 142 · <commit>`. Local builds say "dev build".
+
+`scripts/build-release.sh [dist/…]` makes the same zips from a committed tree (it refuses uncommitted changes and untracked files under `src/` or `public/`). The zips are byte-identical for the same commit on the same OS, Node and zip tool; CI's Ubuntu 24.04 build is the canonical one. To check a release byte for byte:
+
+```sh
+TAG=v0.1.0 RUN=142   # the release's tag and build number (the 4th version part)
+git checkout "$TAG"
+gh release download "$TAG" -p SHA256SUMS -O release-SHA256SUMS
+docker run -e TAG -e RUN --rm -v "$PWD":/w -w /w ubuntu:24.04 bash -c '
+  apt-get update -qq && apt-get install -y -qq curl git zip ca-certificates >/dev/null &&
+  curl -fsSL https://deb.nodesource.com/setup_24.x | bash - >/dev/null && apt-get install -y -qq nodejs >/dev/null &&
+  git config --global --add safe.directory /w && corepack enable &&
+  pnpm install --frozen-lockfile && WXT_BUILD_NUMBER="$RUN" WXT_COMMIT=$(git rev-parse HEAD) \
+  WXT_RELEASE_URL="https://github.com/KYC-rip/xmradar/releases/tag/$TAG" scripts/build-release.sh dist'
+diff dist/SHA256SUMS release-SHA256SUMS
+```
+
 ## Install
 
-**Chrome / Brave / Edge:** open `chrome://extensions`, turn on Developer mode, click *Load unpacked*, and pick `output/chrome-mv3`.
+Until XMRadar is in the stores, install a release zip (or build it yourself):
+
+**Chrome / Brave / Edge:** unzip `xmradar-<version>-chrome.zip`, open `chrome://extensions`, turn on Developer mode, click *Load unpacked*, and pick the unzipped folder (or `output/chrome-mv3` after `pnpm build`).
 
 **Firefox (140+):**
-- Quick test: open `about:debugging#/runtime/this-firefox`, click *Load Temporary Add-on*, and pick `output/firefox-mv3/manifest.json`. Temporary add-ons are removed when Firefox restarts.
+- Quick test: open `about:debugging#/runtime/this-firefox`, click *Load Temporary Add-on*, and pick `xmradar-<version>-firefox.zip` (or `output/firefox-mv3/manifest.json`). Temporary add-ons are removed when Firefox restarts. Firefox Developer Edition and Nightly can keep it installed with `xpinstall.signatures.required` set to `false`.
 - Permanent: run `pnpm zip` and submit the Firefox zip to AMO as **unlisted** (self-distribution; include the source zip, since the build is bundled). Install the signed `.xpi` you get back.
 - Firefox MV3 doesn't grant site access at install time. Open the extension's options page and click **Grant access**, or enable it under *about:addons → XMRadar → Permissions*.
 

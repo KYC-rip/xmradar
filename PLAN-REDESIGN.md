@@ -92,3 +92,9 @@ Four steps: 1 Signer, 2 X handle, 3 Monero address, 4 Link X. A pure function `i
 - LOGO-C2PA: a test asserts the inlined logo markup has no `<script`, `href`, `foreignObject` or `http` (other than the SVG namespace).
 - IDENTITY-STEPPER-STATUS: step 3 with an invalid published address → `current` with a warning; step 4 with a failing or unreachable proof → `current` with the reason; "couldn't read some relays" doesn't change step states.
 - PLAN-POPUP-SUPERSESSION: R1 supersedes PLAN-POPUP for the popup shell, settings shape and options layout. Carried over unchanged: ARIA tabs and `popupTab`, the token boundary checks, the burner create keepalive and its stored states, two-step burn.
+
+## 9. Design update 26 Oct (recorded for later phases)
+
+- R4: the Swap tab is "Swap by kyc.rip", labelled as our own service, with fee and spread next to the quote. kyc.rip orders get the same NKIP-0001 checks as any exchange (no allowlist). Options → Swap receipts gets "Show Swap by kyc.rip in the popup" (default on).
+- R3: NKIP-0002 draft (in the design bundle, `nkips/nkip-0002.md`): recipient confirmation is kind 9044; the optional payment proof goes to the recipient only, as a NIP-59 gift wrap (kind 9043).
+- CI, release zips and build info: PLAN-RELEASE.md.

@@ -3,3 +3,4 @@ node_modules
 .wxt
 .ccb
 output
+dist/

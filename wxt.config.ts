@@ -1,4 +1,15 @@
+import { readFileSync } from 'node:fs';
 import { defineConfig } from 'wxt';
+
+const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')) as { version: string };
+
+// Set only by .github/workflows/release.yml; local builds are "dev builds". The UI reads them as import.meta.env.WXT_*.
+const env = process.env;
+if (env.WXT_BUILD_NUMBER && !/^\d{1,5}$/.test(env.WXT_BUILD_NUMBER)) throw new Error(`bad WXT_BUILD_NUMBER ${env.WXT_BUILD_NUMBER}`);
+if (env.WXT_COMMIT && !/^[0-9a-f]{40}$/.test(env.WXT_COMMIT)) throw new Error(`bad WXT_COMMIT ${env.WXT_COMMIT}`);
+if (env.WXT_RELEASE_URL && !env.WXT_RELEASE_URL.startsWith('https://github.com/KYC-rip/xmradar/releases/tag/')) {
+  throw new Error(`bad WXT_RELEASE_URL ${env.WXT_RELEASE_URL}`);
+}
 
 export default defineConfig({
   srcDir: 'src',
@@ -8,6 +19,8 @@ export default defineConfig({
   manifestVersion: 3,
   manifest: {
     name: 'XMRadar',
+    // 4-part version so about:addons and chrome://extensions show the CI build: 0.1.0.142
+    version: env.WXT_BUILD_NUMBER ? `${pkg.version}.${env.WXT_BUILD_NUMBER}` : pkg.version,
     description: 'Copy your posts from X, Mastodon, Bluesky, LinkedIn, Facebook or any page to Nostr.',
     permissions: ['contextMenus', 'storage', 'activeTab', 'scripting', 'notifications'],
     host_permissions: ['<all_urls>'],

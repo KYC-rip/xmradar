@@ -1,6 +1,7 @@
 import '../../ui/base.css';
 import './style.css';
 import { npubEncode } from 'nostr-tools/nip19';
+import { currentBuild } from '../../build-info';
 import { badgeSummary, setupStatusLast, statusFor } from '../../identity/status';
 import { pubkeyItem } from '../../settings';
 import { mountTabs, popupTabItem } from '../../ui/tabs';
@@ -24,6 +25,9 @@ function show(name: string) {
   void popupTabItem.setValue(name);
   if (!loaded.has(name)) loaded.set(name, loaders[name]?.().catch((e) => console.error('[XMRadar] popup', name, e)) ?? Promise.resolve());
 }
+
+// the build shows on hover; the options page shows it as a line
+$('all-settings').title = currentBuild().label;
 
 // a link in a popup would navigate the popup itself, so the options page opens in a tab
 for (const el of document.querySelectorAll<HTMLElement>('[data-open]')) {

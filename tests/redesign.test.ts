@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fakeBrowser } from 'wxt/testing/fake-browser';
 import { storage } from 'wxt/utils/storage';
 import { burnerInboxItem } from '../src/burner/service';
+import { buildInfo } from '../src/build-info';
 import { badgeSummary, statusFor } from '../src/identity/status';
 import { doneCount, identitySteps } from '../src/identity/steps';
 import type { SetupStatus } from '../src/messaging';
@@ -275,5 +276,22 @@ describe('popup switches', () => {
     document.querySelector<HTMLInputElement>('[data-xmr="badges"]')!.click();
     document.querySelector<HTMLInputElement>('[data-xmr="discovery"]')!.click();
     await vi.waitFor(async () => expect(await xmrSettingsItem.getValue()).toMatchObject({ badgesX: false, nostrDiscovery: true }));
+  });
+});
+
+describe('buildInfo', () => {
+  const sha = 'a1b2c3d4e5f60718293a4b5c6d7e8f9012345678';
+  const url = 'https://github.com/KYC-rip/xmradar/releases/tag/v0.1.0';
+  it('labels CI and dev builds', () => {
+    expect(buildInfo({ version: '0.1.0.142', build: '142', commit: sha, url })).toEqual({ label: 'v0.1.0 · build 142 · a1b2c3d', url });
+    expect(buildInfo({ version: '0.1.0' })).toEqual({ label: 'v0.1.0 · dev build', url: null });
+  });
+  it('ignores bad values instead of showing them', () => {
+    expect(buildInfo({ version: '0.1.0.7', build: '7', commit: 'xyz', url: 'https://evil.example/' })).toEqual({ label: 'v0.1.0 · build 7', url: null });
+    expect(buildInfo({ version: '0.1.0', build: '12a', commit: sha, url })).toEqual({ label: 'v0.1.0 · dev build', url: null });
+  });
+  it('both pages have the slot', () => {
+    expect(page('options')).toContain('id="build-info"');
+    expect(page('popup')).toContain('id="all-settings"');
   });
 });
