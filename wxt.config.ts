@@ -21,7 +21,7 @@ export default defineConfig({
     name: 'XMRadar',
     // 4-part version so about:addons and chrome://extensions show the CI build: 0.1.0.142
     version: env.WXT_BUILD_NUMBER ? `${pkg.version}.${env.WXT_BUILD_NUMBER}` : pkg.version,
-    description: 'Copy your posts from X, Mastodon, Bluesky, LinkedIn, Facebook or any page to Nostr.',
+    description: 'Monero on the pages you use: tip badges on X, burner email, and copying posts to Nostr. Holds no keys and no funds.',
     permissions: ['contextMenus', 'storage', 'activeTab', 'scripting', 'notifications'],
     host_permissions: ['<all_urls>'],
     commands: {

@@ -1,6 +1,15 @@
 # XMRadar
 
-A personal browser extension that copies your posts from X, Bluesky, Mastodon, LinkedIn, Facebook (or any page) to Nostr.
+A browser extension for Chrome and Firefox that brings Monero to the pages you already use. It holds no keys and no funds.
+
+- **Tip with Monero:** XMR badges on X for people who published a Monero address (via xmr.bio or Nostr), and a tip dialog that opens your own wallet.
+- **Your Monero identity:** publish your address on Nostr and link it to your X account, step by step.
+- **Burner email:** a throwaway GhostMail address in one click, for sign-ups.
+- **Copy posts to Nostr:** from X, Bluesky, Mastodon, LinkedIn, Facebook, or any page.
+
+Free software under the GNU GPL v3 or later (see `LICENSE`). Releases: https://github.com/KYC-rip/xmradar/releases
+
+### Copy posts to Nostr
 
 Right-click a post → **Copy post to Nostr** → edit in the preview → **Publish**. You can also hover a post and press `Alt+Shift+N`.
 
