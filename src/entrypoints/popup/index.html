@@ -5,42 +5,57 @@
     <title>XMRadar</title>
   </head>
   <body>
-    <div role="tablist" aria-label="XMRadar" id="tabs">
-      <button role="tab" id="tab-monero" data-tab="monero" aria-controls="panel-monero">Monero</button>
-      <button role="tab" id="tab-burner" data-tab="burner" aria-controls="panel-burner">Burner</button>
-    </div>
-
-    <section role="tabpanel" id="panel-monero" aria-labelledby="tab-monero" hidden>
-      <div id="xmr-toggles">
-        <label><input data-xmr="badges" type="checkbox" /> Show Monero badges on X</label>
-        <label><input data-xmr="discovery" type="checkbox" /> Discover addresses via Nostr relays</label>
-        <p class="hint">Discovery lets relays and X see which accounts you're looking at.</p>
+    <header>
+      <div class="brand"><svg viewBox="0 0 64 64" aria-hidden="true" focusable="false"><circle cx="32" cy="32" r="32" fill="#7b3fe4"/><path d="M32 32 L32 6 A26 26 0 0 1 58 32 Z" fill="#fff" fill-opacity=".35"/><line x1="32" y1="32" x2="32" y2="6" stroke="#fff" stroke-width="6" stroke-linecap="round"/><circle cx="46" cy="18" r="7" fill="#ff7a1a"/></svg><span>XMRadar</span></div>
+      <div role="tablist" aria-label="XMRadar" id="tabs" class="seg">
+        <button role="tab" id="tab-monero" data-tab="monero" aria-controls="panel-monero">Monero</button>
+        <button role="tab" id="tab-burner" data-tab="burner" aria-controls="panel-burner">Burner</button>
       </div>
-      <div id="identity-status">
-        <h2>Your Monero identity</h2>
-        <ul data-status="lines" class="state"></ul>
-        <div class="row"><button data-status="check">Check status</button> <span data-status="when" class="hint"></span></div>
-        <span data-status="message" role="status" aria-live="polite"></span>
-        <button data-open="identity" class="link">Set up…</button>
-      </div>
-    </section>
+    </header>
 
-    <section role="tabpanel" id="panel-burner" aria-labelledby="tab-burner" hidden>
-      <div id="burner">
-        <p class="hint">Throwaway addresses from kyc.rip GhostMail.</p>
-        <div class="row">Address: <code data-burner="email">none</code> <button data-burner="copy" class="hidden">Copy</button></div>
-        <div class="row hint" data-burner="meta"></div>
-        <div class="row">
-          <button data-burner="create">Get a 60-minute address</button>
-          <button data-burner="burn" class="hidden">Burn now</button>
-          <button data-burner="forget" class="hidden">Forget</button>
+    <main>
+      <section role="tabpanel" id="panel-monero" aria-labelledby="tab-monero" hidden>
+        <div id="xmr-toggles" class="card pad">
+          <h2 class="card-head">Show badges on</h2>
+          <label class="setting">
+            <div><span class="row-title">X</span><span class="row-hint">Needs the author's proof tweet</span></div>
+            <input data-xmr="badges" type="checkbox" role="switch" class="switch" />
+          </label>
+          <label class="setting">
+            <div><span class="row-title">Discover X badges via relays</span><span class="row-hint">Relays and X see which accounts you view</span></div>
+            <input data-xmr="discovery" type="checkbox" role="switch" class="switch" />
+          </label>
         </div>
-        <span data-burner="status" role="status" aria-live="polite"></span>
-        <button data-open="burner" class="link">Use a paid inbox…</button>
-      </div>
-    </section>
+        <button id="tip-badge" class="card pad nav-card" data-open="identity">
+          <span><span class="row-title">Your tip badge</span><span class="row-hint" id="tip-badge-summary">Not checked yet</span></span>
+          <span class="arrow" aria-hidden="true">→</span>
+        </button>
+      </section>
 
-    <footer><button data-open="" class="link">All settings</button></footer>
+      <section role="tabpanel" id="panel-burner" aria-labelledby="tab-burner" hidden>
+        <div id="burner" class="card pad">
+          <div class="burner-head">
+            <div>
+              <div class="row-title mono" data-burner="email">none</div>
+              <div class="row-hint" data-burner="meta"></div>
+            </div>
+            <button data-burner="copy" class="soft hidden">Copy</button>
+          </div>
+          <div class="row">
+            <button data-burner="create" class="primary">Get a 60-minute address</button>
+            <button data-burner="burn" class="hidden">Burn now</button>
+            <button data-burner="forget" class="hidden">Forget</button>
+          </div>
+          <span data-burner="status" class="row-hint" role="status" aria-live="polite"></span>
+        </div>
+        <p class="hint">Throwaway addresses from kyc.rip GhostMail. <button data-open="burner" class="link">Use a paid inbox…</button></p>
+      </section>
+    </main>
+
+    <footer>
+      <span class="hint"><span id="signed-in">No signer yet</span> <button id="connect-signer" class="link" data-open="posting">Connect</button></span>
+      <button data-open="" class="link">All settings</button>
+    </footer>
     <script type="module" src="./main.ts"></script>
   </body>
 </html>

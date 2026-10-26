@@ -87,3 +87,21 @@ export function ago(at: number, now = Date.now()): string {
   const min = Math.round((now - at) / 60_000);
   return min < 1 ? 'just now' : min < 120 ? `${min} min ago` : `${Math.round(min / 60)} h ago`;
 }
+
+type StoredStatus = { at: number; status: SetupStatus } | null;
+
+/** The stored check, if it was made with this signer key; a check for another key doesn't describe this one. */
+export const statusFor = (stored: StoredStatus, pubkey: string | null) => (stored && pubkey && stored.status.pubkey === pubkey ? stored : null);
+
+/** One line for the popup's "Your tip badge" card. */
+export function badgeSummary(s: SetupStatus | null): string {
+  if (!s) return 'Not checked yet';
+  const addressOk = !!s.address?.check.ok;
+  const nostrLive = addressOk && s.link?.proof.status === 'verified';
+  const bioOk = s.xmrbio?.found === true && s.xmrbio.check.ok;
+  const parts: string[] = [];
+  if (nostrLive) parts.push('Live on Nostr');
+  else if (addressOk) parts.push('Address on Nostr', 'X needs the proof tweet');
+  if (bioOk) parts.push('xmr.bio verified');
+  return parts.length ? parts.join(' · ') : 'Not set up yet';
+}

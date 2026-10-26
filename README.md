@@ -48,7 +48,7 @@ With **Discover Monero addresses via Nostr relays** turned on in the options (of
 
 ## Your Monero identity (Phase 2c)
 
-In the options page, under **Your Monero identity**: run *Test signer*, confirm your X handle, publish your Monero address, then post the proof tweet and paste its link. Each change reads your current Nostr list from every relay, keeps all other tags, shows a diff, and is signed once in a temporary tab (your signer still asks first). Relays that can't be read are skipped, and you have to confirm before publishing without them. Your badge is live for other XMRadar users with discovery on once both steps are done.
+In the options page, under **Monero identity**, a four-step tracker walks you through it: connect your signer, confirm your X handle, publish your Monero address, then post the proof tweet and paste its link. Done steps collapse to one line with Change, Replace, Remove or Unlink. Each change reads your current Nostr list from every relay, keeps all other tags, shows a diff, and is signed once in a temporary tab (your signer still asks first). Relays that can't be read are skipped, and you have to confirm before publishing without them. Your badge is live for other XMRadar users with discovery on once both steps are done.
 
 ## Security notes
 
@@ -73,3 +73,7 @@ Not yet verified in a browser. Check each of these in Chrome and in Firefox:
 ## When a site changes its layout
 
 Each site has its own file in `src/extractors/` with a matching HTML fixture in `tests/fixtures/`. Save the new post HTML as a fixture, then fix the selectors until `pnpm test` passes. If a site extractor stops matching, select the text and right-click: the selection is always used.
+
+## Third-party assets
+
+- The UI font is Manrope (SIL Open Font License 1.1), bundled from `@fontsource-variable/manrope`. Nothing is loaded from a font CDN.

@@ -7,108 +7,173 @@
     <meta name="manifest.open_in_tab" content="true" />
   </head>
   <body>
-    <main>
-      <h1>XMRadar</h1>
+    <div class="layout">
+      <nav class="sidebar" aria-label="Settings">
+        <div class="brand"><svg viewBox="0 0 64 64" aria-hidden="true" focusable="false"><circle cx="32" cy="32" r="32" fill="#7b3fe4"/><path d="M32 32 L32 6 A26 26 0 0 1 58 32 Z" fill="#fff" fill-opacity=".35"/><line x1="32" y1="32" x2="32" y2="6" stroke="#fff" stroke-width="6" stroke-linecap="round"/><circle cx="46" cy="18" r="7" fill="#ff7a1a"/></svg><span>XMRadar</span></div>
+        <ul id="nav">
+          <li><a href="#posting" data-nav="posting">Posting to Nostr</a></li>
+          <li><a href="#identity" data-nav="identity">Monero identity <span id="nav-identity-count" class="count"></span></a></li>
+          <li><a href="#burner" data-nav="burner">Burner email</a></li>
+        </ul>
+        <p class="hint side-note">Changes save as you make them. Follows your system's light or dark mode.</p>
+      </nav>
 
-      <section id="perm" class="warn hidden">
-        The extension needs access to all sites to read posts and fetch images.
-        <button id="grant">Grant access</button>
-      </section>
-
-      <section>
-        <h2>Signer</h2>
-        <p class="hint">Signing uses your NIP-07 extension (Alby, nos2x…). Your key never touches XMRadar.</p>
-        <button id="test-signer">Test signer</button>
-        <code id="npub"></code>
-      </section>
-
-      <section>
-        <h2>Relays</h2>
-        <p class="hint">One per line. Leave empty to use your NIP-65 write relays, falling back to defaults.</p>
-        <textarea id="relays" rows="5" placeholder="wss://relay.damus.io"></textarea>
-        <button id="load-nip65">Load from my NIP-65 list</button>
-      </section>
-
-      <section>
-        <h2>Images</h2>
-        <label>Blossom server <input id="blossom" type="url" /></label>
-      </section>
-
-      <section id="identity">
-        <h2>Your Monero identity</h2>
-        <p class="hint">
-          Publish your Monero address and link your X account on Nostr, so XMRadar users see a tip badge on your tweets.
-          Each change is signed in a temporary tab, and your signer shows the event before you approve it.
-        </p>
-        <div class="row">Signing key: <code id="id-npub">not connected (use "Test signer" above)</code></div>
-        <div id="identity-status">
-          <ul data-status="lines" class="state"></ul>
-          <div class="row"><button data-status="check">Check status</button> <span data-status="when" class="hint"></span></div>
-          <span data-status="message" role="status" aria-live="polite"></span>
+      <main>
+        <div id="perm" class="banner hidden">
+          <span>The extension needs access to all sites to read posts and fetch images.</span>
+          <button id="grant" class="primary">Grant access</button>
         </div>
-        <p class="hint">Badge switches ("Show Monero badges on X", Nostr discovery) are in the XMRadar toolbar popup.</p>
 
-        <h3>1. Your X handle</h3>
-        <div class="row"><span>@</span><input id="id-handle" type="text" spellcheck="false" placeholder="yourhandle" /><button id="id-handle-save">Confirm</button></div>
+        <section id="posting" data-section="posting">
+          <h1>Posting to Nostr</h1>
+          <p class="lead">Right-click a post → <b>Copy post to Nostr</b>, or hover it and press <kbd>Alt+Shift+N</kbd>.</p>
 
-        <h3>2. Monero address</h3>
-        <input id="id-address" type="text" spellcheck="false" placeholder="4… or 8… (mainnet)" />
-        <div class="row"><button id="id-address-publish">Publish address</button><button id="id-address-remove">Remove my address</button></div>
+          <div class="field">
+            <h2>Signer</h2>
+            <div>
+              <div class="row"><span id="signer-dot" class="dot"></span><code id="npub">Not connected</code><button id="test-signer">Test signer</button></div>
+              <p class="hint">Signing uses your NIP-07 extension (Alby, nos2x…). Your key never touches XMRadar.</p>
+              <span id="signer-status" class="row-hint" role="status" aria-live="polite"></span>
+            </div>
+          </div>
 
-        <h3>3. Link your X account</h3>
-        <p class="hint">Post the proof tweet from your account, then paste its link here.</p>
-        <div class="row"><button id="id-tweet">Post proof tweet on X</button></div>
-        <input id="id-tweet-url" type="url" placeholder="https://x.com/yourhandle/status/…" />
-        <div class="row"><button id="id-link">Check tweet and link</button><button id="id-unlink">Unlink X</button></div>
+          <div class="field">
+            <h2>Relays</h2>
+            <div id="relay-editor">
+              <div class="chips" data-relays="chips"></div>
+              <div class="row">
+                <input data-relays="input" type="text" class="mono" spellcheck="false" placeholder="wss://…" aria-label="Add a relay" aria-describedby="relay-error" />
+                <button id="load-nip65">Load from NIP-65</button>
+              </div>
+              <span id="relay-error" data-relays="error" class="error row-hint" role="alert"></span>
+              <p class="hint">Leave empty to use your NIP-65 write relays, falling back to defaults. <span data-relays="saved" class="saved"></span></p>
+            </div>
+          </div>
 
-        <div id="id-confirm" class="confirm hidden">
-          <h3>Review the change</h3>
-          <div id="id-summary"></div>
-          <pre id="id-diff" class="diff"></pre>
-          <label><input id="id-is-me" type="checkbox" /> <span>Sign as <code id="id-confirm-npub"></code>. This is my key.</span></label>
-          <label id="id-partial-row" class="hidden"><input id="id-partial" type="checkbox" /> <span>Publish anyway. Tags that exist only on the unreadable relays may be lost.</span></label>
-          <div class="row"><button id="id-sign" class="primary" disabled>Sign and publish</button><button id="id-cancel">Cancel</button></div>
-        </div>
-        <ul id="id-results" class="results"></ul>
-        <button id="id-retry" class="hidden">Retry failed relays</button>
-        <span id="id-status" role="status" aria-live="polite"></span>
-        <p class="hint">Also on <a href="https://xmr.bio" target="_blank" rel="noopener noreferrer">xmr.bio</a>: claim or refresh your profile there and use its "Link Nostr" button.</p>
-      </section>
+          <div class="field">
+            <h2>Images</h2>
+            <div id="blossom-field">
+              <input data-blossom="input" type="url" class="mono" spellcheck="false" aria-label="Blossom server" aria-describedby="blossom-error" />
+              <span id="blossom-error" data-blossom="error" class="error row-hint" role="alert"></span>
+              <p class="hint">Blossom server for re-uploaded images. <span data-blossom="saved" class="saved"></span></p>
+            </div>
+          </div>
 
-      <section id="burner">
-        <h2>Burner email</h2>
-        <p class="hint">
-          Throwaway addresses from kyc.rip GhostMail. XMRadar sends GhostMail only the address and its access token, nothing about the page you're on.
-          kyc.rip can read mail sent to the address until it expires.
-        </p>
-        <div class="row">Address: <code data-burner="email">none</code> <button data-burner="copy" class="hidden">Copy</button></div>
-        <div class="row hint" data-burner="meta"></div>
-        <div class="row">
-          <button data-burner="create">Get a 60-minute address</button>
-          <button data-burner="burn" class="hidden">Burn now</button>
-          <button data-burner="forget" class="hidden">Forget</button>
-        </div>
-        <details data-burner="import-box">
-          <summary>Use a paid inbox from kyc.rip/mail</summary>
-          <p class="hint">Paid inboxes last longer and use better-reputation domains. XMRadar only reads them; "Forget" removes them here and leaves them on kyc.rip.</p>
-          <input data-burner="import-email" type="text" spellcheck="false" autocomplete="off" placeholder="address@vigilbox.xyz" />
-          <input data-burner="import-token" type="password" autocomplete="off" placeholder="Access token" />
-          <button data-burner="import">Import</button>
-        </details>
-        <span data-burner="status" role="status" aria-live="polite"></span>
-      </section>
+          <div class="field">
+            <h2>Behaviour</h2>
+            <div>
+              <label><input id="append-source" type="checkbox" /> Append link to the original post by default</label>
+              <label><input id="debug" type="checkbox" /> Show event JSON before signing (debug)</label>
+              <span id="behaviour-saved" class="saved"></span>
+            </div>
+          </div>
+        </section>
 
-      <section>
-        <h2>Behaviour</h2>
-        <label><input id="append-source" type="checkbox" /> Append link to the original post by default</label>
-        <label><input id="debug" type="checkbox" /> Show event JSON before signing (debug)</label>
-      </section>
+        <section id="identity" data-section="identity">
+          <h1>Monero identity</h1>
+          <p class="lead">
+            Publish your Monero address and link your X account on Nostr, so XMRadar users see a tip badge on your tweets.
+            Each change is signed in a temporary tab, and your signer shows the event before you approve it.
+          </p>
 
-      <footer>
-        <button id="save" class="primary">Save</button>
-        <span id="status"></span>
-      </footer>
-    </main>
+          <ol class="steps">
+            <li class="step" data-step="signer">
+              <span class="marker">1</span>
+              <div class="step-main">
+                <div class="step-line"><span class="step-title">Connect your signer</span><code data-value></code><button class="link" data-act="test-signer" data-when="done">Test again</button></div>
+                <div class="step-body">
+                  <p class="hint">XMRadar asks your NIP-07 extension (Alby, nos2x…) for your public key in a temporary tab.</p>
+                  <div class="row"><button class="primary" data-act="test-signer">Connect signer</button></div>
+                </div>
+              </div>
+            </li>
+            <li class="step" data-step="handle">
+              <span class="marker">2</span>
+              <div class="step-main">
+                <div class="step-line"><span class="step-title">Your X handle</span><code data-value></code><button class="link" data-act="edit" data-when="done">Change</button></div>
+                <div class="step-body">
+                  <div class="row"><span>@</span><input id="id-handle" type="text" spellcheck="false" placeholder="yourhandle" aria-label="Your X handle" /><button id="id-handle-save" class="primary">Confirm</button></div>
+                </div>
+              </div>
+            </li>
+            <li class="step" data-step="address">
+              <span class="marker">3</span>
+              <div class="step-main">
+                <div class="step-line"><span class="step-title">Publish your Monero address</span><code data-value></code><button class="link" data-act="edit" data-when="done">Replace</button><button id="id-address-remove" class="link danger" data-when="done">Remove</button></div>
+                <p class="warn row-hint" data-warn></p>
+                <div class="step-body">
+                  <div class="unchecked row"><span class="hint">Not checked yet.</span><button data-act="check">Check status</button></div>
+                  <div class="row"><input id="id-address" type="text" class="mono" spellcheck="false" placeholder="4… or 8… (mainnet)" aria-label="Your Monero address" /><button id="id-address-publish" class="primary">Publish address</button></div>
+                </div>
+              </div>
+            </li>
+            <li class="step" data-step="link">
+              <span class="marker">4</span>
+              <div class="step-main">
+                <div class="step-line"><span class="step-title">Link your X account</span><code data-value></code><button id="id-unlink" class="link danger" data-when="done">Unlink</button></div>
+                <p class="warn row-hint" data-warn></p>
+                <div class="step-body">
+                  <div class="unchecked row"><span class="hint">Not checked yet.</span><button data-act="check">Check status</button></div>
+                  <div class="row"><span class="sub">a</span><button id="id-tweet">Post proof tweet on X</button><span class="hint">Opens X with the text filled in.</span></div>
+                  <div class="row"><span class="sub">b</span><input id="id-tweet-url" type="url" class="mono" placeholder="https://x.com/yourhandle/status/…" aria-label="Link to your proof tweet" /><button id="id-link" class="primary">Check and link</button></div>
+                </div>
+              </div>
+            </li>
+          </ol>
+
+          <div id="id-confirm" class="confirm hidden">
+            <h3>Review the change</h3>
+            <div id="id-summary"></div>
+            <details><summary>Show the tags</summary><pre id="id-diff" class="diff"></pre></details>
+            <label><input id="id-is-me" type="checkbox" /> <span>Sign as <code id="id-confirm-npub"></code>. This is my key.</span></label>
+            <label id="id-partial-row" class="hidden"><input id="id-partial" type="checkbox" /> <span>Publish anyway. Tags that exist only on the unreadable relays may be lost.</span></label>
+            <div class="row"><button id="id-sign" class="primary" disabled>Sign and publish</button><button id="id-cancel">Cancel</button></div>
+          </div>
+          <div id="id-outcome" class="hidden">
+            <span id="id-results-summary"></span>
+            <details><summary>Relay results</summary><ul id="id-results" class="results"></ul></details>
+            <button id="id-retry" class="hidden">Retry failed relays</button>
+          </div>
+          <span id="id-status" role="status" aria-live="polite"></span>
+
+          <div id="identity-status" class="sources">
+            <div class="sources-head"><h2>Where your badge comes from</h2><span data-status="when" class="hint"></span><button data-status="check" class="link">Check again</button></div>
+            <dl data-status="lines" class="state"></dl>
+            <span data-status="message" class="row-hint" role="status" aria-live="polite"></span>
+          </div>
+          <p class="hint">Also on <a href="https://xmr.bio" target="_blank" rel="noopener noreferrer">xmr.bio</a>: claim your profile there and use its "Link with NIP-07" button.</p>
+        </section>
+
+        <section id="burner" data-section="burner">
+          <h1>Burner email</h1>
+          <p class="lead">
+            Throwaway addresses from kyc.rip GhostMail. XMRadar sends GhostMail only the address and its access token, nothing about the page you're on.
+            kyc.rip can read mail sent to the address until it expires.
+          </p>
+          <div class="cards">
+            <div class="card pad">
+              <h2>Free, 60 minutes</h2>
+              <p class="hint">One per hour. A short proof of work runs first.</p>
+              <div class="row burner-addr"><code data-burner="email">none</code><button data-burner="copy" class="soft hidden">Copy</button></div>
+              <div class="row-hint" data-burner="meta"></div>
+              <div class="row">
+                <button data-burner="create" class="primary">Get a 60-minute address</button>
+                <button data-burner="burn" class="hidden">Burn now</button>
+                <button data-burner="forget" class="hidden">Forget</button>
+              </div>
+            </div>
+            <div class="card pad" data-burner="import-box">
+              <h2>Paid inbox from kyc.rip/mail</h2>
+              <p class="hint">Lasts longer, better-reputation domains. XMRadar only reads it; "Forget" removes it here and leaves it on kyc.rip.</p>
+              <input data-burner="import-email" type="text" class="mono" spellcheck="false" autocomplete="off" placeholder="address@vigilbox.xyz" />
+              <input data-burner="import-token" type="password" autocomplete="off" placeholder="Access token" />
+              <div class="row"><button data-burner="import">Import</button></div>
+            </div>
+          </div>
+          <span data-burner="status" role="status" aria-live="polite"></span>
+        </section>
+      </main>
+    </div>
     <script type="module" src="./main.ts"></script>
   </body>
 </html>

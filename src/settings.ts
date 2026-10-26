@@ -1,4 +1,4 @@
-import { storage } from 'wxt/utils/storage';
+import { storage, type WxtStorageItem } from 'wxt/utils/storage';
 
 export const DEFAULT_RELAYS = ['wss://relay.damus.io', 'wss://nos.lol', 'wss://relay.primal.net'];
 /**
@@ -23,6 +23,18 @@ export const settingsItem = storage.defineItem<Settings>('sync:settings', {
   fallback: { relays: [], blossomServer: DEFAULT_BLOSSOM, appendSourceLink: false, debug: false },
 });
 
+/** Merges changes into an object item. Writes from one page run in order, so two autosaves can't drop each other's change. */
+function patcher<T extends object>(item: WxtStorageItem<T, Record<string, unknown>>) {
+  let writes: Promise<unknown> = Promise.resolve();
+  return (patch: Partial<T>): Promise<void> => {
+    const write = writes.then(async () => item.setValue({ ...(await item.getValue()), ...patch }));
+    writes = write.catch(() => {});
+    return write;
+  };
+}
+
+export const patchSettings = patcher(settingsItem);
+
 /** Last pubkey seen from the signer, used by the options page for NIP-65 lookups. */
 export const pubkeyItem = storage.defineItem<string | null>('local:pubkey', { fallback: null });
 
@@ -46,15 +58,35 @@ export function parseRelayList(text: string): string[] {
 
 export interface XmrSettings {
   /** Show Monero badges on X. */
-  badges: boolean;
+  badgesX: boolean;
+  /** Show Monero badges on Nostr web clients (read from R2 on). */
+  badgesNostr: boolean;
   /** Look up NIP-39/NIP-A3 claims on relays for handles on screen (relays and X can see which handles). */
+  nostrDiscovery: boolean;
+  /** Ask to post a kind 9042 receipt after a tip (read from R3 on). */
+  tipReceipts: boolean;
+}
+
+/** v1, before the redesign: one switch for X badges. */
+export interface XmrSettingsV1 {
+  badges: boolean;
   nostrDiscovery: boolean;
 }
 
+export const migrateXmrSettingsV2 = (v: XmrSettingsV1): XmrSettings => ({
+  badgesX: v.badges,
+  badgesNostr: v.badges,
+  nostrDiscovery: v.nostrDiscovery,
+  tipReceipts: true,
+});
+
 // a separate item, so settings saved before Phase 2 need no migration
 export const xmrSettingsItem = storage.defineItem<XmrSettings>('sync:xmrSettings', {
-  fallback: { badges: true, nostrDiscovery: false },
+  fallback: { badgesX: true, badgesNostr: true, nostrDiscovery: false, tipReceipts: true },
+  version: 2,
+  migrations: { 2: migrateXmrSettingsV2 },
 });
+export const patchXmrSettings = patcher(xmrSettingsItem);
 
 /** The user's own X handle; `proven` once their NIP-39 proof tweet passed. Used to hide their own badge. */
 export const myHandleItem = storage.defineItem<{ handle: string; proven: boolean } | null>('local:myHandle', { fallback: null });

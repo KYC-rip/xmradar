@@ -1,5 +1,8 @@
 import '../../ui/base.css';
 import './style.css';
+import { npubEncode } from 'nostr-tools/nip19';
+import { badgeSummary, setupStatusLast, statusFor } from '../../identity/status';
+import { pubkeyItem } from '../../settings';
 import { mountTabs, popupTabItem } from '../../ui/tabs';
 
 const $ = (id: string) => document.getElementById(id)!;
@@ -7,9 +10,8 @@ const $ = (id: string) => document.getElementById(id)!;
 // each panel's code loads the first time its tab is shown
 const loaders: Record<string, () => Promise<unknown>> = {
   monero: async () => {
-    const [{ mountXmrToggles }, { mountIdentityStatus }] = await Promise.all([import('../../ui/xmr-toggles'), import('../../ui/identity-status')]);
+    const { mountXmrToggles } = await import('../../ui/xmr-toggles');
     await mountXmrToggles($('xmr-toggles'));
-    mountIdentityStatus($('identity-status'));
   },
   burner: async () => {
     const { mountBurnerPanel } = await import('../../ui/burner-panel');
@@ -32,4 +34,16 @@ for (const el of document.querySelectorAll<HTMLElement>('[data-open]')) {
   });
 }
 
+/** Footer signer line and the tip badge summary, from the last stored check for this key. */
+async function renderHeader() {
+  const [pubkey, stored] = await Promise.all([pubkeyItem.getValue(), setupStatusLast.getValue()]);
+  const npub = pubkey ? npubEncode(pubkey) : null;
+  $('signed-in').textContent = npub ? `Signed in as ${npub.slice(0, 10)}…${npub.slice(-4)}` : 'No signer yet';
+  $('connect-signer').classList.toggle('hidden', !!npub);
+  $('tip-badge-summary').textContent = badgeSummary(statusFor(stored, pubkey)?.status ?? null);
+}
+
+void renderHeader();
+pubkeyItem.watch(() => void renderHeader());
+setupStatusLast.watch(() => void renderHeader());
 void popupTabItem.getValue().then((tab) => mountTabs($('tabs'), tab, show));

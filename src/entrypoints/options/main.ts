@@ -1,83 +1,70 @@
 import { npubEncode } from 'nostr-tools/nip19';
 import { sendToBackground } from '../../messaging';
-import { DEFAULT_BLOSSOM, parseRelayList, pubkeyItem, settingsItem } from '../../settings';
+import { patchSettings, pubkeyItem, settingsItem } from '../../settings';
 import { mountBurnerPanel } from '../../ui/burner-panel';
-import { initIdentity } from './identity';
+import { setStatus } from '../../ui/dom';
+import { mountBlossomField, mountRelayEditor } from '../../ui/posting-fields';
+import { mountSections } from '../../ui/sections';
+import { initIdentity, testSigner } from './identity';
 import '../../ui/base.css';
 import './style.css';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
-const relaysEl = $<HTMLTextAreaElement>('relays');
-const blossomEl = $<HTMLInputElement>('blossom');
 const appendEl = $<HTMLInputElement>('append-source');
 const debugEl = $<HTMLInputElement>('debug');
-const statusEl = $('status');
-const npubEl = $('npub');
+const signerStatus = $('signer-status');
 
 const ALL_SITES = { origins: ['<all_urls>'] };
 
-function setStatus(text: string, error = false) {
-  statusEl.textContent = text;
-  statusEl.className = error ? 'error' : 'ok';
-}
-
 async function showPubkey() {
   const pk = await pubkeyItem.getValue();
-  npubEl.textContent = pk ? npubEncode(pk) : '';
+  $('npub').textContent = pk ? npubEncode(pk) : 'Not connected';
+  $('signer-dot').classList.toggle('on', !!pk);
+  $('test-signer').textContent = pk ? 'Test again' : 'Test signer';
 }
 
-async function load() {
-  const s = await settingsItem.getValue();
-  relaysEl.value = s.relays.join('\n');
-  blossomEl.value = s.blossomServer;
-  appendEl.checked = s.appendSourceLink;
-  debugEl.checked = s.debug;
-  await showPubkey();
-  // Firefox MV3 doesn't grant host permissions at install time
-  if (!(await browser.permissions.contains(ALL_SITES))) $('perm').classList.remove('hidden');
-}
-
+// Firefox MV3 doesn't grant host permissions at install time
+void browser.permissions.contains(ALL_SITES).then((ok) => $('perm').classList.toggle('hidden', ok));
 $('grant').addEventListener('click', async () => {
   if (await browser.permissions.request(ALL_SITES)) $('perm').classList.add('hidden');
 });
 
-$('save').addEventListener('click', async () => {
-  const blossom = blossomEl.value.trim() || DEFAULT_BLOSSOM;
-  if (!/^https:\/\//.test(blossom)) return setStatus('Blossom server must be an https:// URL', true);
-  const relays = parseRelayList(relaysEl.value);
-  await settingsItem.setValue({ relays, blossomServer: blossom, appendSourceLink: appendEl.checked, debug: debugEl.checked });
-  relaysEl.value = relays.join('\n');
-  setStatus('Saved');
+// Behaviour: saved on change, each box its own field; disabled until the saved values load
+for (const el of [appendEl, debugEl]) el.disabled = true;
+void settingsItem.getValue().then((s) => {
+  appendEl.checked = s.appendSourceLink;
+  debugEl.checked = s.debug;
+  for (const el of [appendEl, debugEl]) el.disabled = false;
 });
+for (const el of [appendEl, debugEl]) {
+  el.addEventListener('change', async () => {
+    await patchSettings(el === appendEl ? { appendSourceLink: el.checked } : { debug: el.checked });
+    setStatus($('behaviour-saved'), 'Saved', 'ok');
+    setTimeout(() => setStatus($('behaviour-saved'), ''), 1500);
+  });
+}
 
-$('test-signer').addEventListener('click', async () => {
-  setStatus('Opening a test page…');
-  try {
-    await sendToBackground({ type: 'test-signer' });
-    await showPubkey();
-    setStatus('Signer works');
-  } catch (e) {
-    setStatus((e as Error).message, true);
-  }
-});
+const relays = mountRelayEditor($('relay-editor'));
+void mountBlossomField($('blossom-field'));
+
+$('test-signer').addEventListener('click', () => void testSigner(signerStatus));
 
 $('load-nip65').addEventListener('click', async () => {
   const pubkey = await pubkeyItem.getValue();
-  if (!pubkey) return setStatus('Run "Test signer" first so we know your pubkey', true);
-  setStatus('Looking up your relay list…');
+  if (!pubkey) return setStatus($('relay-error'), 'Connect your signer first ("Test signer" above), so XMRadar knows your key.', 'error');
+  setStatus($('relay-error'), 'Looking up your relay list…');
   try {
-    const { relays } = await sendToBackground({ type: 'load-nip65', pubkey });
-    if (!relays.length) return setStatus('No NIP-65 relay list found', true);
-    relaysEl.value = relays.join('\n');
-    setStatus(`Loaded ${relays.length} relays — click Save to keep them`);
+    const { relays: found } = await sendToBackground({ type: 'load-nip65', pubkey });
+    if (!found.length) return setStatus($('relay-error'), 'No NIP-65 relay list found.', 'error');
+    await relays.replace(found);
+    setStatus($('relay-error'), `Loaded ${found.length} relays from your NIP-65 list.`, 'ok');
   } catch (e) {
-    setStatus((e as Error).message, true);
+    setStatus($('relay-error'), (e as Error).message, 'error');
   }
 });
 
-void load();
-const burner = mountBurnerPanel($('burner'));
-// the popup links to #identity and #burner; scroll once the sections have their content
-void Promise.all([initIdentity(), burner.ready]).then(() => {
-  if (location.hash) document.getElementById(location.hash.slice(1))?.scrollIntoView();
-});
+void showPubkey();
+pubkeyItem.watch(() => void showPubkey());
+mountBurnerPanel($('burner'));
+mountSections(document, () => scrollTo(0, 0));
+void initIdentity();

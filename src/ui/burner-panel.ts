@@ -99,7 +99,7 @@ export function mountBurnerPanel(root: HTMLElement) {
     if (burnArmed) clearTimeout(burnArmed);
     burnArmed = null;
     burnBtn.textContent = 'Burn now';
-    burnBtn.classList.remove('primary');
+    burnBtn.classList.remove('armed');
   }
 
   createBtn.addEventListener('click', () => guard('Getting an address…', create));
@@ -111,7 +111,7 @@ export function mountBurnerPanel(root: HTMLElement) {
   burnBtn.addEventListener('click', () => {
     if (!burnArmed) {
       burnBtn.textContent = 'Confirm burn';
-      burnBtn.classList.add('primary');
+      burnBtn.classList.add('armed');
       setStatus(statusEl, 'Click again to delete this address and its mail on GhostMail.');
       burnArmed = setTimeout(() => {
         disarmBurn();

@@ -362,7 +362,7 @@ async function cachedVerify(handle: string, tweetId: string, pubkey: string): Pr
 }
 
 async function resolveBadges(handles: string[], tabId: number): Promise<ResolveHandlesResult> {
-  const { badges: enabled, nostrDiscovery } = await xmrSettingsItem.getValue();
+  const { badgesX: enabled, nostrDiscovery } = await xmrSettingsItem.getValue();
   if (!enabled) return { badges: [], pending: [] };
   const valid = [...new Set(handles.filter((h) => typeof h === 'string' && HANDLE_RE.test(h)))].slice(0, MAX_HANDLES_PER_CALL);
   const { badges: cache } = await loadCaches();

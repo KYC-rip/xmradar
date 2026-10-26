@@ -213,15 +213,15 @@ export function startBadges(ctx: ContentScriptContext) {
   // profile headers change on client-side navigation without new tweet nodes
   ctx.addEventListener(window, 'wxt:locationchange', () => scan(document));
 
-  void xmrSettingsItem.getValue().then((s) => setEnabled(s.badges));
+  void xmrSettingsItem.getValue().then((s) => setEnabled(s.badgesX));
   const unwatch = xmrSettingsItem.watch((s, old) => {
     if (s.nostrDiscovery !== old?.nostrDiscovery) {
       // answers depend on the sources in use
       results.clear();
       for (const host of document.querySelectorAll(HOST_TAG)) host.remove();
     }
-    setEnabled(s.badges);
-    if (s.badges) scan(document);
+    setEnabled(s.badgesX);
+    if (s.badgesX) scan(document);
   });
   ctx.onInvalidated(() => {
     unwatch();
