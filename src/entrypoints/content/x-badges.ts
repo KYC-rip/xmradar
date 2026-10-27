@@ -2,7 +2,7 @@ import type { ContentScriptContext } from 'wxt/utils/content-script-context';
 import { PendingQueue } from '../../identity/bucket';
 import { normalizeHandle } from '../../identity/envelope';
 import type { Badge } from '../../identity/resolve';
-import { profileSlot, tweetSlot, type BadgeSlot } from '../../identity/x-handle';
+import { hideOwnBadge, profileSlot, sessionHandle, tweetSlot, type BadgeSlot } from '../../identity/x-handle';
 import { sendToBackground } from '../../messaging';
 import { myHandleItem, xmrSettingsItem } from '../../settings';
 import { openTip } from './tip';
@@ -72,11 +72,30 @@ export function startBadges(ctx: ContentScriptContext) {
   let inflight = false;
   let enabled = false;
   let observer: MutationObserver | null = null;
-  // no badge on your own account once it's proven (PLAN-PHASE2 §4.6)
+  // no badge on your own proven account while X is logged in as it (PLAN-PHASE2 §4.6)
   let ownHandle: string | null = null;
+  let session: string | null = null;
+  const removeAll = () => {
+    for (const host of document.querySelectorAll(HOST_TAG)) host.remove();
+  };
   const setOwn = (v: { handle: string; proven: boolean } | null) => {
-    ownHandle = v?.proven ? normalizeHandle(v.handle) : null;
-    if (ownHandle) for (const host of document.querySelectorAll<HTMLElement>(HOST_TAG)) if (host.dataset.key?.endsWith(`:${ownHandle}`)) host.remove();
+    const next = v?.proven ? normalizeHandle(v.handle) : null;
+    if (next === ownHandle) return;
+    ownHandle = next;
+    // which badge is hidden may have changed: redraw from the results cache
+    removeAll();
+    scan(document);
+  };
+  // X's logged-out pages have none of its test ids (TESTING friction #1)
+  const loggedOut = () => !document.querySelector('[data-testid]');
+  /** Re-reads the X session; on a change (account switch), redraws all badges. */
+  const checkSession = () => {
+    const next = sessionHandle(document);
+    // a profile link missing for a moment (re-render) keeps the last session instead of flashing your badge
+    if (next === session || (next === null && session !== null && !loggedOut())) return false;
+    session = next;
+    removeAll();
+    return true;
   };
   void myHandleItem.getValue().then(setOwn);
   const unwatchOwn = myHandleItem.watch(setOwn);
@@ -105,9 +124,12 @@ export function startBadges(ctx: ContentScriptContext) {
 
   function apply(slot: BadgeSlot) {
     const existing = slot.anchor.querySelector<HTMLElement>(`:scope > ${HOST_TAG}`);
+    if (hideOwnBadge(slot.handle, ownHandle, session)) {
+      existing?.remove();
+      return;
+    }
     if (existing?.dataset.key === slot.key) return;
     existing?.remove();
-    if (ownHandle && normalizeHandle(slot.handle) === ownHandle) return;
     const badge = lookup(slot.handle);
     if (badge) {
       if (badge.primary) insert(slot, badge);
@@ -119,6 +141,7 @@ export function startBadges(ctx: ContentScriptContext) {
 
   function scan(root: ParentNode) {
     if (!enabled) return;
+    if (root === document) checkSession();
     const articles = new Set<Element>();
     if (root instanceof Element) {
       const outer = root.closest('article[data-testid="tweet"]');
@@ -146,8 +169,13 @@ export function startBadges(ctx: ContentScriptContext) {
 
   async function flush() {
     if (!enabled || !queue.size || document.hidden) return;
+    // a handle queued before the session became yours isn't looked up
+    const handles = queue.take(MAX_PER_CALL).filter((h) => !hideOwnBadge(h, ownHandle, session));
+    if (!handles.length) {
+      if (queue.size) schedule(BATCH_DELAY_MS);
+      return;
+    }
     inflight = true;
-    const handles = queue.take(MAX_PER_CALL);
     let retryPending = false;
     try {
       const res = await sendToBackground({ type: 'resolve-handles', handles });
@@ -170,6 +198,8 @@ export function startBadges(ctx: ContentScriptContext) {
   function connect() {
     if (observer || !enabled || document.hidden) return;
     observer = new MutationObserver((records) => {
+      // once per batch; an account switch can change only the profile link's href
+      if (checkSession()) return scan(document);
       for (const r of records) {
         for (const n of r.addedNodes) {
           if (n instanceof Element && !isOurs(n)) scan(n);
@@ -177,7 +207,7 @@ export function startBadges(ctx: ContentScriptContext) {
       }
     });
     // body survives X's client-side navigation, so one observer covers every page
-    observer.observe(document.body, { childList: true, subtree: true });
+    observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['href'] });
     scan(document);
   }
 
@@ -192,7 +222,7 @@ export function startBadges(ctx: ContentScriptContext) {
     disconnect();
     clearTimeout(timer);
     timer = undefined;
-    for (const host of document.querySelectorAll(HOST_TAG)) host.remove();
+    removeAll();
   }
 
   // X recycles tweet nodes while scrolling without adding new ones, so rescan what's on screen now and then
@@ -218,7 +248,7 @@ export function startBadges(ctx: ContentScriptContext) {
     if (s.nostrDiscovery !== old?.nostrDiscovery) {
       // answers depend on the sources in use
       results.clear();
-      for (const host of document.querySelectorAll(HOST_TAG)) host.remove();
+      removeAll();
     }
     setEnabled(s.badgesX);
     if (s.badgesX) scan(document);
