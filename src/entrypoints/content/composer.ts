@@ -4,6 +4,7 @@ import type { ContentScriptContext } from 'wxt/utils/content-script-context';
 import { createShadowRootUi } from 'wxt/utils/content-script-ui/shadow-root';
 import { callBridge } from '../../bridge';
 import { extractPost, type ExtractedImage } from '../../extractors';
+import { expandTweet, xExtractor } from '../../extractors/x';
 import { sendToBackground, type OpenComposerMsg, type RelayResult } from '../../messaging';
 import { articleTemplate, articleTooLarge, blossomAuthTemplate, buildNote, checkSigned, encodeAuthHeader, wordCount, type PostImage } from '../../nostr/event';
 import { settingsItem } from '../../settings';
@@ -39,6 +40,8 @@ export async function openComposer(ctx: ContentScriptContext, msg: OpenComposerM
 }
 
 async function mountComposer(ctx: ContentScriptContext, msg: OpenComposerMsg, target: Element | null) {
+  // a timeline tweet may be cut behind "Show more"; a selection is taken as it is
+  if (!msg.selection?.trim() && xExtractor.matches(document)) target = (await expandTweet(target, document).catch(() => null)) ?? target;
   const { post, fallback } = extractPost(target, document, { selection: msg.selection, srcUrl: msg.srcUrl });
   const settings = await settingsItem.getValue();
   const previousFocus = document.activeElement as HTMLElement | null;

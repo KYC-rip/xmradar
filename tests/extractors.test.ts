@@ -1,7 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { extractPost } from '../src/extractors';
+import { expandTweet } from '../src/extractors/x';
 import { makeDoc } from './helpers';
 
 const fixture = (name: string) => readFileSync(join(process.cwd(), 'tests/fixtures', `${name}.html`), 'utf8');
@@ -55,6 +56,58 @@ describe('x, outside any tweet on a tweet page', () => {
   });
   it('falls back off tweet pages', () => {
     expect(extractPost(null, page('/home')).fallback).toBe(true);
+  });
+});
+
+describe('x, long tweets behind Show more', () => {
+  const page = (more: string, quoteMore = '') =>
+    makeDoc(
+      'https://x.com/home',
+      `<article data-testid="tweet"><div data-testid="tweetText">cut…</div>${more}<div role="link"><div data-testid="tweetText">quoted</div>${quoteMore}</div><a href="/a/status/1"><time>1h</time></a></article>`,
+    );
+  const wire = (doc: Document, sel: string, full: string) =>
+    doc.querySelector(sel)!.addEventListener('click', (e) => {
+      const btn = e.currentTarget as Element;
+      btn.closest('article')!.querySelector('[data-testid="tweetText"]')!.textContent = full;
+      btn.remove();
+    });
+
+  it("clicks the tweet's own Show more and extracts the full text", async () => {
+    const doc = page('<button data-testid="tweet-text-show-more-link">Show more</button>');
+    wire(doc, 'button', 'the whole long tweet');
+    const target = doc.querySelector('[data-testid="tweetText"]')!;
+    const full = await expandTweet(target, doc);
+    expect(full).toBe(doc.querySelector('article'));
+    expect(extractPost(full, doc).post.text).toBe('the whole long tweet');
+  });
+  it("leaves a quoted tweet's Show more, links and short tweets alone", async () => {
+    const quoted = page('', '<button data-testid="tweet-text-show-more-link">Show more</button>');
+    const click = vi.fn();
+    quoted.querySelector('button')!.addEventListener('click', click);
+    await expandTweet(quoted.querySelector('[data-testid="tweetText"]'), quoted);
+    expect(click).not.toHaveBeenCalled();
+    const link = page('<a data-testid="tweet-text-show-more-link" href="/a/status/1">Show more</a>');
+    const linkClick = vi.fn((e: Event) => e.preventDefault());
+    link.querySelector('a[data-testid]')!.addEventListener('click', linkClick);
+    expect(await expandTweet(link.querySelector('[data-testid="tweetText"]'), link)).toBe(link.querySelector('article'));
+    expect(linkClick).not.toHaveBeenCalled();
+  });
+  it('gives up after the timeout if nothing expands', async () => {
+    const doc = page('<button data-testid="tweet-text-show-more-link">Show more</button>');
+    expect(extractPost(await expandTweet(doc.querySelector('[data-testid="tweetText"]'), doc, 60), doc).post.text).toBe('cut…');
+  });
+  it('reads the redrawn tweet when X replaces it instead of expanding in place', async () => {
+    const doc = page('<button data-testid="tweet-text-show-more-link">Show more</button>');
+    const old = doc.querySelector('article')!;
+    old.querySelector('button')!.addEventListener('click', () => {
+      const fresh = old.cloneNode(true) as Element;
+      fresh.querySelector('[data-testid="tweetText"]')!.textContent = 'the whole long tweet';
+      fresh.querySelector('button')!.remove();
+      old.replaceWith(fresh);
+    });
+    const full = await expandTweet(old.querySelector('[data-testid="tweetText"]'), doc);
+    expect(full).not.toBe(old);
+    expect(extractPost(full, doc).post.text).toBe('the whole long tweet');
   });
 });
 
