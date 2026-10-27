@@ -207,8 +207,8 @@ describe('xmr toggles', () => {
     const discovery = document.querySelector<HTMLInputElement>('[data-xmr="discovery"]')!;
     expect([badges.checked, discovery.checked]).toEqual([true, false]);
     discovery.click();
-    await vi.waitFor(async () => expect(await xmrSettingsItem.getValue()).toEqual({ badgesX: true, badgesNostr: true, nostrDiscovery: true, tipReceipts: true }));
-    await xmrSettingsItem.setValue({ badgesX: false, badgesNostr: true, nostrDiscovery: true, tipReceipts: true });
+    await vi.waitFor(async () => expect(await xmrSettingsItem.getValue()).toEqual({ badgesX: true, badgesNostr: true, nostrDiscovery: true, tipReceipts: true, badgeIcon: 'mono', badgeLabel: true }));
+    await xmrSettingsItem.setValue({ badgesX: false, badgesNostr: true, nostrDiscovery: true, tipReceipts: true, badgeIcon: 'mono', badgeLabel: true });
     await vi.waitFor(() => expect(badges.checked).toBe(false));
   });
 });

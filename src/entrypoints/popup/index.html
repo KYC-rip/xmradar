@@ -15,18 +15,11 @@
 
     <main>
       <section role="tabpanel" id="panel-monero" aria-labelledby="tab-monero" hidden>
-        <div id="xmr-toggles" class="card pad">
-          <h2 class="card-head">Show badges on</h2>
-          <label class="setting">
-            <div><span class="row-title">X</span><span class="row-hint">Needs the author's proof tweet</span></div>
-            <input data-xmr="badges" type="checkbox" role="switch" class="switch" />
-          </label>
-          <label class="setting">
-            <div><span class="row-title">Discover X badges via relays</span><span class="row-hint">Relays and X see which accounts you view</span></div>
-            <input data-xmr="discovery" type="checkbox" role="switch" class="switch" />
-          </label>
-        </div>
-        <button id="tip-badge" class="card pad nav-card" data-open="identity">
+        <button id="badges-link" type="button" class="card pad nav-card" data-open="badges">
+          <span><span class="row-title">Badges on X</span><span class="row-hint">On or off, discovery and badge look</span></span>
+          <span class="arrow" aria-hidden="true">→</span>
+        </button>
+        <button id="tip-badge" type="button" class="card pad nav-card" data-open="identity">
           <span><span class="row-title">Your tip badge</span><span class="row-hint" id="tip-badge-summary">Not checked yet</span></span>
           <span class="arrow" aria-hidden="true">→</span>
         </button>

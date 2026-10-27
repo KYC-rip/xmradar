@@ -70,3 +70,13 @@ dl.state dd { margin: 0; }
   .field { grid-template-columns: 1fr; gap: 6px; }
   .cards { grid-template-columns: 1fr; }
 }
+
+/* Badges: look picker */
+#badge-look, #badge-switches { max-width: 460px; padding: 6px 16px; display: flex; flex-direction: column; }
+#badge-look { padding-top: 14px; gap: 4px; }
+.looks { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 6px 0 2px; }
+.look { position: relative; display: flex; align-items: center; justify-content: center; height: 44px; border: 1px solid var(--border); border-radius: 10px; cursor: pointer; }
+.look:has(input:checked) { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.look:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+.look input { position: absolute; opacity: 0; pointer-events: none; }
+.look [data-preview] { pointer-events: none; }

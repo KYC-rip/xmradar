@@ -74,7 +74,7 @@ On x.com, right-click a tweet or profile → **Tip with Monero (look up on xmr.b
 
 ## Monero badges on X (Phase 2b)
 
-With **Discover Monero addresses via Nostr relays** turned on in the options (off by default), tweets get an orange **XMR** badge when the author's npub has published a Monero address (NIP-A3, kind 10133) and links the X handle (NIP-39, kind 10011) with a proof tweet that XMRadar checks itself, through X's oEmbed API and then syndication. Relays and X can see which accounts you're looking at while discovery is on. Clicking a badge opens the tip popup with every source. Without discovery, badges need the xmr.bio directory, which comes in Phase 2d.
+With **Discover X badges via relays** turned on under **Options → Badges on X** (off by default), tweets get an orange badge (the Monero symbol and **XMR** by default; change the icon or hide the label there) when the author's npub has published a Monero address (NIP-A3, kind 10133) and links the X handle (NIP-39, kind 10011) with a proof tweet that XMRadar checks itself, through X's oEmbed API and then syndication. Relays and X can see which accounts you're looking at while discovery is on. Clicking a badge opens the tip popup with every source. Without discovery, badges need the xmr.bio directory, which comes in Phase 2d.
 
 ## Your Monero identity (Phase 2c)
 
@@ -107,3 +107,4 @@ Each site has its own file in `src/extractors/` with a matching HTML fixture in 
 ## Third-party assets
 
 - The UI font is Manrope (SIL Open Font License 1.1), bundled from `@fontsource-variable/manrope`. Nothing is loaded from a font CDN.
+- The Monero symbol on the badge is © The Monero Project, from `monero-project/monero-gui` (`images/monero-vector.svg`, commit 5265e52), BSD-3-Clause, and licensed CC BY-SA 4.0 on getmonero.org. The default look recolours it white. Monero and its symbol are trademarks of their owners; XMRadar is not affiliated with or endorsed by The Monero Project. Full notices: `public/THIRD_PARTY_NOTICES.txt` (shipped in the extension).

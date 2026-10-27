@@ -316,6 +316,16 @@ describe('badge slots', () => {
     expect(slot).toMatchObject({ handle: 'Alice', key: '42:alice' });
     expect(slot.anchor.getAttribute('data-testid')).toBe('User-Name');
   });
+  it('puts the badge in the display-name row when X splits name and @handle into rows', () => {
+    // as on x.com 2026-10: timeline and a tweet's own page (where the rows stack)
+    const real = makeDoc(
+      'https://x.com/XBToshi/status/7',
+      `<article data-testid="tweet"><div data-testid="User-Name"><div class="name"><div><a href="/XBToshi">CyberSatoshi</a></div></div><div class="handle"><div><a href="/XBToshi">@XBToshi</a><a href="/XBToshi/status/7"><time>1h</time></a></div></div></div></article>`,
+    );
+    const slot = tweetSlot(real.querySelector('article')!)!;
+    expect(slot).toMatchObject({ handle: 'XBToshi', key: '7:xbtoshi' });
+    expect(slot.anchor.className).toBe('name');
+  });
   it('finds the profile header on profile pages only', () => {
     expect(profileSlot(doc, { hostname: 'x.com', pathname: '/bob' })).toMatchObject({ handle: 'bob', key: 'profile:bob' });
     expect(profileSlot(doc, { hostname: 'x.com', pathname: '/home' })).toBeNull();

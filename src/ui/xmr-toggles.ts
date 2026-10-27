@@ -2,7 +2,7 @@ import { patchXmrSettings, xmrSettingsItem, type XmrSettings } from '../settings
 import { part } from './dom';
 
 /**
- * The popup's badge switches, saved on change. `data-xmr` names the setting each one drives;
+ * The badge switches (options page, Badges on X), saved on change. `data-xmr` names the setting each one drives;
  * settings without a switch on the page (Nostr clients and tip receipts until R2/R3) are kept as they are.
  */
 export async function mountXmrToggles(root: HTMLElement) {

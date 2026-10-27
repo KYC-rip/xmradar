@@ -97,7 +97,7 @@ Rules:
 - Batching: new handles are collected for 750ms and deduplicated against a local result cache, then sent as one `resolve-handles` message.
 - The observer **disconnects while `document.hidden`** and rescans the visible articles when the tab is shown again.
 - The badge is a button with a **closed shadow root**, styled with `adoptedStyleSheets` and falling back to `<style>` (this doubles as the Phase-1 R6 CSP check), with `aria-label="Accepts Monero — tip @handle"`.
-- No badge on the user's own **confirmed, proven** handle (§4.8), and only while X is logged in as that handle (the nav's `AppTabBar_Profile_Link`). When the session can't be read (logged out, other layouts), the badge shows. An account switch or a change to the confirmed handle redraws all badges.
+- Your own badge shows like anyone else's (owner decision, 2026-10-27): it is how you see your setup works. Hiding it (first by confirmed handle, then by X session in 644245d) was dropped.
 
 ### 4.7 Tip popup (Phase-1 Shadow-DOM modal shell)
 - **All untrusted strings** (handle, address, npub, labels, reasons) are inserted with `textContent` only.
@@ -115,7 +115,7 @@ Rules:
 **The generic bridge allowlist stays {1, 24242}.** Setup never goes through `callBridge`.
 
 Flow, started from the options page "Monero identity", which opens an `x.com` tab and creates a setup session:
-1. **Confirm the handle.** The handle is prefilled from the tab's profile URL if it's a profile page, otherwise typed. The user confirms it. It's only treated as **proven** after step 3's proof tweet passes the author check. It's stored as `confirmedHandle` and used to hide the user's own badge while X is logged in as that handle (§4.6).
+1. **Confirm the handle.** The handle is prefilled from the tab's profile URL if it's a profile page, otherwise typed. The user confirms it. It's only treated as **proven** after step 3's proof tweet passes the author check. It's stored as `confirmedHandle`.
 2. **Monero address → kind 10133.** The background:
    - validates the address
    - runs the **merge algorithm** below

@@ -1,4 +1,5 @@
 import { storage, type WxtStorageItem } from 'wxt/utils/storage';
+import { isBadgeIcon, type BadgeIcon } from './identity/badge-look';
 
 export const DEFAULT_RELAYS = ['wss://relay.damus.io', 'wss://nos.lol', 'wss://relay.primal.net'];
 /**
@@ -56,7 +57,7 @@ export function parseRelayList(text: string): string[] {
   return [...out];
 }
 
-export interface XmrSettings {
+export interface XmrSettingsV2 {
   /** Show Monero badges on X. */
   badgesX: boolean;
   /** Show Monero badges on Nostr web clients (read from R2 on). */
@@ -67,26 +68,40 @@ export interface XmrSettings {
   tipReceipts: boolean;
 }
 
+export interface XmrSettings extends XmrSettingsV2 {
+  /** The badge's icon; read through `badgeLook`, which fills in defaults. */
+  badgeIcon: BadgeIcon;
+  /** Show "XMR" next to the icon (always on with no icon). */
+  badgeLabel: boolean;
+}
+
 /** v1, before the redesign: one switch for X badges. */
 export interface XmrSettingsV1 {
   badges: boolean;
   nostrDiscovery: boolean;
 }
 
-export const migrateXmrSettingsV2 = (v: XmrSettingsV1): XmrSettings => ({
+export const migrateXmrSettingsV2 = (v: XmrSettingsV1): XmrSettingsV2 => ({
   badgesX: v.badges,
   badgesNostr: v.badges,
   nostrDiscovery: v.nostrDiscovery,
   tipReceipts: true,
 });
 
+/** v3 adds the badge look; values already there (e.g. synced from a newer device) are kept. */
+export const migrateXmrSettingsV3 = (v: XmrSettingsV2 & Partial<Pick<XmrSettings, 'badgeIcon' | 'badgeLabel'>>): XmrSettings => ({
+  ...v,
+  badgeIcon: isBadgeIcon(v.badgeIcon) ? v.badgeIcon : 'mono',
+  badgeLabel: typeof v.badgeLabel === 'boolean' ? v.badgeLabel : true,
+});
+
 // a separate item, so settings saved before Phase 2 need no migration
 export const xmrSettingsItem = storage.defineItem<XmrSettings>('sync:xmrSettings', {
-  fallback: { badgesX: true, badgesNostr: true, nostrDiscovery: false, tipReceipts: true },
-  version: 2,
-  migrations: { 2: migrateXmrSettingsV2 },
+  fallback: { badgesX: true, badgesNostr: true, nostrDiscovery: false, tipReceipts: true, badgeIcon: 'mono', badgeLabel: true },
+  version: 3,
+  migrations: { 2: migrateXmrSettingsV2, 3: migrateXmrSettingsV3 },
 });
 export const patchXmrSettings = patcher(xmrSettingsItem);
 
-/** The user's own X handle; `proven` once their NIP-39 proof tweet passed. Used to hide their own badge. */
+/** The user's own X handle; `proven` once their NIP-39 proof tweet passed. Used by the identity setup and status. */
 export const myHandleItem = storage.defineItem<{ handle: string; proven: boolean } | null>('local:myHandle', { fallback: null });

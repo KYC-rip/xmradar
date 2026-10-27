@@ -1,5 +1,5 @@
 import { isXHost } from '../sender';
-import { HANDLE_RE, normalizeHandle } from './envelope';
+import { HANDLE_RE } from './envelope';
 
 // first path segments on x.com that are app pages, not profiles
 const RESERVED = new Set([
@@ -40,11 +40,15 @@ export interface BadgeSlot {
 
 /** Author handle and slot for a timeline tweet. */
 export function tweetSlot(article: Element): BadgeSlot | null {
-  const anchor = article.querySelector('[data-testid="User-Name"]');
-  const handle = fromPath(anchor?.querySelector('a[href^="/"]')?.getAttribute('href'));
-  if (!anchor || !handle) return null;
-  const status = anchor.querySelector('a[href*="/status/"]')?.getAttribute('href') ?? '';
+  const name = article.querySelector('[data-testid="User-Name"]');
+  const handle = fromPath(name?.querySelector('a[href^="/"]')?.getAttribute('href'));
+  if (!name || !handle) return null;
+  const status = name.querySelector('a[href*="/status/"]')?.getAttribute('href') ?? '';
   const tweetId = /\/status\/(\d{1,20})/.exec(status)?.[1] ?? 'x';
+  // inside the display-name row, right after the name: on a tweet's own page X stacks the name
+  // and @handle rows, and a badge after both would sit on a line of its own
+  const row = name.firstElementChild;
+  const anchor = row && row.localName !== 'xmradar-badge' && row.querySelector('a[href^="/"]') ? row : name;
   return { handle, key: `${tweetId}:${handle.toLowerCase()}`, anchor };
 }
 
@@ -56,26 +60,3 @@ export function profileSlot(doc: Document, loc: { hostname: string; pathname: st
   return handle && anchor ? { handle, key: `profile:${handle.toLowerCase()}`, anchor } : null;
 }
 
-/**
- * The account logged in to X, from the nav's profile link. Null when logged out, on layouts
- * without that link (e.g. some mobile ones), or when the links disagree; your badge then shows.
- */
-export function sessionHandle(doc: Document): string | null {
-  const handles = new Set<string>();
-  for (const a of doc.querySelectorAll('a[data-testid="AppTabBar_Profile_Link"]')) {
-    let url: URL;
-    try {
-      url = new URL(a.getAttribute('href') ?? '', 'https://x.com/');
-    } catch {
-      return null;
-    }
-    const h = isXHost(url.hostname) && /^\/[^/]+\/?$/.test(url.pathname) ? fromPath(url.pathname) : null;
-    if (!h) return null;
-    handles.add(normalizeHandle(h));
-  }
-  return handles.size === 1 ? [...handles][0]! : null;
-}
-
-/** Your own badge is hidden only while X is logged in as your proven handle (TESTING friction #2). */
-export const hideOwnBadge = (slotHandle: string, own: string | null, session: string | null): boolean =>
-  own !== null && session !== null && normalizeHandle(own) === normalizeHandle(session) && normalizeHandle(slotHandle) === normalizeHandle(own);

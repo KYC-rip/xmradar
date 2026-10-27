@@ -13,6 +13,7 @@
         <ul id="nav">
           <li><a href="#posting" data-nav="posting">Posting to Nostr</a></li>
           <li><a href="#identity" data-nav="identity">Monero identity <span id="nav-identity-count" class="count"></span></a></li>
+          <li><a href="#badges" data-nav="badges">Badges on X</a></li>
           <li><a href="#burner" data-nav="burner">Burner email</a></li>
         </ul>
         <p class="hint side-note">Changes save as you make them. Follows your system's light or dark mode.<br /><a id="build-info" target="_blank" rel="noopener"></a></p>
@@ -142,6 +143,33 @@
             <span data-status="message" class="row-hint" role="status" aria-live="polite"></span>
           </div>
           <p class="hint">Also on <a href="https://xmr.bio" target="_blank" rel="noopener noreferrer">xmr.bio</a>: claim your profile there and use its "Link with NIP-07" button.</p>
+        </section>
+
+        <section id="badges" data-section="badges">
+          <h1>Badges on X</h1>
+          <p class="lead">An orange badge next to an author's name means they published a Monero address and proved their X handle. Click it to tip.</p>
+          <div id="badge-switches" class="card pad">
+            <label class="setting">
+              <div><span class="row-title">Show badges on X</span><span class="row-hint">Needs the author's proof tweet</span></div>
+              <input data-xmr="badges" type="checkbox" role="switch" class="switch" />
+            </label>
+            <label class="setting">
+              <div><span class="row-title">Discover X badges via relays</span><span class="row-hint">Relays and X see which accounts you view</span></div>
+              <input data-xmr="discovery" type="checkbox" role="switch" class="switch" />
+            </label>
+          </div>
+          <div id="badge-look" class="card pad">
+            <h2 class="card-head">Badge look</h2>
+            <div class="looks" role="radiogroup" aria-label="Badge icon">
+              <label class="look"><input type="radio" name="badge-icon" value="mono" aria-label="Monero symbol, white" /><span data-preview="mono"></span></label>
+              <label class="look"><input type="radio" name="badge-icon" value="color" aria-label="Monero symbol, colour" /><span data-preview="color"></span></label>
+              <label class="look"><input type="radio" name="badge-icon" value="none" aria-label="Text only" /><span data-preview="none"></span></label>
+            </div>
+            <label class="setting">
+              <div><span class="row-title">Show XMR label</span></div>
+              <input data-look="label" type="checkbox" role="switch" class="switch" />
+            </label>
+          </div>
         </section>
 
         <section id="burner" data-section="burner">

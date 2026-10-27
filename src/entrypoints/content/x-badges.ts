@@ -1,10 +1,11 @@
 import type { ContentScriptContext } from 'wxt/utils/content-script-context';
+import { badgeLook, mountBadge, type BadgeLook } from '../../identity/badge-look';
 import { PendingQueue } from '../../identity/bucket';
 import { normalizeHandle } from '../../identity/envelope';
 import type { Badge } from '../../identity/resolve';
-import { hideOwnBadge, profileSlot, sessionHandle, tweetSlot, type BadgeSlot } from '../../identity/x-handle';
+import { profileSlot, tweetSlot, type BadgeSlot } from '../../identity/x-handle';
 import { sendToBackground } from '../../messaging';
-import { myHandleItem, xmrSettingsItem } from '../../settings';
+import { xmrSettingsItem } from '../../settings';
 import { openTip } from './tip';
 
 const HOST_TAG = 'xmradar-badge';
@@ -15,48 +16,6 @@ const MAX_PER_CALL = 200;
 const BADGE_TTL_MS = 6 * 3600_000;
 const NO_BADGE_TTL_MS = 3600_000;
 const SCROLL_RESCAN_MS = 500;
-
-const BADGE_CSS = `
-button {
-  all: unset;
-  box-sizing: border-box;
-  display: inline-flex;
-  align-items: center;
-  margin-left: 4px;
-  padding: 0 6px;
-  height: 16px;
-  border-radius: 8px;
-  background: #f26822;
-  color: #fff;
-  font: 700 10px/16px system-ui, -apple-system, sans-serif;
-  letter-spacing: 0.04em;
-  cursor: pointer;
-  vertical-align: middle;
-}
-button:hover { background: #d9571a; }
-button:focus-visible { outline: 2px solid #4c2a85; outline-offset: 1px; }
-`;
-
-let sheet: CSSStyleSheet | null | undefined;
-
-function styleShadow(root: ShadowRoot) {
-  // adoptedStyleSheets can fail across content-script worlds (Firefox Xrays); fall back to <style>
-  try {
-    if (sheet === undefined) {
-      sheet = new CSSStyleSheet();
-      sheet.replaceSync(BADGE_CSS);
-    }
-    if (sheet) {
-      root.adoptedStyleSheets = [sheet];
-      return;
-    }
-  } catch {
-    sheet = null;
-  }
-  const style = document.createElement('style');
-  style.textContent = BADGE_CSS;
-  root.append(style);
-}
 
 export function startBadges(ctx: ContentScriptContext) {
   const results = new Map<string, { badge: Badge; at: number }>();
@@ -72,62 +31,28 @@ export function startBadges(ctx: ContentScriptContext) {
   let inflight = false;
   let enabled = false;
   let observer: MutationObserver | null = null;
-  // no badge on your own proven account while X is logged in as it (PLAN-PHASE2 §4.6)
-  let ownHandle: string | null = null;
-  let session: string | null = null;
+  let look: BadgeLook = badgeLook(null);
   const removeAll = () => {
     for (const host of document.querySelectorAll(HOST_TAG)) host.remove();
   };
-  const setOwn = (v: { handle: string; proven: boolean } | null) => {
-    const next = v?.proven ? normalizeHandle(v.handle) : null;
-    if (next === ownHandle) return;
-    ownHandle = next;
-    // which badge is hidden may have changed: redraw from the results cache
-    removeAll();
-    scan(document);
-  };
-  // X's logged-out pages have none of its test ids (TESTING friction #1)
-  const loggedOut = () => !document.querySelector('[data-testid]');
-  /** Re-reads the X session; on a change (account switch), redraws all badges. */
-  const checkSession = () => {
-    const next = sessionHandle(document);
-    // a profile link missing for a moment (re-render) keeps the last session instead of flashing your badge
-    if (next === session || (next === null && session !== null && !loggedOut())) return false;
-    session = next;
-    removeAll();
-    return true;
-  };
-  void myHandleItem.getValue().then(setOwn);
-  const unwatchOwn = myHandleItem.watch(setOwn);
 
   const isOurs = (n: Node) => n instanceof Element && n.localName === HOST_TAG;
 
   function insert(slot: BadgeSlot, badge: Badge) {
     const host = document.createElement(HOST_TAG);
     host.dataset.key = slot.key;
-    const root = host.attachShadow({ mode: 'closed' });
-    styleShadow(root);
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.textContent = 'XMR';
-    btn.setAttribute('aria-label', `Accepts Monero — tip @${slot.handle}`);
-    btn.title = `Accepts Monero — tip @${slot.handle}`;
+    const btn = mountBadge(host, look, slot.handle);
     btn.addEventListener('click', (e) => {
       // the tweet itself is a link; don't let X navigate
       e.preventDefault();
       e.stopPropagation();
       void openTip(ctx, slot.handle, lookup(slot.handle) ?? badge);
     });
-    root.append(btn);
     slot.anchor.append(host);
   }
 
   function apply(slot: BadgeSlot) {
     const existing = slot.anchor.querySelector<HTMLElement>(`:scope > ${HOST_TAG}`);
-    if (hideOwnBadge(slot.handle, ownHandle, session)) {
-      existing?.remove();
-      return;
-    }
     if (existing?.dataset.key === slot.key) return;
     existing?.remove();
     const badge = lookup(slot.handle);
@@ -141,7 +66,6 @@ export function startBadges(ctx: ContentScriptContext) {
 
   function scan(root: ParentNode) {
     if (!enabled) return;
-    if (root === document) checkSession();
     const articles = new Set<Element>();
     if (root instanceof Element) {
       const outer = root.closest('article[data-testid="tweet"]');
@@ -169,13 +93,8 @@ export function startBadges(ctx: ContentScriptContext) {
 
   async function flush() {
     if (!enabled || !queue.size || document.hidden) return;
-    // a handle queued before the session became yours isn't looked up
-    const handles = queue.take(MAX_PER_CALL).filter((h) => !hideOwnBadge(h, ownHandle, session));
-    if (!handles.length) {
-      if (queue.size) schedule(BATCH_DELAY_MS);
-      return;
-    }
     inflight = true;
+    const handles = queue.take(MAX_PER_CALL);
     let retryPending = false;
     try {
       const res = await sendToBackground({ type: 'resolve-handles', handles });
@@ -198,8 +117,6 @@ export function startBadges(ctx: ContentScriptContext) {
   function connect() {
     if (observer || !enabled || document.hidden) return;
     observer = new MutationObserver((records) => {
-      // once per batch; an account switch can change only the profile link's href
-      if (checkSession()) return scan(document);
       for (const r of records) {
         for (const n of r.addedNodes) {
           if (n instanceof Element && !isOurs(n)) scan(n);
@@ -207,7 +124,7 @@ export function startBadges(ctx: ContentScriptContext) {
       }
     });
     // body survives X's client-side navigation, so one observer covers every page
-    observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['href'] });
+    observer.observe(document.body, { childList: true, subtree: true });
     scan(document);
   }
 
@@ -243,11 +160,20 @@ export function startBadges(ctx: ContentScriptContext) {
   // profile headers change on client-side navigation without new tweet nodes
   ctx.addEventListener(window, 'wxt:locationchange', () => scan(document));
 
-  void xmrSettingsItem.getValue().then((s) => setEnabled(s.badgesX));
+  void xmrSettingsItem.getValue().then((s) => {
+    look = badgeLook(s);
+    setEnabled(s.badgesX);
+  });
   const unwatch = xmrSettingsItem.watch((s, old) => {
     if (s.nostrDiscovery !== old?.nostrDiscovery) {
       // answers depend on the sources in use
       results.clear();
+      removeAll();
+    }
+    const next = badgeLook(s);
+    if (next.icon !== look.icon || next.label !== look.label) {
+      // redrawn from the results below, no new lookups
+      look = next;
       removeAll();
     }
     setEnabled(s.badgesX);
@@ -255,7 +181,6 @@ export function startBadges(ctx: ContentScriptContext) {
   });
   ctx.onInvalidated(() => {
     unwatch();
-    unwatchOwn();
     setEnabled(false);
   });
 }

@@ -10,10 +10,6 @@ const $ = (id: string) => document.getElementById(id)!;
 
 // each panel's code loads the first time its tab is shown
 const loaders: Record<string, () => Promise<unknown>> = {
-  monero: async () => {
-    const { mountXmrToggles } = await import('../../ui/xmr-toggles');
-    await mountXmrToggles($('xmr-toggles'));
-  },
   burner: async () => {
     const { mountBurnerPanel } = await import('../../ui/burner-panel');
     mountBurnerPanel($('burner'));

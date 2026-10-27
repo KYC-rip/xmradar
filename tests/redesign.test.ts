@@ -38,10 +38,10 @@ describe('xmrSettings v2 migration', () => {
   it('splits the old badges switch into X and Nostr and turns tip receipts on', async () => {
     await storage.setItem('sync:xmrSettings', { badges: false, nostrDiscovery: true });
     await xmrSettingsItem.migrate();
-    expect(await xmrSettingsItem.getValue()).toEqual({ badgesX: false, badgesNostr: false, nostrDiscovery: true, tipReceipts: true });
+    expect(await xmrSettingsItem.getValue()).toEqual({ badgesX: false, badgesNostr: false, nostrDiscovery: true, tipReceipts: true, badgeIcon: 'mono', badgeLabel: true });
   });
   it('a fresh install gets the fallback', async () => {
-    expect(await xmrSettingsItem.getValue()).toEqual({ badgesX: true, badgesNostr: true, nostrDiscovery: false, tipReceipts: true });
+    expect(await xmrSettingsItem.getValue()).toEqual({ badgesX: true, badgesNostr: true, nostrDiscovery: false, tipReceipts: true, badgeIcon: 'mono', badgeLabel: true });
   });
 });
 
@@ -225,6 +225,17 @@ describe('page markup', () => {
     const panel = mountBurnerPanel(document.getElementById('burner')!);
     await panel.ready;
     panel.stop();
+  });
+
+  it('the options page has the Badges on X section; the popup only links to it', async () => {
+    document.body.innerHTML = page('options');
+    for (const id of ['badges', 'badge-switches', 'badge-look']) expect(document.getElementById(id)).not.toBeNull();
+    expect([...document.querySelectorAll<HTMLElement>('#badge-look [data-preview]')].map((e) => e.dataset.preview)).toEqual(['mono', 'color', 'none']);
+    expect(document.querySelector('#badge-look [data-look="label"]')).not.toBeNull();
+    expect(document.querySelector('[data-nav="badges"]')).not.toBeNull();
+    const popup = page('popup');
+    expect(popup).not.toMatch(/data-xmr=|data-look=|badge-icon/);
+    expect(popup).toContain('data-open="badges"');
   });
 
   it('the inline logo has no script, link or external reference', () => {
