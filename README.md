@@ -11,7 +11,7 @@ Free software under the GNU GPL v3 or later (see `LICENSE`). Releases: https://g
 
 ### Copy posts to Nostr
 
-Right-click a post → **Copy post to Nostr** → edit in the preview → **Publish**. You can also hover a post and press `Alt+Shift+N`.
+Right-click a post → **Copy post to Nostr** → edit in the preview → **Publish**. You can also hover a post and press `Alt+Shift+N`, or on X pick **Copy to Nostr** in a tweet's share menu (turn it off under Options → Posting to Nostr → Behaviour).
 
 - Signing goes through your NIP-07 extension (Alby, nos2x…), so your key never touches this extension.
 - Images are re-uploaded to a Blossom server (default `https://blossom.primal.net`) and tagged with NIP-92 `imeta`.
@@ -86,6 +86,7 @@ In the options page, under **Monero identity**, a four-step tracker walks you th
 - The bridge only signs kind 1 (notes) and kind 24242 (Blossom upload auth).
 - Every signed event is checked before use: correct pubkey, unchanged content, valid signature.
 - The background only uploads or publishes for a composer session that you opened in that same tab. Sessions end when the composer closes, or after 15 minutes at most.
+- A session starts from the browser's right-click menu, the keyboard shortcut, or a real (trusted) click on **Copy to Nostr** in X's share menu, in the top frame of an x.com tab, at most once every 2 s per tab. The tweet is the one whose share button you clicked, checked by its status ID. A page can't start a session by itself, and you still review the composer and approve in your signer.
 - Before uploading, the background checks that the Blossom auth event matches the image hash and is signed.
 - Image URLs taken from the page are only fetched over http(s) or as `data:image`. Literal local and private addresses are refused, both for the original URL and for where any redirect ends up. A DNS name that resolves to a private IP is not caught; that's accepted for a personal tool.
 - **Remaining risk:** a hostile page can impersonate the signer's replies, for example by returning a fake pubkey. The worst it can do is get your text published under someone else's key, or block publishing. It can't use your key without your signer's prompt. Check the "Posting as npub…" line in the composer.

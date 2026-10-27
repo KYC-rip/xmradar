@@ -20,10 +20,12 @@ export interface ExtractResult {
 
 export function extractPost(target: Element | null, doc: Document, opts: { selection?: string; srcUrl?: string } = {}): ExtractResult {
   let post: ExtractedPost | null = null;
-  if (target) {
+  // no target (shortcut with nothing hovered): site extractors can still use the page itself
+  const from = target ?? doc.body;
+  if (from) {
     for (const ex of extractors) {
       if (!ex.matches(doc)) continue;
-      post = ex.extract(target, doc);
+      post = ex.extract(from, doc);
       if (post) break;
     }
   }

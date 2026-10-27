@@ -1,7 +1,7 @@
 import { npubEncode } from 'nostr-tools/nip19';
 import { currentBuild } from '../../build-info';
 import { sendToBackground } from '../../messaging';
-import { patchSettings, pubkeyItem, settingsItem } from '../../settings';
+import { patchSettings, pubkeyItem, settingsItem, shareMenuOn, type Settings } from '../../settings';
 import { mountBadgeLook } from '../../ui/badge-look-controls';
 import { mountBurnerPanel } from '../../ui/burner-panel';
 import { setStatus } from '../../ui/dom';
@@ -15,6 +15,7 @@ import './style.css';
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const appendEl = $<HTMLInputElement>('append-source');
 const debugEl = $<HTMLInputElement>('debug');
+const shareMenuEl = $<HTMLInputElement>('share-menu-x');
 const signerStatus = $('signer-status');
 
 const ALL_SITES = { origins: ['<all_urls>'] };
@@ -33,15 +34,21 @@ $('grant').addEventListener('click', async () => {
 });
 
 // Behaviour: saved on change, each box its own field; disabled until the saved values load
-for (const el of [appendEl, debugEl]) el.disabled = true;
+const boxes: [HTMLInputElement, (on: boolean) => Partial<Settings>][] = [
+  [appendEl, (on) => ({ appendSourceLink: on })],
+  [debugEl, (on) => ({ debug: on })],
+  [shareMenuEl, (on) => ({ shareMenuX: on })],
+];
+for (const [el] of boxes) el.disabled = true;
 void settingsItem.getValue().then((s) => {
   appendEl.checked = s.appendSourceLink;
   debugEl.checked = s.debug;
-  for (const el of [appendEl, debugEl]) el.disabled = false;
+  shareMenuEl.checked = shareMenuOn(s);
+  for (const [el] of boxes) el.disabled = false;
 });
-for (const el of [appendEl, debugEl]) {
+for (const [el, patch] of boxes) {
   el.addEventListener('change', async () => {
-    await patchSettings(el === appendEl ? { appendSourceLink: el.checked } : { debug: el.checked });
+    await patchSettings(patch(el.checked));
     setStatus($('behaviour-saved'), 'Saved', 'ok');
     setTimeout(() => setStatus($('behaviour-saved'), ''), 1500);
   });

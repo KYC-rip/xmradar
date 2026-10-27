@@ -33,6 +33,31 @@ describe('x', () => {
   });
 });
 
+describe('x, outside any tweet on a tweet page', () => {
+  const tweet = (id: string, text: string, extra = '') =>
+    `<article data-testid="tweet"><div data-testid="tweetText">${text}</div>${extra}<a href="/XBToshi/status/${id}"><time>1h</time></a></article>`;
+  const page = (path: string) =>
+    makeDoc(`https://x.com${path}`, `<div id="side">menu</div>${tweet('1', 'parent')}${tweet('2', 'the focal tweet', '<div role="link"><a href="/a/status/9"><time>x</time></a></div>')}${tweet('3', 'a reply')}`);
+
+  it('takes the tweet the URL names', () => {
+    const doc = page('/XBToshi/status/2');
+    for (const target of [doc.getElementById('side'), null]) {
+      const { post, fallback } = extractPost(target, doc);
+      expect(fallback).toBe(false);
+      expect(post.text).toBe('the focal tweet');
+      expect(post.sourceUrl).toBe('https://x.com/XBToshi/status/2');
+    }
+  });
+  it('still prefers the tweet that was clicked, and a quoted link does not count as the focal one', () => {
+    const doc = page('/XBToshi/status/2');
+    expect(extractPost(doc.querySelectorAll('[data-testid="tweetText"]')[2]!, doc).post.text).toBe('a reply');
+    expect(extractPost(null, page('/a/status/9')).fallback).toBe(true);
+  });
+  it('falls back off tweet pages', () => {
+    expect(extractPost(null, page('/home')).fallback).toBe(true);
+  });
+});
+
 describe('bluesky', () => {
   const doc = makeDoc('https://bsky.app/', fixture('bluesky'));
   const { post } = extractPost(doc.querySelector('[data-testid="postText"]')!, doc);

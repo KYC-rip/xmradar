@@ -17,7 +17,7 @@ import { statusIdFromUrl } from '../extractors/x-article';
 import { KIND_ARTICLE, checkBlossomAuth, checkPublishable, checkSigned, dedupeKey, sha256Hex } from '../nostr/event';
 import { allRelaysFrom, fetchWriteRelays, publishToRelays, readEach } from '../nostr/relays';
 import { assertFetchableImageUrl } from '../nostr/url-guard';
-import { checkSessionSender, isExtensionPageSender, isXUrl } from '../sender';
+import { checkSessionSender, checkShareMenuSender, isExtensionPageSender, isXUrl, shareMenuRateLimit, withoutTab } from '../sender';
 import { DEFAULT_RELAYS, INDEX_RELAYS, withoutIndex, myHandleItem, postedItem, pubkeyItem, settingsItem, xmrSettingsItem } from '../settings';
 import { storage } from 'wxt/utils/storage';
 import { activeInbox, burnerCreatingItem, burnerInboxItem, burnerLastErrorItem, burnFreeInbox, createFreeInbox, forgetImportedInbox, importInbox, type BurnerDeps } from '../burner/service';
@@ -45,6 +45,9 @@ interface Session {
 
 // storage.session survives MV3 service-worker suspension, unlike module state
 const sessionsItem = storage.defineItem<Session[]>('session:composerSessions', { fallback: [] });
+// last share-menu copy per tab, for the 2 s rate limit
+const shareMenuLast = storage.defineItem<Record<number, number>>('session:shareMenuLast', { fallback: {} });
+const SHARE_MENU_GAP_MS = 2000;
 const resolveSeen = storage.defineItem<SeenEntries>('local:xmrbioResolveSeen', { fallback: [] });
 // resolves run one at a time so concurrent lookups can't overwrite each other's replay guard entry
 let resolveQueue: Promise<unknown> = Promise.resolve();
@@ -98,7 +101,10 @@ export default defineBackground(() => {
     if (tab) void openComposer(tab, 0, { fromCommand: true });
   });
 
-  browser.tabs.onRemoved.addListener((tabId) => buckets.delete(tabId));
+  browser.tabs.onRemoved.addListener((tabId) => {
+    buckets.delete(tabId);
+    void shareMenuLast.getValue().then((last) => (tabId in last ? shareMenuLast.setValue(withoutTab(last, tabId)) : undefined));
+  });
 
   // drop an inbox that expired while the worker was asleep
   void activeInbox(burner).catch(() => {});
@@ -286,6 +292,15 @@ async function handle(msg: BgRequest, sender: Browser.runtime.MessageSender): Pr
     case 'test-signer': {
       if (!isExtensionPage(sender)) throw new Error('Not allowed');
       return { pubkey: await testSigner() };
+    }
+    case 'share-menu-copy': {
+      const tabId = checkShareMenuSender(sender, browser.runtime.id);
+      // one per tab every 2 s; in session storage, so a suspended worker doesn't reset it
+      const next = shareMenuRateLimit(await shareMenuLast.getValue(), tabId, Date.now(), SHARE_MENU_GAP_MS);
+      if (!next) throw new Error('Too fast; try again');
+      await shareMenuLast.setValue(next);
+      void openComposer(sender.tab!, 0, { fromShareMenu: true });
+      return null;
     }
     case 'resolve-handles': {
       if (!isXContentScript(sender) || sender.tab?.id == null) throw new Error('Not allowed');

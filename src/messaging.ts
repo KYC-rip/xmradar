@@ -12,6 +12,8 @@ export interface OpenComposerMsg {
   srcUrl?: string;
   /** true when triggered by keyboard command rather than a right-click */
   fromCommand?: boolean;
+  /** true when the user picked "Copy to Nostr" in X's share menu */
+  fromShareMenu?: boolean;
 }
 
 /** background → content: open the Monero tip popup */
@@ -95,7 +97,8 @@ export type BgRequest =
   | { type: 'setup-cancel' }
   | { type: 'burner-import'; email: string; token: string }
   | { type: 'burner-burn' }
-  | { type: 'burner-forget' };
+  | { type: 'burner-forget' }
+  | { type: 'share-menu-copy' };
 
 /** Port name for creating a free burner inbox; the open port keeps the worker busy during the proof of work. */
 export const BURNER_CREATE_PORT = 'burner-create';
@@ -133,6 +136,8 @@ export type BgResponse<T extends BgRequest['type']> = T extends 'fetch-image'
                             ? { email: string }
                             : T extends 'burner-burn'
                               ? { burned: boolean }
+                              : T extends 'share-menu-copy'
+                                ? null
                               : never;
 
 /** Every response is wrapped so errors survive the message boundary. */

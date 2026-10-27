@@ -1,7 +1,8 @@
 export interface SenderLike {
   id?: string;
   url?: string;
-  tab?: { id?: number };
+  frameId?: number;
+  tab?: { id?: number; url?: string };
 }
 
 export interface SessionLike {
@@ -34,3 +35,23 @@ export function isXUrl(url: string | undefined): boolean {
     return false;
   }
 }
+
+/** Throws unless a share-menu copy request comes from our content script in the top frame of an X tab. */
+export function checkShareMenuSender(sender: SenderLike, runtimeId: string): number {
+  if (sender.id !== runtimeId) throw new Error('Unknown sender');
+  const tabId = sender.tab?.id;
+  if (tabId == null || sender.frameId !== 0) throw new Error('Not allowed');
+  // also rules out extension pages, whose URLs aren't https://x.com
+  if (!isXUrl(sender.url) || !isXUrl(sender.tab?.url)) throw new Error('Not allowed');
+  return tabId;
+}
+
+/** The share-menu rate limit: the updated per-tab times, or null if this tab asked less than `gapMs` ago. */
+export function shareMenuRateLimit(last: Record<number, number>, tabId: number, now: number, gapMs: number): Record<number, number> | null {
+  const prev = last[tabId];
+  return prev != null && now - prev < gapMs ? null : { ...last, [tabId]: now };
+}
+
+/** The per-tab times without a closed tab. */
+export const withoutTab = (last: Record<number, number>, tabId: number): Record<number, number> =>
+  Object.fromEntries(Object.entries(last).filter(([id]) => Number(id) !== tabId));

@@ -242,11 +242,12 @@ async function mountComposer(ctx: ContentScriptContext, msg: OpenComposerMsg, ta
           if (res.results.some((r) => r.ok)) {
             done = true;
             const ref = res.naddr ?? res.nevent;
-            const link = `https://njump.me/${ref}`;
+            // notes open in RipleyOS's Nostr app; it has no article (naddr) route yet, so articles stay on njump
+            const link = res.naddr ? `https://njump.me/${ref}` : `https://app.ros.rip/nostr/note/${ref}`;
             status.className = 'status ok';
             status.replaceChildren(
               'Published! ',
-              h('a', { href: link, target: '_blank', rel: 'noopener', textContent: 'View on njump' }),
+              h('a', { href: link, target: '_blank', rel: 'noopener', textContent: res.naddr ? 'View on njump' : 'View on ros.rip' }),
               ' ',
               h('button', { class: 'link', textContent: res.naddr ? 'Copy naddr' : 'Copy nevent', onclick: () => void navigator.clipboard.writeText(ref) }),
             );

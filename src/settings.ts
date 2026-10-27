@@ -18,7 +18,11 @@ export interface Settings {
   blossomServer: string;
   appendSourceLink: boolean;
   debug: boolean;
+  /** "Copy to Nostr" in X's share menu; read with `shareMenuOn`, since settings saved before it lack the field. */
+  shareMenuX?: boolean;
 }
+
+export const shareMenuOn = (s: Partial<Settings> | null | undefined) => s?.shareMenuX !== false;
 
 export const settingsItem = storage.defineItem<Settings>('sync:settings', {
   fallback: { relays: [], blossomServer: DEFAULT_BLOSSOM, appendSourceLink: false, debug: false },
