@@ -23,8 +23,10 @@ import { storage } from 'wxt/utils/storage';
 import { activeInbox, burnerCreatingItem, burnerInboxItem, burnerLastErrorItem, burnFreeInbox, createFreeInbox, forgetImportedInbox, importInbox, type BurnerDeps } from '../burner/service';
 import { idbTokenStore } from '../burner/token-store';
 import { xapPoolQuery } from '../xap/fetch';
-import { FreshTotals, countFor, publishXap, withSent, type SentXap, type XapDeps } from '../xap/service';
-import type { XapTotals, XapTotalsResult } from '../messaging';
+import { FreshTotals, countFor, countPosts, publishXap, validPosts, withSent, type PostRef, type SentXap, type XapDeps } from '../xap/service';
+import { parsePostKey, postKey } from '../xap/post';
+import { xapTtl } from '../xap/ttl';
+import type { XapPostTotalsResult, XapTotals, XapTotalsResult } from '../messaging';
 import { trackCreate } from '../burner/tracked';
 import { fetchXmrUsd, PRICE_RETRY_MS, PRICE_TTL_MS } from '../xap/price';
 import { markFor, withMark } from '../xap/marks';
@@ -96,7 +98,6 @@ async function xmrUsd(): Promise<number> {
     .finally(() => (xmrUsdInFlight = null));
   return xmrUsdInFlight;
 }
-const XAP_TTL_MS = 10 * 60_000;
 const XAP_GAP_MS = 10_000;
 const MAX_XAP_RECIPIENTS = 50;
 let xapCache: Promise<EntryCache<XapTotals>> | null = null;
@@ -114,6 +115,13 @@ const xapDeps: XapDeps = {
 const freshTotals = new FreshTotals(async (pk) => {
   const t = (await countFor([pk], xapDeps)).get(pk)!;
   (await loadXapCache()).set(pk, t, Date.now());
+  persistXapCache();
+  return t;
+});
+// post figures share the cache under postKey(pubkey, id), which never looks like a bare pubkey
+const freshPostTotals = new FreshTotals(async (key) => {
+  const t = (await countPosts([parsePostKey(key)], xapDeps)).get(key)!;
+  (await loadXapCache()).set(key, t, Date.now());
   persistXapCache();
   return t;
 });
@@ -378,15 +386,28 @@ async function handle(msg: BgRequest, sender: Browser.runtime.MessageSender): Pr
         publish: publishToRelays,
         record: async (s) => xapSentItem.setValue(withSent(await xapSentItem.getValue(), s)),
       });
+      // the next ask, popup or action bar, goes to the relays
       freshTotals.forget(msg.recipient);
-      // published: the next Xap to this recipient gets a new mark
+      const cache = await loadXapCache();
+      cache.delete(msg.recipient);
+      if (msg.post) {
+        const key = postKey(msg.recipient, msg.post);
+        freshPostTotals.forget(key);
+        cache.delete(key);
+      }
+      persistXapCache();
+      // published: the next Xap to this recipient (and post) gets a new mark
       // best effort: the receipt is out, so a storage error here must not read as a failed publish
       if (res.results.some((r) => r.ok))
         await xapMarksItem
           .getValue()
-          .then((m) => xapMarksItem.setValue(withMark(m, markFor(msg.recipient, msg.address), null, Date.now())))
+          .then((m) => xapMarksItem.setValue(withMark(m, markFor(msg.recipient, msg.address, msg.post), null, Date.now())))
           .catch(() => {});
       return res;
+    }
+    case 'xap-post-totals': {
+      if (!isXContentScript(sender) || sender.tab?.id == null) throw new Error('Not allowed');
+      return xapPostTotals(msg.posts, !!msg.fresh, sender.tab.id);
     }
     case 'xmr-price': {
       // only a tip popup asks; those open on x.com only
@@ -504,7 +525,7 @@ async function resolveBadges(handles: string[], tabId: number): Promise<ResolveH
 }
 
 function loadXapCache() {
-  xapCache ??= xapCacheItem.getValue().then((e) => new EntryCache(e, 500));
+  xapCache ??= xapCacheItem.getValue().then((e) => new EntryCache(e, 1000));
   return xapCache;
 }
 
@@ -530,7 +551,7 @@ async function xapTotals(recipients: string[], fresh: boolean, tabId: number): P
   const out: [string, XapTotals][] = [];
   const misses: string[] = [];
   for (const pk of valid) {
-    const hit = cache.get(pk, Date.now(), XAP_TTL_MS);
+    const hit = cache.get(pk, Date.now(), xapTtl);
     if (hit) out.push([pk, hit]);
     else misses.push(pk);
   }
@@ -543,6 +564,43 @@ async function xapTotals(recipients: string[], fresh: boolean, tabId: number): P
     for (const [pk, t] of await countFor(batch, xapDeps)) {
       cache.set(pk, t, Date.now());
       out.push([pk, t]);
+    }
+    persistXapCache();
+  }
+  return { totals: out, pending: misses.slice(granted) };
+}
+
+/**
+ * Post figures (NKIP-0002 external post tips) for the action bar, or `fresh` for one post's popup.
+ * Same gates, cache and per-tab bucket as profile totals; each post costs one token.
+ */
+async function xapPostTotals(posts: unknown, fresh: boolean, tabId: number): Promise<XapPostTotalsResult> {
+  const valid = validPosts(posts, MAX_XAP_RECIPIENTS);
+  if (fresh) {
+    if (valid.length !== 1) throw new Error('One post at a time');
+    const key = postKey(valid[0]!.pubkey, valid[0]!.id);
+    return { totals: [[key, await freshPostTotals.get(key)]], pending: [] };
+  }
+  const { badgesX, nostrDiscovery } = await xmrSettingsItem.getValue();
+  if (!badgesX || !nostrDiscovery) return { totals: [], pending: [] };
+  const cache = await loadXapCache();
+  const out: [string, XapTotals][] = [];
+  const misses: PostRef[] = [];
+  for (const p of valid) {
+    const key = postKey(p.pubkey, p.id);
+    const hit = cache.get(key, Date.now(), xapTtl);
+    if (hit) out.push([key, hit]);
+    else misses.push(p);
+  }
+  if (!misses.length) return { totals: out, pending: [] };
+  let bucket = xapBuckets.get(tabId);
+  if (!bucket) xapBuckets.set(tabId, (bucket = new TokenBucket(50, 2)));
+  const granted = bucket.take(misses.length);
+  const batch = misses.slice(0, granted);
+  if (batch.length) {
+    for (const [key, t] of await countPosts(batch, xapDeps)) {
+      cache.set(key, t, Date.now());
+      out.push([key, t]);
     }
     persistXapCache();
   }

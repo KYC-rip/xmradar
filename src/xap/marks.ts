@@ -7,10 +7,13 @@ import { UNIQUE_MAX } from './amount';
  */
 
 export const MARK_TTL_MS = 24 * 60 * 60_000;
-const MAX_MARKS = 200;
+const MAX_MARKS = 500;
 
-/** The key a mark is kept under: recipient and the address paid, so a new address gets a new mark. */
-export const markFor = (recipient: string, address: string) => `${recipient}:${address}`;
+/**
+ * The key a mark is kept under: recipient, address paid and post, so a new address or another post gets
+ * a new mark and two unpublished Xaps of the same amount never share one.
+ */
+export const markFor = (recipient: string, address: string, post?: string) => `${recipient}:${address}:${post ?? 'profile'}`;
 
 /** [markFor key, mark in piconero as a decimal string, drawn at ms] */
 export type Marks = [string, string, number][];

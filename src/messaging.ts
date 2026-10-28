@@ -52,6 +52,12 @@ export interface XapTotalsResult {
   pending: string[];
 }
 
+/** Post figures keyed by `<bound pubkey>:<status id>` (src/xap/post.ts postKey); `pending` were rate limited. */
+export interface XapPostTotalsResult {
+  totals: [string, XapTotals][];
+  pending: { id: string; pubkey: string }[];
+}
+
 export interface XapPublishResult {
   results: RelayResult[];
   id: string;
@@ -127,7 +133,8 @@ export type BgRequest =
   | { type: 'burner-forget' }
   | { type: 'share-menu-copy' }
   | { type: 'xap-totals'; recipients: string[]; fresh?: boolean }
-  | { type: 'xap-publish'; recipient: string; address: string; amount: string }
+  | { type: 'xap-post-totals'; posts: { id: string; pubkey: string }[]; fresh?: boolean }
+  | { type: 'xap-publish'; recipient: string; address: string; amount: string; post?: string }
   | { type: 'xmr-price' };
 
 /** Port name for creating a free burner inbox; the open port keeps the worker busy during the proof of work. */
@@ -170,6 +177,8 @@ export type BgResponse<T extends BgRequest['type']> = T extends 'fetch-image'
                                 ? null
                                 : T extends 'xap-totals'
                                   ? XapTotalsResult
+                                  : T extends 'xap-post-totals'
+                                    ? XapPostTotalsResult
                                   : T extends 'xap-publish'
                                     ? XapPublishResult
                                     : T extends 'xmr-price'

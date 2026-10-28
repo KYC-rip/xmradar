@@ -1,6 +1,7 @@
 import type { Event } from 'nostr-tools/pure';
 import { validEvent } from '../identity/nostr';
 import { KIND_CONFIRMATION, KIND_DELETION, KIND_RECEIPT, parseConfirmation, parseReceipt, type Confirmation, type Receipt } from './events';
+import { postOf } from './post';
 
 /** "verifying" lasts this long after the user's own receipt: about 10 confirmations (~20 min) plus slack. */
 export const VERIFYING_SECS = 30 * 60;
@@ -29,9 +30,11 @@ export interface CountInput {
   me?: { pubkey: string | null; sent: ReadonlySet<string> };
   /** seconds */
   now: number;
+  /** count one external post only: its canonical `i` value (receipts for other posts or the profile are left out) */
+  post?: string;
 }
 
-/** Profile-tip totals by the NKIP-0002 counting rules. */
+/** Profile totals (every tip without `e`, post tips included) or one post's, by the NKIP-0002 counting rules. */
 export function countXaps(input: CountInput): Counted {
   const { recipient } = input;
   const seen = new Set<string>();
@@ -46,8 +49,8 @@ export function countXaps(input: CountInput): Counted {
     seen.add(ev.id);
     if (ev.kind === KIND_RECEIPT) {
       const r = parseReceipt(ev);
-      // 1: profile tips to this recipient only, never self-tips
-      if (r && r.recipient === recipient && r.note === null && r.tipper !== recipient) receipts.set(r.id, r);
+      // 1: tips without `e` to this recipient only, never self-tips; for a post, only receipts naming it
+      if (r && r.recipient === recipient && r.note === null && r.tipper !== recipient && (input.post === undefined || postOf(ev) === input.post)) receipts.set(r.id, r);
     } else if (ev.kind === KIND_CONFIRMATION) {
       for (const t of ev.tags) if (t[0] === 'e' && t[1]) referenced.add(t[1]);
       const c = parseConfirmation(ev);

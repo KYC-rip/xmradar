@@ -24,7 +24,7 @@ export interface TwitterClaim {
   /** normalized (lowercase) handle */
   handle: string;
   tweetId: string;
-  /** created_at of the claiming kind-10011 event */
+  /** created_at of the claiming kind-10011 (or kind 0) event */
   createdAt: number;
 }
 
@@ -40,7 +40,7 @@ export function parseTweetProof(proof: string | undefined, handle: string): stri
 
 /** `twitter:` claims in one kind-10011 event, limited to the given (normalized) handles. */
 export function twitterClaims(event: Event, wanted: ReadonlySet<string>): TwitterClaim[] {
-  if (event.kind !== KIND_IDENTITIES) return [];
+  if (event.kind !== KIND_IDENTITIES && event.kind !== 0) return [];
   const out: TwitterClaim[] = [];
   for (const t of event.tags) {
     if (t[0] !== 'i' || !t[1]?.toLowerCase().startsWith('twitter:')) continue;
@@ -67,14 +67,22 @@ function newestPerPubkey(events: Event[], kind: number): Map<string, Event> {
   return out;
 }
 
-/** Every pubkey whose newest kind-10011 claims one of the handles. */
+/**
+ * Every pubkey whose newest identity list claims one of the handles: kind 10011 (current NIP-39), or
+ * kind 0 `i` tags (older NIP-39 clients, the minimum NKIP-0002 R14 names) when it has no kind 10011.
+ */
 export async function findClaims(handles: string[], relays: string[], query: QueryFn = poolQuery): Promise<TwitterClaim[]> {
   const wanted = new Set(handles.map(normalizeHandle).filter((h) => HANDLE_RE.test(h)));
   if (!wanted.size) return [];
   // `#i` matches exactly and claims keep the handle's case, so ask for both spellings
   const values = [...new Set(handles.flatMap((h) => [`twitter:${h.replace(/^@/, '')}`, `twitter:${normalizeHandle(h)}`]))];
-  const events = await query(relays, { kinds: [KIND_IDENTITIES], '#i': values });
-  return [...newestPerPubkey(events, KIND_IDENTITIES).values()].flatMap((e) => twitterClaims(e, wanted));
+  const events = await query(relays, { kinds: [KIND_IDENTITIES, 0], '#i': values });
+  const lists = newestPerPubkey(events, KIND_IDENTITIES);
+  const meta = [...newestPerPubkey(events, 0).values()].filter((e) => !lists.has(e.pubkey));
+  // any kind 10011 supersedes a key's kind 0, also one that no longer names the handle (and so wasn't
+  // returned above): ask for those keys' lists before taking a kind 0 claim
+  const superseded = meta.length ? new Set((await query(relays, { kinds: [KIND_IDENTITIES], authors: meta.map((e) => e.pubkey) })).filter((e) => e.kind === KIND_IDENTITIES && validEvent(e)).map((e) => e.pubkey)) : new Set<string>();
+  return [...lists.values(), ...meta.filter((e) => !superseded.has(e.pubkey))].flatMap((e) => twitterClaims(e, wanted));
 }
 
 export interface Payto {

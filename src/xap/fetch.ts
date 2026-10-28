@@ -90,3 +90,29 @@ export async function fetchXapEvents(recipient: string, relays: string[], query:
   ]);
   return [...receipts, ...extra, ...confirmations, ...deletions];
 }
+
+/**
+ * One X post's receipts (by its canonical `i`, R15), the bound recipient's confirmations of those, and the
+ * recipient's deletions of the confirmations. One query per post, so a busy post can't crowd out others.
+ */
+export async function fetchPostEvents(post: string, recipient: string, relays: string[], query: XapQuery = xapPoolQuery): Promise<Event[]> {
+  const receipts = (await query(relays, { kinds: [KIND_RECEIPT], '#i': [post], limit: MAX_RECEIPTS }))
+    .sort((a, b) => b.created_at - a.created_at)
+    .slice(0, MAX_RECEIPTS);
+  const ids = [...new Set(receipts.filter((r) => r.tags.some((t) => t[0] === 'p' && t[1] === recipient)).map((r) => r.id))];
+  const confirmations: Event[] = [];
+  for (let i = 0; i < ids.length; i += MAX_MISSING) {
+    confirmations.push(...(await query(relays, { kinds: [KIND_CONFIRMATION], authors: [recipient], '#e': ids.slice(i, i + MAX_MISSING), limit: MAX_CONFIRMATIONS })));
+  }
+  // only a post at the cap can have older receipts: then the recipient's newest confirmations may point
+  // at one, which is fetched by id (counting keeps it only if it names this post)
+  const known = new Set(receipts.map((r) => r.id));
+  if (receipts.length >= MAX_RECEIPTS)
+    confirmations.push(...(await query(relays, { kinds: [KIND_CONFIRMATION], authors: [recipient], limit: MAX_CONFIRMATIONS })));
+  const missing = [...new Set(confirmations.flatMap((c) => c.tags.filter((t) => t[0] === 'e' && t[1] && !known.has(t[1])).map((t) => t[1]!)))].slice(0, MAX_MISSING);
+  const [extra, deletions] = await Promise.all([
+    missing.length ? query(relays, { ids: missing, kinds: [KIND_RECEIPT] }) : Promise.resolve([]),
+    confirmations.length ? query(relays, { kinds: [KIND_DELETION], authors: [recipient], '#e': [...new Set(confirmations.map((c) => c.id))] }) : Promise.resolve([]),
+  ]);
+  return [...receipts, ...extra, ...confirmations, ...deletions];
+}

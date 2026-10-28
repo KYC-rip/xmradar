@@ -76,6 +76,26 @@ describe('twitterClaims / findClaims', () => {
     expect(query.mock.calls[0]![1]['#i']).toEqual(['twitter:Alice', 'twitter:alice']);
     expect(claims.map((c) => c.tweetId).sort()).toEqual(['2', '3']);
   });
+
+  it('reads kind 0 claims (older NIP-39) only for keys without a kind 10011', async () => {
+    const other = generateSecretKey();
+    const list = signed(sk, 10011, [['i', 'twitter:alice', '2']], 200);
+    const metaSame = signed(sk, 0, [['i', 'twitter:alice', '9']], 300);
+    const metaOnly = signed(other, 0, [['i', 'twitter:alice', '3']], 100);
+    const query = vi.fn<QueryFn>(async (_r, f) => (f.authors ? [] : [list, metaSame, metaOnly]));
+    const claims = await findClaims(['alice'], ['wss://r'], query);
+    expect(query.mock.calls[0]![1].kinds).toEqual([10011, 0]);
+    expect(claims.map((c) => c.tweetId).sort()).toEqual(['2', '3']);
+  });
+
+  it("a kind 10011 that no longer names the handle still supersedes the key's kind 0 claim", async () => {
+    const meta = signed(sk, 0, [['i', 'twitter:alice', '9']], 100);
+    const newerList = signed(sk, 10011, [['i', 'github:alice', 'x']], 200);
+    // relays answer `#i` with the kind 0 only; the authors query finds the newer list
+    const query = vi.fn<QueryFn>(async (_r, f) => (f.authors ? [newerList] : [meta]));
+    expect(await findClaims(['alice'], ['wss://r'], query)).toEqual([]);
+    expect(query.mock.calls[1]![1]).toEqual({ kinds: [10011], authors: [meta.pubkey] });
+  });
 });
 
 describe('payto', () => {

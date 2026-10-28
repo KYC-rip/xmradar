@@ -9,11 +9,12 @@ vi.mock('../src/messaging', async (orig) => ({ ...(await orig<typeof import('../
 const ADDR = '44AFFq5kSiGBoZ4NMDwYtN18obc8AemS33DBLWs3H7otXft3XjrpDtQGv7SqSsaBYBb98uNbr2VBBEt7f2wfn3RVGQBEP3A';
 const ADDR2 = '888tNkZrPN6JsEgekjMnABU4TBzc2Dt29EPAvkRxbANsAnjyPbb3iQ1YBRk1UXcdRsiKc9dhwMVgN5S9cQUiyoogDavup3H';
 const PK = 'c'.repeat(64);
+const POST = '2113662765525282909';
 const entry = { source: 'nostr', address: ADDR, check: { ok: true, type: 'standard' }, verified: true, method: 'nip39:client', pubkey: PK } as BadgeEntry & { pubkey: string };
 const totals = (address: string | null) => ({ verified: '0', verifiedTippers: 0, verifying: '0', claimed: '0', claimedTippers: 0, address, mine: [], at: 0 });
 
-const mount = (receipts = true) => {
-  const el = renderXap({ handle: 'xbtoshi', entry, receipts, isClosed: () => false });
+const mount = (receipts = true, post?: string) => {
+  const el = renderXap({ handle: 'xbtoshi', entry, receipts, post, isClosed: () => false });
   document.body.append(el);
   return el;
 };
@@ -30,7 +31,13 @@ describe('Xap popup', () => {
   beforeEach(() => {
     fakeBrowser.reset();
     send.mockReset().mockImplementation(async (m: { type: string }) =>
-      m.type === 'xap-totals' ? { totals: [[PK, totals(ADDR)]], pending: [] } : m.type === 'xmr-price' ? { usd: 500 } : null,
+      m.type === 'xap-totals'
+        ? { totals: [[PK, totals(ADDR)]], pending: [] }
+        : m.type === 'xap-post-totals'
+          ? { totals: [[`${PK}:${POST}`, { ...totals(ADDR), claimed: '0.0016', claimedTippers: 1 }]], pending: [] }
+          : m.type === 'xmr-price'
+            ? { usd: 500 }
+            : null,
     );
   });
   afterEach(() => {
@@ -119,6 +126,10 @@ describe('Xap popup', () => {
   it('a popup reopened for the same recipient gives the same amount, so a paid Xap can still get its receipt', async () => {
     const first = mount();
     typeAmount(first, '0.01');
+    // nothing payable until the kept mark is settled
+    expect(wallet(first).hasAttribute('href')).toBe(false);
+    expect(first.querySelector('.qr')).toBeNull();
+    await vi.waitFor(() => expect(wallet(first).getAttribute('href')).toMatch(/tx_amount=/));
     const sent = /tx_amount=([\d.]+)/.exec(wallet(first).href)![1];
     await vi.waitFor(async () => expect((await fakeBrowser.storage.local.get('xapMarks')).xapMarks).toHaveLength(1));
     first.remove();
@@ -134,4 +145,22 @@ describe('Xap popup', () => {
     expect((await fakeBrowser.storage.local.get('xapMarks')).xapMarks).toBeUndefined();
     expect(el.textContent).not.toContain('I sent it');
   });
+
+  it('a post Xap: the post figure, the person total on its own line, and the mark kept per post', async () => {
+    const base = send.getMockImplementation()!;
+    send.mockImplementation(async (m: { type: string }) => (m.type === 'xap-totals' ? { totals: [[PK, { ...totals(ADDR), claimed: '0.5', claimedTippers: 2 }]], pending: [] } : base(m)));
+    const el = mount(true, POST);
+    await vi.waitFor(() => expect(el.textContent).toContain('This post: +ɱ 0.0016 claimed'));
+    expect(send).toHaveBeenCalledWith({ type: 'xap-post-totals', posts: [{ id: POST, pubkey: PK }], fresh: true });
+    await vi.waitFor(() => expect(el.textContent).toContain('All Xaps to @xbtoshi: +ɱ 0.5 claimed'));
+    // never one summed figure
+    expect(el.textContent).not.toContain('0.5016');
+    typeAmount(el, '0.01');
+    await vi.waitFor(() => expect(button(el, 'I sent it').disabled).toBe(false));
+    const marks = (await fakeBrowser.storage.local.get('xapMarks')).xapMarks as [string][];
+    expect(marks[0]![0]).toBe(`${PK}:${ADDR}:${POST}`);
+    button(el, 'I sent it').click();
+    expect(el.querySelector('.xap-confirm')!.textContent).toContain(`the post you tipped (x.com/i/status/${POST})`);
+  });
 });
+

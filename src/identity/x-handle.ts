@@ -38,6 +38,8 @@ export interface BadgeSlot {
   anchor: Element;
   /** set for tweets, which get a Xap button in the action bar instead of a badge */
   article?: Element;
+  /** the tweet's own X status id, when its link has one; a Xap from it tips that post */
+  statusId?: string;
 }
 
 /** Author handle and slot for a timeline tweet. */
@@ -45,13 +47,34 @@ export function tweetSlot(article: Element): BadgeSlot | null {
   const name = article.querySelector('[data-testid="User-Name"]');
   const handle = fromPath(name?.querySelector('a[href^="/"]')?.getAttribute('href'));
   if (!name || !handle) return null;
-  const status = name.querySelector('a[href*="/status/"]')?.getAttribute('href') ?? '';
-  const tweetId = /\/status\/(\d{1,20})/.exec(status)?.[1] ?? 'x';
+  // the timestamp link: in the name row on timelines; on a tweet's own page X puts it under the text, so
+  // take the article's timestamp link outside any quoted tweet, by the same author
+  const own = (a: Element) => {
+    const m = /^\/([A-Za-z0-9_]{1,15})\/status\/(\d{1,20})$/.exec(a.getAttribute('href') ?? '');
+    return m && m[1]!.toLowerCase() === handle.toLowerCase() ? m[2]! : null;
+  };
+  const inName = name.querySelector('a[href*="/status/"]');
+  const stamp = [...article.querySelectorAll('a[href*="/status/"]')].find((a) => a.querySelector('time') && !a.closest('div[role="link"]') && own(a));
+  // both by the tweet's author, so a link to another status can never name the post
+  const tweetId = (inName ? own(inName) : stamp && own(stamp)) ?? 'x';
   // inside the display-name row, right after the name: on a tweet's own page X stacks the name
   // and @handle rows, and a badge after both would sit on a line of its own
   const row = name.firstElementChild;
   const anchor = row && row.localName !== 'xmradar-badge' && row.querySelector('a[href^="/"]') ? row : name;
-  return { handle, key: `${tweetId}:${handle.toLowerCase()}`, anchor, article };
+  // only a well-formed id names a post; otherwise the Xap is a profile tip
+  const statusId = /^[1-9]\d{0,19}$/.test(tweetId) ? tweetId : undefined;
+  return { handle, key: `${tweetId}:${handle.toLowerCase()}`, anchor, article, ...(statusId ? { statusId } : {}) };
+}
+
+/**
+ * An X Article's reading page (`/<handle>/article/<status id>`): X renders it as its own article element,
+ * with no name row, so the author and post come from the URL. Its action bar gets a Xap button.
+ */
+export function articleViewSlot(article: Element, loc: { hostname: string; pathname: string }): BadgeSlot | null {
+  if (!isXHost(loc.hostname)) return null;
+  const m = /^\/([A-Za-z0-9_]{1,15})\/article\/([1-9]\d{0,19})(?:\/|$)/.exec(loc.pathname);
+  const handle = m ? fromPath(`/${m[1]}`) : null;
+  return handle && m ? { handle, key: `${m[2]}:${handle.toLowerCase()}`, anchor: article, article, statusId: m[2]! } : null;
 }
 
 /** The profile header ("Name @handle" above the bio) on a profile page. */
@@ -70,4 +93,19 @@ export function hoverCardSlot(card: Element): BadgeSlot | null {
   const handle = fromPath(link?.getAttribute('href'));
   const row = link?.firstElementChild;
   return handle && row ? { handle, key: `hover:${handle.toLowerCase()}`, anchor: row } : null;
+}
+
+/**
+ * A person row in X's lists (Relevant people, Who to follow, followers, search): the pill goes after the
+ * name, as in the hover card. The name link must point where the row's avatar does, so a mention in the
+ * bio is never taken for the row's person.
+ */
+export function userCellSlot(cell: Element): BadgeSlot | null {
+  const links = [...cell.querySelectorAll<HTMLAnchorElement>('a[href^="/"][role="link"]')];
+  const avatar = links.find((a) => a.getAttribute('tabindex') === '-1')?.getAttribute('href');
+  if (!avatar || !/^\/[A-Za-z0-9_]{1,15}$/.test(avatar)) return null;
+  const link = links.find((a) => a.getAttribute('tabindex') !== '-1' && a.getAttribute('href') === avatar);
+  const handle = fromPath(avatar);
+  const row = link?.firstElementChild;
+  return handle && row ? { handle, key: `cell:${handle.toLowerCase()}`, anchor: row } : null;
 }

@@ -1,5 +1,6 @@
 import type { Event, EventTemplate } from 'nostr-tools/pure';
 import { validateMoneroAddress } from '../xmr/address';
+import { POST_K, xPostId } from './post';
 import { parseXmr } from './amount';
 
 /** NKIP-0002 (Verifiable Monero Tips on Nostr). "Xap" is only our name for it in the UI. */
@@ -85,8 +86,11 @@ export function parseConfirmation(ev: Event): Confirmation | null {
   return { id: ev.id, signer: ev.pubkey, receipt, tipper, amount, method, t };
 }
 
-/** The profile-tip receipt XMRadar publishes: no `e` (an X post has no Nostr id), no txid or proof (R1). */
-export function receiptTemplate(opts: { recipient: string; amount: string; address: string; now?: number }): EventTemplate {
+/**
+ * The receipt XMRadar publishes: never `e` (an X post has no Nostr id) and no txid or proof (R1). With
+ * `post` (an X status id) it names the post with `i` and `k` (R15); without, it's a profile tip.
+ */
+export function receiptTemplate(opts: { recipient: string; amount: string; address: string; post?: string; now?: number }): EventTemplate {
   if (!HEX64.test(opts.recipient)) throw new Error('Bad recipient key');
   if (parseXmr(opts.amount) === null) throw new Error('Bad amount');
   const check = validateMoneroAddress(opts.address);
@@ -97,6 +101,7 @@ export function receiptTemplate(opts: { recipient: string; amount: string; addre
     content: '',
     tags: [
       ['p', opts.recipient],
+      ...(opts.post === undefined ? [] : [['i', xPostId(opts.post)], ['k', POST_K]]),
       ['amount', opts.amount],
       ['unit', 'xmr'],
       ['address', opts.address],

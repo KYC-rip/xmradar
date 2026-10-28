@@ -43,8 +43,20 @@ export function mineLine(t: XapTotals, handle: string): string | null {
   return `${what}not in the claimed total (another of your receipts counts, or @${handle} has changed address)`;
 }
 
-export const confirmText = (handle: string, amount: string) =>
-  `Publish a public Xap receipt? It shows your Nostr key, @${handle}'s Nostr key and ${amount} XMR. It never contains your transaction id.`;
+export const confirmText = (handle: string, amount: string, post?: string) =>
+  post
+    ? `Publish a public Xap receipt? It shows your Nostr key, @${handle}'s Nostr key, ${amount} XMR and the post you tipped (x.com/i/status/${post}). It never contains your transaction id.`
+    : `Publish a public Xap receipt? It shows your Nostr key, @${handle}'s Nostr key and ${amount} XMR. It never contains your transaction id.`;
+
+/** The person's total under a post's figures: its own line, never added to the post's (counting step 8). */
+export function profileLine(t: XapTotals, handle: string): string {
+  const parts = [
+    parseXmr(t.verified) ? `ɱ ${t.verified} ✓ verified` : '',
+    parseXmr(t.verifying) ? `ɱ ${t.verifying} verifying (yours)` : '',
+    parseXmr(t.claimed) ? `+ɱ ${t.claimed} claimed` : '',
+  ].filter(Boolean);
+  return `All Xaps to @${handle}: ${parts.length ? parts.join(', ') : 'none yet'}`;
+}
 
 const errorText = (message: string, handle: string) =>
   message === 'ADDRESS_CHANGED'
@@ -59,6 +71,14 @@ export interface XapOptions {
   cached?: XapTotals;
   /** "Ask to publish a Xap receipt after a tip" */
   receipts: boolean;
+  /** X status id: this Xap tips that post, and the figures above are the post's */
+  post?: string;
+  /** a receipt was published */
+  onPublished?: () => void;
+  /** fresh figures for this post (or person), so the button can show them too */
+  onTotals?: (t: XapTotals) => void;
+  /** a post popup's fresh person total, so the page's badge tooltip shows it too */
+  onProfileTotals?: (t: XapTotals) => void;
   isClosed: () => boolean;
 }
 
@@ -68,19 +88,38 @@ export function renderXap(o: XapOptions): HTMLElement {
   const wrap = h('div', { class: 'tip xap' });
   const totalsBox = h('div', { class: 'xap-totals', attrs: { role: 'status', 'aria-live': 'polite' } });
   const mineBox = h('div', { class: 'small' });
+  const profileBox = h('div', { class: 'small' });
   const addrWarn = h('div', { class: 'warn hidden' });
   let fresh: XapTotals | null = null;
   // set when relays now name another address: nothing may still point at the old one
   let stale = false;
   const showTotals = () => {
-    totalsBox.replaceChildren(...totalsLines(fresh, o.cached ?? null, handle).map((l) => h('div', { textContent: l })));
+    const lines = totalsLines(fresh, o.cached ?? null, handle);
+    if (o.post) lines[0] = `This post: ${lines[0]}`;
+    totalsBox.replaceChildren(...lines.map((l) => h('div', { textContent: l })));
     mineBox.textContent = fresh ? (mineLine(fresh, handle) ?? '') : '';
   };
-  const refresh = async () => {
+  // a post popup also shows the person's total, on its own line
+  const refreshProfile = async () => {
+    if (!o.post) return;
     try {
       const res = await sendToBackground({ type: 'xap-totals', recipients: [entry.pubkey], fresh: true });
+      const t = res.totals[0]?.[1];
+      if (t) o.onProfileTotals?.(t);
+      if (!o.isClosed() && t) profileBox.textContent = profileLine(t, handle);
+    } catch {
+      // the post's own figures are what this popup is for
+    }
+  };
+  const refresh = async () => {
+    void refreshProfile();
+    try {
+      const res = o.post
+        ? await sendToBackground({ type: 'xap-post-totals', posts: [{ id: o.post, pubkey: entry.pubkey }], fresh: true })
+        : await sendToBackground({ type: 'xap-totals', recipients: [entry.pubkey], fresh: true });
       if (o.isClosed()) return;
       fresh = res.totals[0]?.[1] ?? null;
+      if (fresh) o.onTotals?.(fresh);
       if (fresh && fresh.address !== address) {
         addrWarn.textContent = fresh.address
           ? `@${handle} now lists a different address. Don't send to the one below; close this and open it again.`
@@ -139,6 +178,15 @@ export function renderXap(o: XapOptions): HTMLElement {
       walletLink.setAttribute('aria-disabled', 'true');
       return;
     }
+    if (unique && !markReady) {
+      // the kept mark may replace the drawn one: nothing payable until it's settled (a storage read)
+      qrBox.replaceChildren();
+      uniqueLine.textContent = 'Preparing the amount…';
+      walletLink.removeAttribute('href');
+      walletLink.setAttribute('aria-disabled', 'true');
+      copyAmount.disabled = sentBtn.disabled = true;
+      return;
+    }
     qrBox.replaceChildren(qrSvg(uri));
     // without receipts this is a plain tip, and the amount is optional
     uniqueLine.textContent = unique ? `You'll send ${unique} XMR${usd && total ? ` (≈ ${picoToUsd(total, usd)})` : ''}; the last digits mark this Xap.` : o.receipts ? 'A Xap needs an amount.' : '';
@@ -154,7 +202,7 @@ export function renderXap(o: XapOptions): HTMLElement {
   }
   amount.addEventListener('input', update);
   // only receipts need a kept mark; keyed by recipient and address, so a new address gets a new one
-  const markKey = markFor(entry.pubkey, address);
+  const markKey = markFor(entry.pubkey, address, o.post);
   if (o.receipts)
     void (async () => {
       const now = Date.now();
@@ -193,7 +241,7 @@ export function renderXap(o: XapOptions): HTMLElement {
       publishStatus.textContent = 'Approve the receipt in your signer; then it is published.';
       results.replaceChildren();
       try {
-        const res = await sendToBackground({ type: 'xap-publish', recipient: entry.pubkey, address, amount: sent });
+        const res = await sendToBackground({ type: 'xap-publish', recipient: entry.pubkey, address, amount: sent, ...(o.post ? { post: o.post } : {}) });
         if (o.isClosed()) return;
         const ok = res.results.filter((r) => r.ok).length;
         results.replaceChildren(...res.results.map((r) => h('li', { textContent: `${r.ok ? '✓' : '✗'} ${r.relay}${r.ok ? '' : `: ${r.message}`}` })));
@@ -203,6 +251,7 @@ export function renderXap(o: XapOptions): HTMLElement {
         publish.remove();
         skip.textContent = 'Done';
         skip.disabled = false;
+        o.onPublished?.();
         void refresh();
       } catch (err) {
         if (o.isClosed()) return;
@@ -218,7 +267,7 @@ export function renderXap(o: XapOptions): HTMLElement {
       confirm.classList.add('hidden');
       publishStatus.textContent = '';
     });
-    confirm.replaceChildren(h('div', { textContent: confirmText(handle, sent) }), h('div', { class: 'row' }, publish, skip));
+    confirm.replaceChildren(h('div', { textContent: confirmText(handle, sent, o.post) }), h('div', { class: 'row' }, publish, skip));
     confirm.classList.remove('hidden');
     publish.focus();
   });
@@ -226,6 +275,7 @@ export function renderXap(o: XapOptions): HTMLElement {
   wrap.append(
     totalsBox,
     mineBox,
+    profileBox,
     addrWarn,
     qrBox,
     addrBox,

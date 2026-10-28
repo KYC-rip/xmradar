@@ -40,6 +40,14 @@ export interface TipOptions {
   xap?: boolean;
   /** the action bar's cached totals, shown until fresh ones arrive (verified only) */
   totals?: XapTotals;
+  /** X status id: the Xap tips that post (NKIP-0002 external post tips) */
+  post?: string;
+  /** a receipt was published, so cached figures are stale */
+  onPublished?: () => void;
+  /** the popup's fresh figures */
+  onTotals?: (t: XapTotals) => void;
+  /** the popup's fresh person total (a post popup shows both) */
+  onProfileTotals?: (t: XapTotals) => void;
 }
 
 /** From a badge, `badge` is shown right away and xmr.bio is only asked on click. */
@@ -138,10 +146,10 @@ async function mountTip(ctx: ContentScriptContext, detected: string | null, badg
       const xap = opts.xap && badge ? xapEntry(badge) : null;
       if (opts.xap && badge?.primary) {
         const who = detected ?? badge.handle;
-        title.textContent = `Xap @${who}`;
-        dialog.setAttribute('aria-label', `Xap @${who}`);
+        title.textContent = opts.post ? `Xap this post by @${who}` : `Xap @${who}`;
+        dialog.setAttribute('aria-label', title.textContent);
         if (xap?.pubkey) {
-          const x = renderXap({ handle: who, entry: xap as BadgeEntry & { pubkey: string }, cached: opts.totals, receipts, isClosed: () => closed });
+          const x = renderXap({ handle: who, entry: xap as BadgeEntry & { pubkey: string }, cached: opts.totals, receipts, post: opts.post, onPublished: opts.onPublished, onTotals: opts.onTotals, onProfileTotals: opts.onProfileTotals, isClosed: () => closed });
           x.append(badgePanel(badge));
           if (badge.differ) x.prepend(h('div', { class: 'warn' }, 'This account has published more than one address. Xaps go to its Nostr address; check the sources below before sending.'));
           result.replaceChildren(x);

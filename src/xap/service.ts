@@ -5,7 +5,8 @@ import { validateMoneroAddress } from '../xmr/address';
 import { formatXmr, parseXmr } from './amount';
 import { countXaps } from './count';
 import { isHex64, receiptTemplate } from './events';
-import { fetchProfiles, fetchXapEvents, type XapQuery } from './fetch';
+import { fetchPostEvents, fetchProfiles, fetchXapEvents, type XapQuery } from './fetch';
+import { postKey, STATUS_ID_RE, xPostId } from './post';
 
 export interface SentXap {
   receiptId: string;
@@ -50,18 +51,59 @@ export async function countFor(recipients: string[], deps: XapDeps): Promise<Map
     const address = profiles.addresses.get(pk) ?? null;
     const events = await fetchXapEvents(pk, relays, deps.query);
     const c = countXaps({ recipient: pk, events, current: address ? [address] : [], me: { pubkey: me.pubkey, sent }, now: Math.floor(now / 1000) });
-    out.set(pk, {
-      verified: formatXmr(c.verified),
-      verifiedTippers: c.verifiedTippers,
-      verifying: formatXmr(c.verifying),
-      claimed: formatXmr(c.claimed),
-      claimedTippers: c.claimedTippers,
-      address,
-      mine: c.mine.map((m) => ({ amount: formatXmr(m.amount), state: m.state, recorded: m.recorded })),
-      at: now,
-    });
+    out.set(pk, totalsOf(c, address, now));
   });
   return out;
+}
+
+const totalsOf = (c: ReturnType<typeof countXaps>, address: string | null, now: number): XapTotals => ({
+  verified: formatXmr(c.verified),
+  verifiedTippers: c.verifiedTippers,
+  verifying: formatXmr(c.verifying),
+  claimed: formatXmr(c.claimed),
+  claimedTippers: c.claimedTippers,
+  address,
+  mine: c.mine.map((m) => ({ amount: formatXmr(m.amount), state: m.state, recorded: m.recorded })),
+  at: now,
+});
+
+export interface PostRef {
+  /** X status id */
+  id: string;
+  /** the key the post's author proves (R14): only receipts to it count toward the post */
+  pubkey: string;
+}
+
+/** Each post's figure, keyed by postKey(pubkey, id): only receipts naming the post and paid to its bound key. */
+export async function countPosts(posts: PostRef[], deps: XapDeps): Promise<Map<string, XapTotals>> {
+  const now = (deps.now ?? Date.now)();
+  const lookup = await deps.lookupRelays();
+  const pubkeys = [...new Set(posts.map((p) => p.pubkey))];
+  const [profiles, me] = await Promise.all([fetchProfiles(pubkeys, lookup, deps.query), deps.me()]);
+  const sent = new Set(me.sent.map((s) => s.receiptId));
+  const out = new Map<string, XapTotals>();
+  await mapLimit(posts, CONCURRENCY, async ({ id, pubkey }) => {
+    const relays = [...new Set([...lookup, ...(profiles.relays.get(pubkey) ?? [])])];
+    const address = profiles.addresses.get(pubkey) ?? null;
+    const post = xPostId(id);
+    const events = await fetchPostEvents(post, pubkey, relays, deps.query);
+    const c = countXaps({ recipient: pubkey, events, current: address ? [address] : [], me: { pubkey: me.pubkey, sent }, now: Math.floor(now / 1000), post });
+    out.set(postKey(pubkey, id), totalsOf(c, address, now));
+  });
+  return out;
+}
+
+/** Valid, distinct post refs, at most `max`; anything malformed is dropped. */
+export function validPosts(posts: unknown, max: number): PostRef[] {
+  if (!Array.isArray(posts)) return [];
+  const seen = new Map<string, PostRef>();
+  // malformed entries don't use up the cap; the scan itself is bounded
+  for (const p of posts.slice(0, 1000) as { id?: unknown; pubkey?: unknown }[]) {
+    if (seen.size >= max) break;
+    if (typeof p?.id !== 'string' || !STATUS_ID_RE.test(p.id) || !isHex64(p.pubkey)) continue;
+    seen.set(postKey(p.pubkey, p.id), { id: p.id, pubkey: p.pubkey });
+  }
+  return [...seen.values()];
 }
 
 /**
@@ -117,12 +159,15 @@ export interface PublishRequest {
   recipient: unknown;
   address: unknown;
   amount: unknown;
+  /** X status id: the receipt names that post (R15); absent for a profile tip */
+  post?: unknown;
 }
 
 /** Signs and publishes a receipt for a tip the user confirmed sending (R8 is asked in the popup). */
 export async function publishXap(req: PublishRequest, deps: PublishDeps): Promise<XapPublishResult> {
-  const { recipient, address, amount } = req;
+  const { recipient, address, amount, post } = req;
   if (!isHex64(recipient)) throw new Error('Bad recipient key');
+  if (post !== undefined && (typeof post !== 'string' || !STATUS_ID_RE.test(post))) throw new Error('Bad post');
   if (typeof address !== 'string') throw new Error('Bad address');
   const check = validateMoneroAddress(address);
   if (!check.ok || check.type === 'integrated') throw new Error('Xaps go to a standard address or subaddress');
@@ -134,7 +179,7 @@ export async function publishXap(req: PublishRequest, deps: PublishDeps): Promis
   const lookup = await deps.lookupRelays();
   const profiles = await fetchProfiles([recipient], lookup, deps.query);
   if (profiles.addresses.get(recipient) !== address) throw new Error('ADDRESS_CHANGED');
-  const template = receiptTemplate({ recipient, amount, address, now: Math.floor((deps.now ?? Date.now)() / 1000) });
+  const template = receiptTemplate({ recipient, amount, address, post, now: Math.floor((deps.now ?? Date.now)() / 1000) });
   const event = await deps.sign(template, pubkey);
   const relays = [...new Set([...withoutIndex(await deps.myRelays(pubkey)), ...withoutIndex(profiles.relays.get(recipient) ?? []), ...DEFAULT_RELAYS])].slice(0, MAX_PUBLISH_RELAYS);
   const results = await deps.publish(relays, event);

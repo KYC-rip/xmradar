@@ -3,11 +3,13 @@ import { badgeLook, mountBadge, type BadgeLook } from '../../identity/badge-look
 import { PendingQueue } from '../../identity/bucket';
 import { normalizeHandle } from '../../identity/envelope';
 import { xapEntry, type Badge } from '../../identity/resolve';
-import { hoverCardSlot, profileSlot, tweetSlot, type BadgeSlot } from '../../identity/x-handle';
+import { articleViewSlot, hoverCardSlot, profileSlot, tweetSlot, userCellSlot, type BadgeSlot } from '../../identity/x-handle';
 import { sendToBackground, type XapTotals } from '../../messaging';
 import { xmrSettingsItem } from '../../settings';
 import { openTip } from './tip';
-import { XAP_SELECTOR, insertXap, ownXap, setXapCount, xapSummary } from './x-xap';
+import { XAP_SELECTOR, actionBars, insertXap, ownXaps, setXapCount, xapSummary } from './x-xap';
+import { parsePostKey, postKey } from '../../xap/post';
+import { xapTtl } from '../../xap/ttl';
 
 const HOST_TAG = 'xmradar-badge';
 const BATCH_DELAY_MS = 750;
@@ -17,8 +19,6 @@ const MAX_PER_CALL = 200;
 const BADGE_TTL_MS = 6 * 3600_000;
 const NO_BADGE_TTL_MS = 3600_000;
 const SCROLL_RESCAN_MS = 500;
-// the background caches totals as long; this only spares it repeated messages
-const XAP_TOTALS_TTL_MS = 10 * 60_000;
 
 export function startBadges(ctx: ContentScriptContext) {
   const results = new Map<string, { badge: Badge; at: number }>();
@@ -45,70 +45,105 @@ export function startBadges(ctx: ContentScriptContext) {
   // Xap totals for the action-bar counts: asked for in batches, only with relay discovery on
   const totals = new Map<string, { t: XapTotals; at: number }>();
   const totalsQueue = new PendingQueue(500);
+  const postQueue = new PendingQueue(500);
   let totalsTimer: ReturnType<typeof setTimeout> | undefined;
   const cachedTotals = (pk: string) => {
     const hit = totals.get(pk);
-    return hit && Date.now() - hit.at < XAP_TOTALS_TTL_MS ? hit.t : undefined;
+    // as long as the background keeps it; this only spares it repeated messages
+    return hit && Date.now() - hit.at < xapTtl(hit.t) ? hit.t : undefined;
   };
   // a profile badge's button sits in a closed shadow root, so keep it by its host
   const pillButtons = new WeakMap<HTMLElement, HTMLElement>();
-  const showTotals = (pk: string, t: XapTotals) => {
+  // keys: a bare pubkey for a profile total, postKey(pubkey, id) for a post figure; buttons on a
+  // post show only that post's figure, never the profile total (NKIP-0002 counting step 8)
+  const showTotals = (key: string, t: XapTotals) => {
     for (const el of document.querySelectorAll<HTMLElement>(XAP_SELECTOR)) {
-      if (el.dataset.pubkey === pk) setXapCount(el, el.dataset.handle ?? '', t);
+      const own = el.dataset.post && el.dataset.pubkey ? postKey(el.dataset.pubkey, el.dataset.post) : el.dataset.pubkey;
+      if (own === key) setXapCount(el, el.dataset.handle ?? '', t, !!el.dataset.post);
     }
     for (const host of document.querySelectorAll<HTMLElement>(`${HOST_TAG}[data-pubkey]`)) {
       const btn = pillButtons.get(host);
-      if (host.dataset.pubkey !== pk || !btn) continue;
+      if (host.dataset.pubkey !== key || !btn) continue;
       const label = `Accepts Monero — tip @${host.dataset.handle}\n${xapSummary(host.dataset.handle ?? '', t)}`;
       btn.title = label;
       btn.setAttribute('aria-label', label.replace('\n', '. '));
     }
   };
-  function wantTotals(pk: string) {
-    const hit = cachedTotals(pk);
-    if (hit) return showTotals(pk, hit);
+  const keep = (key: string, t: XapTotals) => {
+    totals.delete(key);
+    totals.set(key, { t, at: Date.now() });
+    // oldest first: keep a long timeline from growing it without bound
+    if (totals.size > 1000) totals.delete(totals.keys().next().value!);
+    showTotals(key, t);
+  };
+  /** a profile total (bare pubkey) or a post figure (postKey) */
+  function wantTotals(key: string) {
+    const hit = cachedTotals(key);
+    if (hit) return showTotals(key, hit);
     if (!discovery) return;
-    totalsQueue.add([pk]);
+    (key.includes(':') ? postQueue : totalsQueue).add([key]);
     totalsTimer ??= setTimeout(() => void flushTotals(), BATCH_DELAY_MS);
   }
   async function flushTotals() {
     totalsTimer = undefined;
-    if (!enabled || !discovery || !totalsQueue.size || document.hidden) return;
+    if (!enabled || !discovery || (!totalsQueue.size && !postQueue.size) || document.hidden) return;
     const recipients = totalsQueue.take(50);
-    try {
-      const res = await sendToBackground({ type: 'xap-totals', recipients });
-      for (const [pk, t] of res.totals) {
-        totals.delete(pk);
-        totals.set(pk, { t, at: Date.now() });
-        // oldest first: keep a long timeline from growing it without bound
-        if (totals.size > 500) totals.delete(totals.keys().next().value!);
-        showTotals(pk, t);
-      }
-      if (res.pending.length) totalsQueue.add(res.pending);
-    } catch {
-      // counts are optional; they come back with the next sighting
-    }
-    if (totalsQueue.size) totalsTimer ??= setTimeout(() => void flushTotals(), PENDING_RETRY_MS);
+    const posts = postQueue.take(50).map(parsePostKey);
+    // both at once, so a slow profile batch doesn't hold up the post figures; counts are optional, and
+    // a failed batch comes back with the next sighting
+    await Promise.all([
+      recipients.length &&
+        sendToBackground({ type: 'xap-totals', recipients }).then((res) => {
+          for (const [pk, t] of res.totals) keep(pk, t);
+          if (res.pending.length) totalsQueue.add(res.pending);
+        }, () => {}),
+      posts.length &&
+        sendToBackground({ type: 'xap-post-totals', posts }).then((res) => {
+          for (const [key, t] of res.totals) keep(key, t);
+          if (res.pending.length) postQueue.add(res.pending.map((p) => postKey(p.pubkey, p.id)));
+        }, () => {}),
+    ]);
+    if (totalsQueue.size || postQueue.size) totalsTimer ??= setTimeout(() => void flushTotals(), PENDING_RETRY_MS);
   }
 
   /** The Xap button: in the action bar, for tweets by an author with a badge. */
   function applyXap(slot: BadgeSlot & { article: Element }, badge: Badge) {
-    const existing = ownXap(slot.article);
-    if (existing?.dataset.key === slot.key) return;
-    existing?.remove();
+    // every bar of the post has this post's button (an X Article page has two), or they're redrawn
+    const existing = ownXaps(slot.article);
+    if (existing.length && existing.length === actionBars(slot.article).length && existing.every((e) => e.dataset.key === slot.key)) return;
+    for (const e of existing) e.remove();
     const entry = xapEntry(badge);
+    const pk = entry?.pubkey;
+    // a tweet with a status id gets a post Xap (R15), bound to its author's proven key (R14)
+    const post = pk && slot.statusId ? slot.statusId : undefined;
+    const key = pk ? (post ? postKey(pk, post) : pk) : undefined;
     const el = insertXap(slot.article, {
       handle: slot.handle,
       key: slot.key,
-      pubkey: entry?.pubkey,
+      pubkey: pk,
+      post,
       onClick: () => {
         const now = lookup(slot.handle) ?? badge;
-        void openTip(ctx, slot.handle, now, { xap: true, totals: entry?.pubkey ? cachedTotals(entry.pubkey) : undefined });
+        void openTip(ctx, slot.handle, now, {
+          xap: true,
+          post,
+          totals: key ? cachedTotals(key) : undefined,
+          // the popup's fresh figures show on the button right away
+          onTotals: (t) => key && keep(key, t),
+          onProfileTotals: (t) => pk && keep(pk, t),
+          onPublished: () => {
+            // the next figure comes from the relays
+            for (const k of new Set([key, pk])) {
+              if (!k) continue;
+              totals.delete(k);
+              wantTotals(k);
+            }
+          },
+        });
       },
     });
     if (!el) return;
-    el.dataset.handle = slot.handle;
-    if (entry?.pubkey) wantTotals(entry.pubkey);
+    if (key) wantTotals(key);
   }
 
   function insert(slot: BadgeSlot, badge: Badge) {
@@ -135,7 +170,7 @@ export function startBadges(ctx: ContentScriptContext) {
     const badge = lookup(slot.handle);
     if (slot.article) {
       // a recycled tweet node may still hold another author's button
-      if (!badge?.primary) ownXap(slot.article)?.remove();
+      if (!badge?.primary) for (const e of ownXaps(slot.article)) e.remove();
       else return applyXap(slot as BadgeSlot & { article: Element }, badge);
     } else {
       const existing = slot.anchor.querySelector<HTMLElement>(`:scope > ${HOST_TAG}`);
@@ -158,6 +193,19 @@ export function startBadges(ctx: ContentScriptContext) {
     for (const a of root.querySelectorAll('article[data-testid="tweet"]')) articles.add(a);
     for (const a of articles) {
       const slot = tweetSlot(a);
+      if (slot) apply(slot);
+    }
+    // an X Article's reading page
+    const view = root instanceof Element && root.closest('article[data-testid="twitterArticleReadView"]') ? root.closest('article[data-testid="twitterArticleReadView"]') : document.querySelector('article[data-testid="twitterArticleReadView"]');
+    const viewSlot = view ? articleViewSlot(view, location) : null;
+    if (viewSlot) apply(viewSlot);
+    const cells = new Set<Element>(root.querySelectorAll('[data-testid="UserCell"]'));
+    if (root instanceof Element) {
+      const cell = root.closest('[data-testid="UserCell"]');
+      if (cell) cells.add(cell);
+    }
+    for (const c of cells) {
+      const slot = userCellSlot(c);
       if (slot) apply(slot);
     }
     const cards = new Set<Element>(root.querySelectorAll('[data-testid="HoverCard"]'));

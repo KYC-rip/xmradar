@@ -83,12 +83,14 @@ A Xap is a Monero tip recorded on Nostr the way [NKIP-0002](https://github.com/n
 - **It needs the recipient's Nostr key.** Authors known only through xmr.bio get a plain tip with nothing recorded.
 - **The unique amount.** XMRadar adds 1–999,999 random piconero to the amount you type (at most 0.000001 XMR), so the last digits look odd: `0.010000437215`. That exact amount goes into the `monero:` link and the QR code, and it is what lets the recipient's wallet match your transfer to your receipt.
 - **The receipt.** After you click **I sent it** and agree, XMRadar asks your signer to sign a public kind 9042 receipt and publishes it to your relays, the recipient's relays and the defaults. It shows your npub, the recipient's npub, the amount and the address you paid. It never contains your transaction id, tx key or a payment proof. Turn the question off under **Options → Badges on X**.
-- **Profile Xaps only.** An X post has no Nostr id, so totals are per author, not per tweet.
+- **Per post.** A Xap from a tweet tips that tweet: the receipt names it with NKIP-0002's external post tag, `["i", "https://x.com/i/status/<id>"]` and `["k", "web"]` (never `e`, which is for Nostr notes). The confirm step says the post is named.
+- **The author binding.** A receipt counts toward a tweet only when it pays the key the tweet's author proves through NIP-39 (kind 10011, or kind 0 from older clients): a proof tweet by that handle, containing the npub, that XMRadar checked. Only the key behind the author's badge counts for their tweets, and an author with a proof but no valid address gets no tweet figures. A tweet without a status link gets a profile Xap.
+- **Post and person.** Every post Xap also counts toward the person's total. The button shows the tweet's figure; the badge tooltip and the popup's "All Xaps to @handle" line show the person's. The two are never added.
 - **Three states, never added together:**
   - **verified:** the recipient confirmed it (kind 9044) from their wallet;
   - **verifying:** your own Xap from the last 30 minutes, while the transfer gets its confirmations (only you see this);
   - **claimed:** a receipt nobody has confirmed. Claims are free to make, so each tipper counts once, with their smallest receipt, and only if it paid the recipient's current address.
-- The action-bar number is the verified total; with none, the claimed total marked "~" (what tippers say they sent, not confirmed). The two are never added. The popup shows all three.
+- The action-bar number is the tweet's verified total (the person's, for a tweet without a status link); with none, the claimed total marked "~" (what tippers say they sent, not confirmed). The two are never added. The popup shows all three.
 - XMRadar doesn't send payment proofs (kind 9043) yet, so its Xaps are confirmed when the recipient's wallet matches the unique amount.
 
 ## Your Monero identity (Phase 2c)

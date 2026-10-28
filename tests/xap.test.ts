@@ -7,9 +7,12 @@ import { formatXmr, parseXmr, randomPico, shortXmr, uniqueAmount } from '../src/
 import { countXaps, VERIFYING_SECS } from '../src/xap/count';
 import { parseConfirmation, parseReceipt, receiptTemplate } from '../src/xap/events';
 import { currentAddress, type XapQuery } from '../src/xap/fetch';
-import { FreshTotals, countFor, publishXap, withSent, type PublishDeps } from '../src/xap/service';
-import { confirmText, mineLine, totalsLines } from '../src/entrypoints/content/xap-popup';
-import { insertXap, ownXap, setXapCount, XAP_SELECTOR } from '../src/entrypoints/content/x-xap';
+import { FreshTotals, countFor, countPosts, publishXap, validPosts, withSent, type PublishDeps } from '../src/xap/service';
+import { xapTtl, XAP_EMPTY_TTL_MS, XAP_TTL_MS } from '../src/xap/ttl';
+import { postKey, postOf, statusIdOf, xPostId } from '../src/xap/post';
+import { articleViewSlot, tweetSlot } from '../src/identity/x-handle';
+import { confirmText, mineLine, profileLine, totalsLines } from '../src/entrypoints/content/xap-popup';
+import { insertXap, ownXap, ownXaps, setXapCount, XAP_SELECTOR } from '../src/entrypoints/content/x-xap';
 import { hoverCardSlot } from '../src/identity/x-handle';
 import { xapEntry, type Badge, type BadgeEntry } from '../src/identity/resolve';
 import { makeDoc } from './helpers';
@@ -275,7 +278,8 @@ function relaysWith(events: () => Event[]): XapQuery {
         (!f.authors || f.authors.includes(e.pubkey)) &&
         (!f.ids || f.ids.includes(e.id)) &&
         (!f['#p'] || e.tags.some((t) => t[0] === 'p' && f['#p']!.includes(t[1]!))) &&
-        (!f['#e'] || e.tags.some((t) => t[0] === 'e' && f['#e']!.includes(t[1]!))),
+        (!f['#e'] || e.tags.some((t) => t[0] === 'e' && f['#e']!.includes(t[1]!))) &&
+        (!f['#i'] || e.tags.some((t) => t[0] === 'i' && f['#i']!.includes(t[1]!))),
     );
 }
 
@@ -305,6 +309,11 @@ describe('totals service', () => {
     fresh.forget(RECIPIENT);
     await fresh.get(RECIPIENT);
     expect(fetchOne).toHaveBeenCalledTimes(3);
+  });
+  it('an empty result is cached briefly, since it can be a relay hiccup', () => {
+    const t = { verified: '0', verifiedTippers: 0, verifying: '0', claimed: '0', claimedTippers: 0, address: ADDR, mine: [], at: 0 };
+    expect(xapTtl(t)).toBe(XAP_EMPTY_TTL_MS);
+    expect(xapTtl({ ...t, claimed: '0.0016' })).toBe(XAP_TTL_MS);
   });
   it('keeps at most 200 sent records', () => {
     let list: ReturnType<typeof withSent> = [];
@@ -443,6 +452,37 @@ describe('action-bar button', () => {
     expect(el.querySelector('[data-xmradar="xap-count"]')!.textContent).toBe('0.004');
     expect(el.querySelector('button')!.getAttribute('aria-label')).toBe('Xap @XBToshi (Monero tip), ɱ 0.004 verified');
   });
+  it('the logo turns into the coloured Monero logo once the post has Xaps, with one coin flip per post', () => {
+    const el = insertXap(setup(), { handle: 'XBToshi', key: 'k', pubkey: RECIPIENT, post: '777', onClick: () => {} })!;
+    const svg = el.querySelector('svg')!;
+    const fills = () => [...svg.querySelectorAll('path')].map((p) => (p.style.display === 'none' ? 'hidden' : p.getAttribute('fill')));
+    expect(fills()).toEqual(['hidden', 'currentColor', 'currentColor']);
+    const animate = vi.fn();
+    (svg as unknown as { animate: typeof animate }).animate = animate;
+    const totals = { verified: '0', verifiedTippers: 0, verifying: '0', claimed: '0.0017', claimedTippers: 1, address: ADDR, mine: [], at: 0 };
+    setXapCount(el, 'XBToshi', totals, true);
+    expect(fills()).toEqual(['#fff', '#f36e36', '#575757']);
+    setXapCount(el, 'XBToshi', totals, true);
+    expect(animate).toHaveBeenCalledTimes(1);
+    setXapCount(el, 'XBToshi', { ...totals, claimed: '0' }, true);
+    expect(fills()).toEqual(['hidden', 'currentColor', 'currentColor']);
+  });
+  it('a post with two action bars (an X Article on its own page) gets a button in each, both counted', () => {
+    const article = setup();
+    const bar = article.querySelector('[role="group"]')!;
+    // as on a tweet's page: the top bar sits in the article body's own nested <article>
+    const body = article.ownerDocument.createElement('article');
+    body.dataset.testid = 'twitterArticleReadView';
+    body.append(bar.cloneNode(true));
+    bar.parentElement!.insertBefore(body, bar.parentElement!.firstChild);
+    const first = insertXap(article, { handle: 'XBToshi', key: 'k', pubkey: RECIPIENT, post: '777', onClick: () => {} })!;
+    expect(ownXaps(article)).toHaveLength(2);
+    expect(first).toBe(ownXaps(article)[0]);
+    // inserting again adds nothing
+    insertXap(article, { handle: 'XBToshi', key: 'k', pubkey: RECIPIENT, post: '777', onClick: () => {} });
+    expect(article.querySelectorAll(XAP_SELECTOR)).toHaveLength(2);
+    for (const el of ownXaps(article)) expect(el.dataset).toMatchObject({ post: '777', pubkey: RECIPIENT, handle: 'XBToshi' });
+  });
   it("never touches a button outside the tweet's own action bar", () => {
     const article = setup();
     const el = insertXap(article, { handle: 'XBToshi', key: 'k', onClick: () => {} })!;
@@ -457,7 +497,7 @@ describe('action-bar button', () => {
     const article = setup();
     article.querySelector('[data-testid="reply"]')!.parentElement!.setAttribute('data-engagement', 'reply');
     const el = insertXap(article, { handle: 'x', key: 'k', onClick: () => {} })!;
-    const xs = [el, ...el.querySelectorAll('*')].flatMap((n) => [...n.attributes].filter((a) => a.name.startsWith('data-') && !['data-xmradar', 'data-key'].includes(a.name)));
+    const xs = [el, ...el.querySelectorAll('*')].flatMap((n) => [...n.attributes].filter((a) => a.name.startsWith('data-') && !['data-xmradar', 'data-key', 'data-handle'].includes(a.name)));
     expect(xs.map((a) => a.name)).toEqual([]);
   });
   it('inserts nothing into a bar without the reply or share button', () => {
@@ -480,3 +520,145 @@ describe('hover card', () => {
     expect(slot.anchor.id).toBe('row');
   });
 });
+
+describe('external post tips (NKIP-0002, R14–R16)', () => {
+  const ID = '2113662765525282909';
+  const POST = `https://x.com/i/status/${ID}`;
+  const postReceipt = (opts: { sk?: Uint8Array; to?: string; amount?: string; i?: string[][]; ago?: number } = {}) =>
+    receipt({
+      sk: opts.sk,
+      ago: opts.ago,
+      tags: [
+        ['p', opts.to ?? RECIPIENT],
+        ...(opts.i ?? [['i', POST], ['k', 'web']]),
+        ['amount', opts.amount ?? '0.01'],
+        ['unit', 'xmr'],
+        ['address', ADDR],
+        ['client', 'test'],
+        ['v', 'nkip02/1'],
+      ],
+    });
+
+  it('one canonical spelling: https://x.com/i/status/<id>, nothing else', () => {
+    expect(xPostId(ID)).toBe(POST);
+    for (const bad of ['0123', '', 'abc', '1'.repeat(21)]) expect(() => xPostId(bad), bad).toThrow();
+    expect(statusIdOf(POST)).toBe(ID);
+    for (const bad of [`https://x.com/XBToshi/status/${ID}`, `https://twitter.com/i/status/${ID}`, `HTTPS://X.COM/i/status/${ID}`, `${POST}/`, `${POST}?s=20`, `${POST}#x`, 'https://x.com/i/status/0123'])
+      expect(statusIdOf(bad), bad).toBeNull();
+  });
+
+  it('the receipt names the post with i and k, never e (R15)', () => {
+    const t = receiptTemplate({ recipient: RECIPIENT, amount: '0.01', address: ADDR, post: ID, now: NOW });
+    expect(t.tags).toContainEqual(['i', POST]);
+    expect(t.tags).toContainEqual(['k', 'web']);
+    expect(t.tags.some((x) => x[0] === 'e')).toBe(false);
+    expect(() => receiptTemplate({ recipient: RECIPIENT, amount: '0.01', address: ADDR, post: '012' })).toThrow();
+    expect(receiptTemplate({ recipient: RECIPIENT, amount: '0.01', address: ADDR }).tags.some((x) => x[0] === 'i')).toBe(false);
+  });
+
+  it('a receipt counts toward a post only with one canonical i, one k = web and no e', () => {
+    expect(postOf(postReceipt())).toBe(POST);
+    const cases: [string, string[][]][] = [
+      ['handle form', [['i', `https://x.com/XBToshi/status/${ID}`], ['k', 'web']]],
+      ['twitter.com', [['i', `https://twitter.com/i/status/${ID}`], ['k', 'web']]],
+      ['wrong k', [['i', POST], ['k', 'x']]],
+      ['no k', [['i', POST]]],
+      ['two i', [['i', POST], ['i', 'https://x.com/i/status/1'], ['k', 'web']]],
+      ['two k', [['i', POST], ['k', 'web'], ['k', 'web']]],
+      ['e and i', [['e', T1], ['i', POST], ['k', 'web']]],
+    ];
+    for (const [what, i] of cases) expect(postOf(postReceipt({ i })), what).toBeNull();
+  });
+
+  it('post tips count toward the profile; a post counts only its own receipts', () => {
+    const forPost = postReceipt({ amount: '0.02' });
+    const otherPost = postReceipt({ sk: otherSk, i: [['i', 'https://x.com/i/status/1'], ['k', 'web']] });
+    const profile = receipt({ sk: otherSk, amount: '0.03' });
+    const all = [forPost, otherPost, profile];
+    // the profile counts every tip without e: the smallest claim per tipper
+    expect(count(all)).toMatchObject({ claimedTippers: 2 });
+    expect(count(all, { post: POST })).toMatchObject({ claimed: parseXmr('0.02'), claimedTippers: 1 });
+    // e and i: a note tip, so neither the post nor the profile counts it
+    expect(count([postReceipt({ i: [['e', T1], ['i', POST], ['k', 'web']] })], { post: POST }).claimedTippers).toBe(0);
+  });
+
+  it('countPosts binds each post to its key (R14) and confirms within the post', async () => {
+    const mine = postReceipt({ amount: '0.02' });
+    const toOther = postReceipt({ sk: otherSk, to: OTHER });
+    const world = [sign(recipientSk, { kind: 10133, tags: [['payto', 'monero', ADDR]], created_at: NOW - 9000 }), mine, toOther, confirmation(mine)];
+    const deps = { query: relaysWith(() => world), lookupRelays: async () => ['wss://a'], me: async () => ({ pubkey: null, sent: [] }), now: () => NOW * 1000 };
+    const out = await countPosts([{ id: ID, pubkey: RECIPIENT }], deps);
+    // the receipt paid to another key never counts for this author's post
+    expect(out.get(postKey(RECIPIENT, ID))).toMatchObject({ verified: '0.02', verifiedTippers: 1, claimed: '0', address: ADDR });
+  });
+
+  it('a confirmed post receipt beyond the newest 500 is fetched by id and verified', async () => {
+    const old = postReceipt({ amount: '0.03', ago: 90_000 });
+    const newer = Array.from({ length: 500 }, (_, n) => postReceipt({ sk: generateSecretKey(), amount: '0.001', ago: 100 + n }));
+    const world = [sign(recipientSk, { kind: 10133, tags: [['payto', 'monero', ADDR]], created_at: NOW - 9000 }), old, ...newer, confirmation(old)];
+    // relays honour the limit, newest first
+    const base = relaysWith(() => world);
+    const query: XapQuery = async (r, f) => (await base(r, f)).sort((a, b) => b.created_at - a.created_at).slice(0, f.limit ?? Infinity);
+    const deps = { query, lookupRelays: async () => ['wss://a'], me: async () => ({ pubkey: null, sent: [] }), now: () => NOW * 1000 };
+    expect((await countPosts([{ id: ID, pubkey: RECIPIENT }], deps)).get(postKey(RECIPIENT, ID))).toMatchObject({ verified: '0.03' });
+  });
+
+  it('validPosts keeps well-formed, distinct posts only', () => {
+    expect(validPosts([{ id: ID, pubkey: RECIPIENT }, { id: ID, pubkey: RECIPIENT }, { id: '01', pubkey: RECIPIENT }, { id: ID, pubkey: 'x' }, null], 50)).toEqual([{ id: ID, pubkey: RECIPIENT }]);
+    expect(validPosts('nope', 50)).toEqual([]);
+    expect(validPosts(Array.from({ length: 1000 }, (_, n) => ({ id: String(n + 1), pubkey: RECIPIENT })), 50)).toHaveLength(50);
+    // malformed entries don't use up the cap
+    expect(validPosts([...Array.from({ length: 150 }, () => ({ id: 'x', pubkey: RECIPIENT })), { id: ID, pubkey: RECIPIENT }], 50)).toEqual([{ id: ID, pubkey: RECIPIENT }]);
+  });
+
+  it('publish names the post and refuses a malformed one', async () => {
+    const signed: EventTemplate[] = [];
+    const d: PublishDeps = {
+      query: relaysWith(() => [sign(recipientSk, { kind: 10133, tags: [['payto', 'monero', ADDR]] })]),
+      lookupRelays: async () => ['wss://a'],
+      myRelays: async () => [],
+      pubkey: async () => TIPPER,
+      sign: async (t) => (signed.push(t), finalizeEvent(t, tipperSk)),
+      publish: async (relays) => relays.map((relay) => ({ relay, ok: true, message: 'ok' })),
+      record: async () => {},
+    };
+    await publishXap({ recipient: RECIPIENT, address: ADDR, amount: '0.01', post: ID }, d);
+    expect(signed[0]!.tags).toContainEqual(['i', POST]);
+    await expect(publishXap({ recipient: RECIPIENT, address: ADDR, amount: '0.01', post: `https://x.com/i/status/${ID}` }, d)).rejects.toThrow('Bad post');
+  });
+
+  it('the confirm step names the post (R16); the profile line stands apart from the post figure', () => {
+    expect(confirmText('XBToshi', '0.01', ID)).toContain(`the post you tipped (x.com/i/status/${ID})`);
+    expect(confirmText('XBToshi', '0.01')).not.toContain('post');
+    const t = { verified: '0.004', verifiedTippers: 1, verifying: '0', claimed: '0.5', claimedTippers: 2, address: ADDR, mine: [], at: 0 };
+    expect(profileLine(t, 'XBToshi')).toBe('All Xaps to @XBToshi: ɱ 0.004 ✓ verified, +ɱ 0.5 claimed');
+    expect(profileLine({ ...t, verified: '0', claimed: '0' }, 'XBToshi')).toBe('All Xaps to @XBToshi: none yet');
+    expect(profileLine({ ...t, verified: '0', verifying: '0.01', claimed: '0' }, 'XBToshi')).toBe('All Xaps to @XBToshi: ɱ 0.01 verifying (yours)');
+  });
+
+  it("the tweet's own status id, not a quoted tweet's", () => {
+    const doc = makeDoc('https://x.com/home', `<article data-testid="tweet">
+      <div data-testid="User-Name"><div><a href="/XBToshi">CyberSatoshi</a></div><a href="/XBToshi/status/${ID}">1h</a></div>
+      <div role="link"><div data-testid="User-Name"><div><a href="/other">Other</a></div><a href="/other/status/42">2h</a></div></div>
+    </article>`);
+    expect(tweetSlot(doc.querySelector('article')!)).toMatchObject({ handle: 'XBToshi', statusId: ID });
+    // a status link in the name row by someone else never names the post
+    const other = makeDoc('https://x.com/home', `<article data-testid="tweet"><div data-testid="User-Name"><div><a href="/XBToshi">CyberSatoshi</a></div><a href="/other/status/42">1h</a></div></article>`);
+    expect(tweetSlot(other.querySelector('article')!)?.statusId).toBeUndefined();
+    // a tweet's own page: the timestamp link sits under the text, next to analytics links and a quote
+    const focal = makeDoc('https://x.com/XBToshi/status/' + ID, `<article data-testid="tweet">
+      <div data-testid="User-Name"><div><a href="/XBToshi">CyberSatoshi</a></div></div>
+      <div role="link"><a href="/other/status/42"><time>2h</time></a></div>
+      <a href="/XBToshi/status/${ID}/analytics">Views</a><a href="/XBToshi/status/${ID}"><time>1h</time></a>
+    </article>`);
+    expect(tweetSlot(focal.querySelector('article')!)?.statusId).toBe(ID);
+    // an X Article's reading page: author and post from the URL
+    const view = makeDoc('https://x.com/XBToshi/article/' + ID, '<article data-testid="twitterArticleReadView"></article>').querySelector('article')!;
+    expect(articleViewSlot(view, { hostname: 'x.com', pathname: `/XBToshi/article/${ID}` })).toMatchObject({ handle: 'XBToshi', statusId: ID, article: view });
+    expect(articleViewSlot(view, { hostname: 'x.com', pathname: '/home' })).toBeNull();
+    expect(articleViewSlot(view, { hostname: 'x.com', pathname: '/i/article/1' })).toBeNull();
+    const bare = makeDoc('https://x.com/home', `<article data-testid="tweet"><div data-testid="User-Name"><div><a href="/XBToshi">CyberSatoshi</a></div></div></article>`);
+    expect(tweetSlot(bare.querySelector('article')!)?.statusId).toBeUndefined();
+  });
+});
+

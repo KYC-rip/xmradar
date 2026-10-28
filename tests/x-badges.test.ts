@@ -26,6 +26,9 @@ const card = `<div data-testid="HoverCard"><a href="/XBToshi" role="link"><div i
 const badges = () => document.querySelectorAll('xmradar-badge').length;
 const xaps = () => document.querySelectorAll('[data-xmradar="xap"]');
 const totals = { verified: '0.004', verifiedTippers: 1, verifying: '0', claimed: '0.5', claimedTippers: 1, address: ADDR, mine: [], at: 0 };
+// the fixture tweet's own figure: different from the profile total, so a mix-up shows
+const postTotals = { ...totals, verified: '0', verifiedTippers: 0, claimed: '0.0016', claimedTippers: 1 };
+const STATUS = '2113662765525282909';
 
 describe('badges on X', () => {
   let invalidate: (() => void)[] = [];
@@ -42,7 +45,13 @@ describe('badges on X', () => {
     fakeBrowser.reset();
     openTip.mockReset();
     mounted.length = 0;
-    send.mockReset().mockImplementation(async (m: { type: string }) => (m.type === 'xap-totals' ? { totals: [[PK, totals]], pending: [] } : { badges: [['xbtoshi', badge]], pending: [] }));
+    send.mockReset().mockImplementation(async (m: { type: string; posts?: { id: string; pubkey: string }[] }) =>
+      m.type === 'xap-totals'
+        ? { totals: [[PK, totals]], pending: [] }
+        : m.type === 'xap-post-totals'
+          ? { totals: m.posts!.map((p) => [`${p.pubkey}:${p.id}`, postTotals]), pending: [] }
+          : { badges: [['xbtoshi', badge]], pending: [] },
+    );
     await xmrSettingsItem.setValue({ badgesX: true, badgesNostr: true, nostrDiscovery: true, tipReceipts: true, badgeIcon: 'mono', badgeLabel: true });
   });
   const lookups = () => send.mock.calls.filter(([m]) => m.type === 'resolve-handles').length;
@@ -54,16 +63,26 @@ describe('badges on X', () => {
     await vi.waitFor(() => expect(xaps().length).toBe(1), { timeout: 3000 });
     expect(badges()).toBe(0);
     expect(document.querySelector('[data-testid="User-Name"] xmradar-badge')).toBeNull();
-    // with discovery on, the verified total comes in batches
-    await vi.waitFor(() => expect(document.querySelector('[data-xmradar="xap-count"]')!.textContent).toBe('0.004'), { timeout: 3000 });
+    // with discovery on, the tweet's own figure comes in batches: never the profile total
+    await vi.waitFor(() => expect(document.querySelector('[data-xmradar="xap-count"]')!.textContent).toBe('~0.0016'), { timeout: 3000 });
+    expect(xaps()[0]!.querySelector('button')!.getAttribute('aria-label')).toBe('Xap this post by @XBToshi (Monero tip), ~ɱ 0.0016 claimed by 1 tipper on this post, not confirmed');
+    expect(send).toHaveBeenCalledWith({ type: 'xap-post-totals', posts: [{ pubkey: PK, id: STATUS }] });
   });
 
-  it('the Xap button opens the popup in Xap mode, with the cached totals', async () => {
+  it('the Xap button opens a post Xap, with the cached post figure', async () => {
     document.body.innerHTML = fixture;
     startBadges(ctx as never);
-    await vi.waitFor(() => expect(document.querySelector('[data-xmradar="xap-count"]')?.textContent).toBe('0.004'), { timeout: 3000 });
+    await vi.waitFor(() => expect(document.querySelector('[data-xmradar="xap-count"]')?.textContent).toBe('~0.0016'), { timeout: 3000 });
     xaps()[0]!.querySelector('button')!.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
-    expect(openTip).toHaveBeenCalledWith(ctx, 'XBToshi', badge, { xap: true, totals });
+    expect(openTip).toHaveBeenCalledWith(ctx, 'XBToshi', badge, { xap: true, post: STATUS, totals: postTotals, onTotals: expect.any(Function), onProfileTotals: expect.any(Function), onPublished: expect.any(Function) });
+  });
+
+  it('a tweet without a status link gets a profile Xap and the profile total', async () => {
+    document.body.innerHTML = fixture.replaceAll(`/status/${STATUS}`, '');
+    startBadges(ctx as never);
+    await vi.waitFor(() => expect(document.querySelector('[data-xmradar="xap-count"]')?.textContent).toBe('0.004'), { timeout: 3000 });
+    expect((xaps()[0] as HTMLElement).dataset.post).toBeUndefined();
+    expect(send.mock.calls.some(([m]) => m.type === 'xap-post-totals')).toBe(false);
   });
 
   it('no button for an author without a badge, and a recycled tweet loses its old one', async () => {
@@ -131,4 +150,18 @@ describe('badges on X', () => {
     await vi.waitFor(() => expect(mounted[0]?.title).toContain('Xaps:'), { timeout: 3000 });
     expect(mounted[0]!.title).toBe('Accepts Monero — tip @XBToshi\nXaps: ɱ 0.004 verified (1 tipper) · ~ɱ 0.5 claimed (1 tipper, not confirmed by @XBToshi)');
   });
+
+  it('people lists get the pill after the name, never for a mention in the bio', async () => {
+    document.body.innerHTML = `<div data-testid="UserCell">
+      <a href="/XBToshi" role="link" tabindex="-1"><img></a>
+      <a href="/XBToshi" role="link"><div id="cellrow"><span>CyberSatoshi</span></div></a>
+      <a href="/XBToshi" role="link" tabindex="-1"><div>@XBToshi</div></a>
+      <div><a href="/kyc_rip" role="link"><div id="mention">@kyc_rip</div></a></div>
+    </div>`;
+    startBadges(ctx as never);
+    await vi.waitFor(() => expect(badges()).toBe(1), { timeout: 3000 });
+    expect(document.querySelector('#cellrow > xmradar-badge')).not.toBeNull();
+    expect(document.querySelector('#mention xmradar-badge')).toBeNull();
+  });
 });
+
