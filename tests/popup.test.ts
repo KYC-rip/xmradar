@@ -201,7 +201,7 @@ describe('burner panel', () => {
 
 describe('xmr toggles', () => {
   it('saves on change and follows storage', async () => {
-    document.body.innerHTML = '<div id="t"><input type="checkbox" data-xmr="badges"/><input type="checkbox" data-xmr="discovery"/></div>';
+    document.body.innerHTML = '<div id="t"><input type="checkbox" data-xmr="badges"/><input type="checkbox" data-xmr="discovery"/><input type="checkbox" data-xmr="receipts"/></div>';
     await mountXmrToggles(document.getElementById('t')!);
     const badges = document.querySelector<HTMLInputElement>('[data-xmr="badges"]')!;
     const discovery = document.querySelector<HTMLInputElement>('[data-xmr="discovery"]')!;
@@ -210,6 +210,10 @@ describe('xmr toggles', () => {
     await vi.waitFor(async () => expect(await xmrSettingsItem.getValue()).toEqual({ badgesX: true, badgesNostr: true, nostrDiscovery: true, tipReceipts: true, badgeIcon: 'mono', badgeLabel: true }));
     await xmrSettingsItem.setValue({ badgesX: false, badgesNostr: true, nostrDiscovery: true, tipReceipts: true, badgeIcon: 'mono', badgeLabel: true });
     await vi.waitFor(() => expect(badges.checked).toBe(false));
+    const receipts = document.querySelector<HTMLInputElement>('[data-xmr="receipts"]')!;
+    expect(receipts.checked).toBe(true);
+    receipts.click();
+    await vi.waitFor(async () => expect((await xmrSettingsItem.getValue()).tipReceipts).toBe(false));
   });
 });
 

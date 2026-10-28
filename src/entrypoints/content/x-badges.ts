@@ -2,11 +2,12 @@ import type { ContentScriptContext } from 'wxt/utils/content-script-context';
 import { badgeLook, mountBadge, type BadgeLook } from '../../identity/badge-look';
 import { PendingQueue } from '../../identity/bucket';
 import { normalizeHandle } from '../../identity/envelope';
-import type { Badge } from '../../identity/resolve';
-import { profileSlot, tweetSlot, type BadgeSlot } from '../../identity/x-handle';
-import { sendToBackground } from '../../messaging';
+import { xapEntry, type Badge } from '../../identity/resolve';
+import { hoverCardSlot, profileSlot, tweetSlot, type BadgeSlot } from '../../identity/x-handle';
+import { sendToBackground, type XapTotals } from '../../messaging';
 import { xmrSettingsItem } from '../../settings';
 import { openTip } from './tip';
+import { XAP_SELECTOR, insertXap, ownXap, setXapCount, xapSummary } from './x-xap';
 
 const HOST_TAG = 'xmradar-badge';
 const BATCH_DELAY_MS = 750;
@@ -16,6 +17,8 @@ const MAX_PER_CALL = 200;
 const BADGE_TTL_MS = 6 * 3600_000;
 const NO_BADGE_TTL_MS = 3600_000;
 const SCROLL_RESCAN_MS = 500;
+// the background caches totals as long; this only spares it repeated messages
+const XAP_TOTALS_TTL_MS = 10 * 60_000;
 
 export function startBadges(ctx: ContentScriptContext) {
   const results = new Map<string, { badge: Badge; at: number }>();
@@ -32,11 +35,81 @@ export function startBadges(ctx: ContentScriptContext) {
   let enabled = false;
   let observer: MutationObserver | null = null;
   let look: BadgeLook = badgeLook(null);
+  let discovery = false;
   const removeAll = () => {
-    for (const host of document.querySelectorAll(HOST_TAG)) host.remove();
+    for (const host of document.querySelectorAll(`${HOST_TAG}, ${XAP_SELECTOR}`)) host.remove();
   };
 
-  const isOurs = (n: Node) => n instanceof Element && n.localName === HOST_TAG;
+  const isOurs = (n: Node) => n instanceof Element && (n.localName === HOST_TAG || n.matches(XAP_SELECTOR));
+
+  // Xap totals for the action-bar counts: asked for in batches, only with relay discovery on
+  const totals = new Map<string, { t: XapTotals; at: number }>();
+  const totalsQueue = new PendingQueue(500);
+  let totalsTimer: ReturnType<typeof setTimeout> | undefined;
+  const cachedTotals = (pk: string) => {
+    const hit = totals.get(pk);
+    return hit && Date.now() - hit.at < XAP_TOTALS_TTL_MS ? hit.t : undefined;
+  };
+  // a profile badge's button sits in a closed shadow root, so keep it by its host
+  const pillButtons = new WeakMap<HTMLElement, HTMLElement>();
+  const showTotals = (pk: string, t: XapTotals) => {
+    for (const el of document.querySelectorAll<HTMLElement>(XAP_SELECTOR)) {
+      if (el.dataset.pubkey === pk) setXapCount(el, el.dataset.handle ?? '', t);
+    }
+    for (const host of document.querySelectorAll<HTMLElement>(`${HOST_TAG}[data-pubkey]`)) {
+      const btn = pillButtons.get(host);
+      if (host.dataset.pubkey !== pk || !btn) continue;
+      const label = `Accepts Monero — tip @${host.dataset.handle}\n${xapSummary(host.dataset.handle ?? '', t)}`;
+      btn.title = label;
+      btn.setAttribute('aria-label', label.replace('\n', '. '));
+    }
+  };
+  function wantTotals(pk: string) {
+    const hit = cachedTotals(pk);
+    if (hit) return showTotals(pk, hit);
+    if (!discovery) return;
+    totalsQueue.add([pk]);
+    totalsTimer ??= setTimeout(() => void flushTotals(), BATCH_DELAY_MS);
+  }
+  async function flushTotals() {
+    totalsTimer = undefined;
+    if (!enabled || !discovery || !totalsQueue.size || document.hidden) return;
+    const recipients = totalsQueue.take(50);
+    try {
+      const res = await sendToBackground({ type: 'xap-totals', recipients });
+      for (const [pk, t] of res.totals) {
+        totals.delete(pk);
+        totals.set(pk, { t, at: Date.now() });
+        // oldest first: keep a long timeline from growing it without bound
+        if (totals.size > 500) totals.delete(totals.keys().next().value!);
+        showTotals(pk, t);
+      }
+      if (res.pending.length) totalsQueue.add(res.pending);
+    } catch {
+      // counts are optional; they come back with the next sighting
+    }
+    if (totalsQueue.size) totalsTimer ??= setTimeout(() => void flushTotals(), PENDING_RETRY_MS);
+  }
+
+  /** The Xap button: in the action bar, for tweets by an author with a badge. */
+  function applyXap(slot: BadgeSlot & { article: Element }, badge: Badge) {
+    const existing = ownXap(slot.article);
+    if (existing?.dataset.key === slot.key) return;
+    existing?.remove();
+    const entry = xapEntry(badge);
+    const el = insertXap(slot.article, {
+      handle: slot.handle,
+      key: slot.key,
+      pubkey: entry?.pubkey,
+      onClick: () => {
+        const now = lookup(slot.handle) ?? badge;
+        void openTip(ctx, slot.handle, now, { xap: true, totals: entry?.pubkey ? cachedTotals(entry.pubkey) : undefined });
+      },
+    });
+    if (!el) return;
+    el.dataset.handle = slot.handle;
+    if (entry?.pubkey) wantTotals(entry.pubkey);
+  }
 
   function insert(slot: BadgeSlot, badge: Badge) {
     const host = document.createElement(HOST_TAG);
@@ -49,17 +122,28 @@ export function startBadges(ctx: ContentScriptContext) {
       void openTip(ctx, slot.handle, lookup(slot.handle) ?? badge);
     });
     slot.anchor.append(host);
+    // the badge's tooltip carries the account's Xap totals
+    const pk = xapEntry(badge)?.pubkey;
+    if (!pk) return;
+    host.dataset.pubkey = pk;
+    host.dataset.handle = slot.handle;
+    pillButtons.set(host, btn);
+    wantTotals(pk);
   }
 
   function apply(slot: BadgeSlot) {
-    const existing = slot.anchor.querySelector<HTMLElement>(`:scope > ${HOST_TAG}`);
-    if (existing?.dataset.key === slot.key) return;
-    existing?.remove();
     const badge = lookup(slot.handle);
-    if (badge) {
-      if (badge.primary) insert(slot, badge);
-      return;
+    if (slot.article) {
+      // a recycled tweet node may still hold another author's button
+      if (!badge?.primary) ownXap(slot.article)?.remove();
+      else return applyXap(slot as BadgeSlot & { article: Element }, badge);
+    } else {
+      const existing = slot.anchor.querySelector<HTMLElement>(`:scope > ${HOST_TAG}`);
+      if (existing?.dataset.key === slot.key) return;
+      existing?.remove();
+      if (badge?.primary) return insert(slot, badge);
     }
+    if (badge) return;
     queue.add([slot.handle]);
     schedule(BATCH_DELAY_MS);
   }
@@ -74,6 +158,15 @@ export function startBadges(ctx: ContentScriptContext) {
     for (const a of root.querySelectorAll('article[data-testid="tweet"]')) articles.add(a);
     for (const a of articles) {
       const slot = tweetSlot(a);
+      if (slot) apply(slot);
+    }
+    const cards = new Set<Element>(root.querySelectorAll('[data-testid="HoverCard"]'));
+    if (root instanceof Element) {
+      const card = root.closest('[data-testid="HoverCard"]');
+      if (card) cards.add(card);
+    }
+    for (const c of cards) {
+      const slot = hoverCardSlot(c);
       if (slot) apply(slot);
     }
     // the profile header only needs a document-wide lookup when it could have changed
@@ -126,6 +219,7 @@ export function startBadges(ctx: ContentScriptContext) {
     // body survives X's client-side navigation, so one observer covers every page
     observer.observe(document.body, { childList: true, subtree: true });
     scan(document);
+    if (totalsQueue.size) totalsTimer ??= setTimeout(() => void flushTotals(), BATCH_DELAY_MS);
   }
 
   function disconnect() {
@@ -139,6 +233,8 @@ export function startBadges(ctx: ContentScriptContext) {
     disconnect();
     clearTimeout(timer);
     timer = undefined;
+    clearTimeout(totalsTimer);
+    totalsTimer = undefined;
     removeAll();
   }
 
@@ -162,14 +258,17 @@ export function startBadges(ctx: ContentScriptContext) {
 
   void xmrSettingsItem.getValue().then((s) => {
     look = badgeLook(s);
+    discovery = s.nostrDiscovery;
     setEnabled(s.badgesX);
   });
   const unwatch = xmrSettingsItem.watch((s, old) => {
     if (s.nostrDiscovery !== old?.nostrDiscovery) {
       // answers depend on the sources in use
       results.clear();
+      totals.clear();
       removeAll();
     }
+    discovery = s.nostrDiscovery;
     const next = badgeLook(s);
     if (next.icon !== look.icon || next.label !== look.label) {
       // redrawn from the results below, no new lookups

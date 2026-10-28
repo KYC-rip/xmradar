@@ -3,14 +3,16 @@ import { part } from './dom';
 
 /**
  * The badge switches (options page, Badges on X), saved on change. `data-xmr` names the setting each one drives;
- * settings without a switch on the page (Nostr clients and tip receipts until R2/R3) are kept as they are.
+ * settings without a switch on the page (Nostr clients until R2) are kept as they are.
  */
 export async function mountXmrToggles(root: HTMLElement) {
   const badges = part<HTMLInputElement>(root, 'xmr', 'badges');
   const discovery = part<HTMLInputElement>(root, 'xmr', 'discovery');
+  const receipts = part<HTMLInputElement>(root, 'xmr', 'receipts');
   const show = (x: XmrSettings) => {
     badges.checked = x.badgesX;
     discovery.checked = x.nostrDiscovery;
+    receipts.checked = x.tipReceipts;
   };
   // each switch saves only its own field; a failed save puts the switches back to what's stored
   const save = (patch: Partial<XmrSettings>) =>
@@ -20,6 +22,7 @@ export async function mountXmrToggles(root: HTMLElement) {
     });
   badges.addEventListener('change', () => void save({ badgesX: badges.checked }));
   discovery.addEventListener('change', () => void save({ nostrDiscovery: discovery.checked }));
+  receipts.addEventListener('change', () => void save({ tipReceipts: receipts.checked }));
   xmrSettingsItem.watch((x) => show(x));
   show(await xmrSettingsItem.getValue());
 }

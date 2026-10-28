@@ -2,13 +2,14 @@ import { decode as nip19Decode, npubEncode } from 'nostr-tools/nip19';
 import type { ContentScriptContext } from 'wxt/utils/content-script-context';
 import { createShadowRootUi } from 'wxt/utils/content-script-ui/shadow-root';
 import { HANDLE_RE, normalizeHandle, toTimestamp, type ResolvedIdentity } from '../../identity/envelope';
-import type { Badge, BadgeEntry } from '../../identity/resolve';
-import { sendToBackground } from '../../messaging';
+import { xapEntry, type Badge, type BadgeEntry } from '../../identity/resolve';
+import { sendToBackground, type XapTotals } from '../../messaging';
+import { xmrSettingsItem } from '../../settings';
 import { isValidAmount, moneroUri, type AddressCheck } from '../../xmr/address';
-import { qrPath } from '../../xmr/qr';
 import { h, trapFocus } from './dom';
-
-const SVG_NS = 'http://www.w3.org/2000/svg';
+import { fiatChips } from './fiat-chips';
+import { qrSvg } from './qr-svg';
+import { renderXap } from './xap-popup';
 
 let open = false;
 
@@ -34,39 +35,29 @@ const links = {
 
 const PROOF_LABELS = new Map([['nostr', 'Nostr'], ['x-post', 'X post'], ['agent-key', 'Agent key']]);
 
-function qrSvg(text: string): SVGSVGElement {
-  const { size, d } = qrPath(text);
-  const pad = 4;
-  const svg = document.createElementNS(SVG_NS, 'svg');
-  svg.setAttribute('viewBox', `${-pad} ${-pad} ${size + pad * 2} ${size + pad * 2}`);
-  svg.setAttribute('class', 'qr');
-  svg.setAttribute('role', 'img');
-  svg.setAttribute('aria-label', 'QR code of the Monero payment link');
-  svg.setAttribute('shape-rendering', 'crispEdges');
-  const bg = document.createElementNS(SVG_NS, 'rect');
-  for (const [k, v] of Object.entries({ x: -pad, y: -pad, width: size + pad * 2, height: size + pad * 2, fill: '#fff' })) bg.setAttribute(k, String(v));
-  const path = document.createElementNS(SVG_NS, 'path');
-  path.setAttribute('d', d);
-  path.setAttribute('fill', '#000');
-  svg.append(bg, path);
-  return svg;
+export interface TipOptions {
+  /** opened from the action bar's Xap button */
+  xap?: boolean;
+  /** the action bar's cached totals, shown until fresh ones arrive (verified only) */
+  totals?: XapTotals;
 }
 
 /** From a badge, `badge` is shown right away and xmr.bio is only asked on click. */
-export async function openTip(ctx: ContentScriptContext, handle: string | null, badge?: Badge) {
+export async function openTip(ctx: ContentScriptContext, handle: string | null, badge?: Badge, opts: TipOptions = {}) {
   if (open) return;
   open = true;
   try {
-    await mountTip(ctx, handle, badge);
+    await mountTip(ctx, handle, badge, opts);
   } catch (e) {
     open = false;
     window.alert(`XMRadar: ${(e as Error).message}`);
   }
 }
 
-async function mountTip(ctx: ContentScriptContext, detected: string | null, badge?: Badge) {
+async function mountTip(ctx: ContentScriptContext, detected: string | null, badge?: Badge, opts: TipOptions = {}) {
   const previousFocus = document.activeElement as HTMLElement | null;
   let closed = false;
+  const receipts = opts.xap ? (await xmrSettingsItem.getValue()).tipReceipts : false;
 
   const ui = await createShadowRootUi(ctx, {
     name: 'xmradar-tip',
@@ -144,7 +135,23 @@ async function mountTip(ctx: ContentScriptContext, detected: string | null, badg
       lookupBtn.addEventListener('click', () => void lookup());
       handleInput.addEventListener('keydown', (e) => e.key === 'Enter' && void lookup());
 
-      if (badge?.primary) {
+      const xap = opts.xap && badge ? xapEntry(badge) : null;
+      if (opts.xap && badge?.primary) {
+        const who = detected ?? badge.handle;
+        title.textContent = `Xap @${who}`;
+        dialog.setAttribute('aria-label', `Xap @${who}`);
+        if (xap?.pubkey) {
+          const x = renderXap({ handle: who, entry: xap as BadgeEntry & { pubkey: string }, cached: opts.totals, receipts, isClosed: () => closed });
+          x.append(badgePanel(badge));
+          if (badge.differ) x.prepend(h('div', { class: 'warn' }, 'This account has published more than one address. Xaps go to its Nostr address; check the sources below before sending.'));
+          result.replaceChildren(x);
+        } else {
+          // xmr.bio only: a plain tip, with nothing to record it against
+          const plain = renderBadge(badge);
+          plain.prepend(h('div', { class: 'small' }, "This account has no Nostr key, so Xaps can't be recorded. You can still tip."));
+          result.replaceChildren(plain);
+        }
+      } else if (badge?.primary) {
         title.textContent = `Tip @${detected ?? badge.handle}`;
         result.replaceChildren(renderBadge(badge));
       } else if (detected) {
@@ -224,6 +231,7 @@ function renderPayment(address: string, check: AddressCheck, sourceLabel: string
       addrBox,
       check.type === 'integrated' && check.paymentId ? h('div', { class: 'small' }, `Integrated address, payment ID ${check.paymentId}`) : '',
       h('div', { class: 'row' }, copyBtn, amount),
+      fiatChips(amount),
       amountErr,
       h('div', { class: 'row' }, walletLink),
     );

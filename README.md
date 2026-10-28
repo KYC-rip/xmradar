@@ -74,7 +74,22 @@ On x.com, right-click a tweet or profile → **Tip with Monero (look up on xmr.b
 
 ## Monero badges on X (Phase 2b)
 
-With **Discover X badges via relays** turned on under **Options → Badges on X** (off by default), tweets get an orange badge (the Monero symbol and **XMR** by default; change the icon or hide the label there) when the author's npub has published a Monero address (NIP-A3, kind 10133) and links the X handle (NIP-39, kind 10011) with a proof tweet that XMRadar checks itself, through X's oEmbed API and then syndication. Relays and X can see which accounts you're looking at while discovery is on. Clicking a badge opens the tip popup with every source. Without discovery, badges need the xmr.bio directory, which comes in Phase 2d.
+With **Discover X badges via relays** turned on under **Options → Badges on X** (off by default), XMRadar marks authors whose npub has published a Monero address (NIP-A3, kind 10133) and links the X handle (NIP-39, kind 10011) with a proof tweet that XMRadar checks itself, through X's oEmbed API and then syndication. Their tweets get a **Xap** button (the Monero symbol) in the action bar, next to X's share button; their profile header and hover card get an orange badge (the Monero symbol and **XMR** by default; change the icon or hide the label there). Relays and X can see which accounts you're looking at while discovery is on. Clicking either opens the tip popup with every source. Without discovery, badges need the xmr.bio directory, which comes in Phase 2d.
+
+## Xap (NKIP-0002)
+
+A Xap is a Monero tip recorded on Nostr the way [NKIP-0002](https://github.com/nkips/nkips/blob/main/nkips/nkip-0002.md) (Verifiable Monero Tips on Nostr) describes; "Xap" is just the name in the UI.
+
+- **It needs the recipient's Nostr key.** Authors known only through xmr.bio get a plain tip with nothing recorded.
+- **The unique amount.** XMRadar adds 1–999,999 random piconero to the amount you type (at most 0.000001 XMR), so the last digits look odd: `0.010000437215`. That exact amount goes into the `monero:` link and the QR code, and it is what lets the recipient's wallet match your transfer to your receipt.
+- **The receipt.** After you click **I sent it** and agree, XMRadar asks your signer to sign a public kind 9042 receipt and publishes it to your relays, the recipient's relays and the defaults. It shows your npub, the recipient's npub, the amount and the address you paid. It never contains your transaction id, tx key or a payment proof. Turn the question off under **Options → Badges on X**.
+- **Profile Xaps only.** An X post has no Nostr id, so totals are per author, not per tweet.
+- **Three states, never added together:**
+  - **verified:** the recipient confirmed it (kind 9044) from their wallet;
+  - **verifying:** your own Xap from the last 30 minutes, while the transfer gets its confirmations (only you see this);
+  - **claimed:** a receipt nobody has confirmed. Claims are free to make, so each tipper counts once, with their smallest receipt, and only if it paid the recipient's current address.
+- The action-bar number is the verified total; with none, the claimed total marked "~" (what tippers say they sent, not confirmed). The two are never added. The popup shows all three.
+- XMRadar doesn't send payment proofs (kind 9043) yet, so its Xaps are confirmed when the recipient's wallet matches the unique amount.
 
 ## Your Monero identity (Phase 2c)
 
@@ -87,6 +102,8 @@ In the options page, under **Monero identity**, a four-step tracker walks you th
 - Every signed event is checked before use: correct pubkey, unchanged content, valid signature.
 - The background only uploads or publishes for a composer session that you opened in that same tab. Sessions end when the composer closes, or after 15 minutes at most.
 - A session starts from the browser's right-click menu, the keyboard shortcut, or a real (trusted) click on **Copy to Nostr** in X's share menu, in the top frame of an x.com tab, at most once every 2 s per tab. The tweet is the one whose share button you clicked, checked by its status ID. A page can't start a session by itself, and you still review the composer and approve in your signer.
+- A Xap receipt is signed only after a real click on **Publish receipt** in the popup, from the top frame of an x.com tab, at most once every 10 s, and only for a standard address or subaddress that the recipient's newest NIP-A3 list (or kind 0, without one) names right now, read fresh from relays. Your signer still asks first.
+- The tip and Xap popups' dollar shortcuts ($1, $5, $10, $20) need the XMR/USD price. It is fetched from `api.kyc.rip/v1/price/XMR` only when a tip popup opens, without cookies, at most once every 5 minutes (once a minute while it fails); nothing about you or the recipient is sent. If it fails, the shortcuts don't show.
 - Before uploading, the background checks that the Blossom auth event matches the image hash and is signed.
 - Image URLs taken from the page are only fetched over http(s) or as `data:image`. Literal local and private addresses are refused, both for the original URL and for where any redirect ends up. A DNS name that resolves to a private IP is not caught; that's accepted for a personal tool.
 - **Remaining risk:** a hostile page can impersonate the signer's replies, for example by returning a fake pubkey. The worst it can do is get your text published under someone else's key, or block publishing. It can't use your key without your signer's prompt. Check the "Posting as npub…" line in the composer.

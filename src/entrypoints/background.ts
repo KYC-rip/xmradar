@@ -18,11 +18,16 @@ import { KIND_ARTICLE, checkBlossomAuth, checkPublishable, checkSigned, dedupeKe
 import { allRelaysFrom, fetchWriteRelays, publishToRelays, readEach } from '../nostr/relays';
 import { assertFetchableImageUrl } from '../nostr/url-guard';
 import { checkSessionSender, checkShareMenuSender, isExtensionPageSender, isXUrl, shareMenuRateLimit, withoutTab } from '../sender';
-import { DEFAULT_RELAYS, INDEX_RELAYS, withoutIndex, myHandleItem, postedItem, pubkeyItem, settingsItem, xmrSettingsItem } from '../settings';
+import { DEFAULT_RELAYS, INDEX_RELAYS, withoutIndex, myHandleItem, postedItem, pubkeyItem, settingsItem, xapMarksItem, xmrSettingsItem } from '../settings';
 import { storage } from 'wxt/utils/storage';
 import { activeInbox, burnerCreatingItem, burnerInboxItem, burnerLastErrorItem, burnFreeInbox, createFreeInbox, forgetImportedInbox, importInbox, type BurnerDeps } from '../burner/service';
 import { idbTokenStore } from '../burner/token-store';
+import { xapPoolQuery } from '../xap/fetch';
+import { FreshTotals, countFor, publishXap, withSent, type SentXap, type XapDeps } from '../xap/service';
+import type { XapTotals, XapTotalsResult } from '../messaging';
 import { trackCreate } from '../burner/tracked';
+import { fetchXmrUsd, PRICE_RETRY_MS, PRICE_TTL_MS } from '../xap/price';
+import { markFor, withMark } from '../xap/marks';
 
 const MENU_ID = 'xmradar';
 const TIP_MENU_ID = 'xmradar-tip';
@@ -64,6 +69,55 @@ const buckets = new Map<number, TokenBucket>();
 // image bytes between fetch-image and upload-image; refetched if the worker was suspended
 const imageCache = new Map<string, { bytes: ArrayBuffer; mime: string }>();
 
+// Xap (NKIP-0002)
+const xapSentItem = storage.defineItem<SentXap[]>('local:xapsSent', { fallback: [] });
+const xapCacheItem = storage.defineItem<CacheEntries<XapTotals>>('local:xapTotalsCache', { fallback: [] });
+const xapLastItem = storage.defineItem<number>('session:xapLast', { fallback: 0 });
+const xmrUsdItem = storage.defineItem<{ usd: number; at: number } | null>('session:xmrUsd', { fallback: null });
+let xmrUsdInFlight: Promise<number> | null = null;
+let xmrUsdFailedAt = 0;
+
+/** USD per XMR, at most one fetch every 5 min (1 min after a failure), shared by every popup asking meanwhile. */
+async function xmrUsd(): Promise<number> {
+  const cached = await xmrUsdItem.getValue();
+  if (cached && Date.now() - cached.at < PRICE_TTL_MS) return cached.usd;
+  if (Date.now() - xmrUsdFailedAt < PRICE_RETRY_MS) throw new Error('Price unavailable');
+  xmrUsdInFlight ??= fetchXmrUsd()
+    .then(
+      async (usd) => {
+        await xmrUsdItem.setValue({ usd, at: Date.now() }).catch(() => {});
+        return usd;
+      },
+      (e) => {
+        xmrUsdFailedAt = Date.now();
+        throw e;
+      },
+    )
+    .finally(() => (xmrUsdInFlight = null));
+  return xmrUsdInFlight;
+}
+const XAP_TTL_MS = 10 * 60_000;
+const XAP_GAP_MS = 10_000;
+const MAX_XAP_RECIPIENTS = 50;
+let xapCache: Promise<EntryCache<XapTotals>> | null = null;
+let xapPersistTimer: ReturnType<typeof setTimeout> | undefined;
+const xapBuckets = new Map<number, TokenBucket>();
+const xapDeps: XapDeps = {
+  query: xapPoolQuery,
+  lookupRelays: async () => {
+    const pubkey = await pubkeyItem.getValue();
+    const mine = pubkey ? await resolveRelays(pubkey).catch(() => []) : (await settingsItem.getValue()).relays;
+    return [...new Set([...DEFAULT_RELAYS, ...INDEX_RELAYS, ...mine])];
+  },
+  me: async () => ({ pubkey: await pubkeyItem.getValue(), sent: await xapSentItem.getValue() }),
+};
+const freshTotals = new FreshTotals(async (pk) => {
+  const t = (await countFor([pk], xapDeps)).get(pk)!;
+  (await loadXapCache()).set(pk, t, Date.now());
+  persistXapCache();
+  return t;
+});
+
 const burner: BurnerDeps = { meta: { get: () => burnerInboxItem.getValue(), set: (v) => burnerInboxItem.setValue(v) }, tokens: idbTokenStore };
 
 export default defineBackground(() => {
@@ -103,6 +157,7 @@ export default defineBackground(() => {
 
   browser.tabs.onRemoved.addListener((tabId) => {
     buckets.delete(tabId);
+    xapBuckets.delete(tabId);
     void shareMenuLast.getValue().then((last) => (tabId in last ? shareMenuLast.setValue(withoutTab(last, tabId)) : undefined));
   });
 
@@ -302,6 +357,42 @@ async function handle(msg: BgRequest, sender: Browser.runtime.MessageSender): Pr
       void openComposer(sender.tab!, 0, { fromShareMenu: true });
       return null;
     }
+    case 'xap-totals': {
+      if (!isXContentScript(sender) || sender.tab?.id == null) throw new Error('Not allowed');
+      return xapTotals(msg.recipients, !!msg.fresh, sender.tab.id);
+    }
+    case 'xap-publish': {
+      checkShareMenuSender(sender, browser.runtime.id);
+      if (!(await xmrSettingsItem.getValue()).tipReceipts) throw new Error('Xap receipts are turned off in XMRadar’s options');
+      // one receipt every 10 s; each still needs the signer's own prompt
+      const last = await xapLastItem.getValue();
+      if (Date.now() - last < XAP_GAP_MS) throw new Error('RATE_LIMITED');
+      await xapLastItem.setValue(Date.now());
+      const res = await publishXap(msg, {
+        query: xapPoolQuery,
+        lookupRelays: xapDeps.lookupRelays,
+        myRelays: resolveRelays,
+        // the signer's key right now, not the one saved at the last test: the user may have switched accounts
+        pubkey: testSigner,
+        sign: signExact,
+        publish: publishToRelays,
+        record: async (s) => xapSentItem.setValue(withSent(await xapSentItem.getValue(), s)),
+      });
+      freshTotals.forget(msg.recipient);
+      // published: the next Xap to this recipient gets a new mark
+      // best effort: the receipt is out, so a storage error here must not read as a failed publish
+      if (res.results.some((r) => r.ok))
+        await xapMarksItem
+          .getValue()
+          .then((m) => xapMarksItem.setValue(withMark(m, markFor(msg.recipient, msg.address), null, Date.now())))
+          .catch(() => {});
+      return res;
+    }
+    case 'xmr-price': {
+      // only a tip popup asks; those open on x.com only
+      if (!isXContentScript(sender) || sender.tab?.id == null) throw new Error('Not allowed');
+      return { usd: await xmrUsd() };
+    }
     case 'resolve-handles': {
       if (!isXContentScript(sender) || sender.tab?.id == null) throw new Error('Not allowed');
       return resolveBadges(msg.handles, sender.tab.id);
@@ -410,6 +501,52 @@ async function resolveBadges(handles: string[], tabId: number): Promise<ResolveH
     persistCaches();
   }
   return { badges: out, pending: misses.slice(granted) };
+}
+
+function loadXapCache() {
+  xapCache ??= xapCacheItem.getValue().then((e) => new EntryCache(e, 500));
+  return xapCache;
+}
+
+function persistXapCache() {
+  clearTimeout(xapPersistTimer);
+  xapPersistTimer = setTimeout(async () => xapCacheItem.setValue((await loadXapCache()).entries()), 1000);
+}
+
+/**
+ * Cached totals feed the action-bar counts (verified only, which doesn't depend on the current
+ * address). A popup asks `fresh`: one recipient, from the relays or a fetch under 15 s old.
+ */
+async function xapTotals(recipients: string[], fresh: boolean, tabId: number): Promise<XapTotalsResult> {
+  const valid = [...new Set(Array.isArray(recipients) ? recipients.filter((r) => typeof r === 'string' && /^[0-9a-f]{64}$/.test(r)) : [])].slice(0, MAX_XAP_RECIPIENTS);
+  if (fresh) {
+    if (valid.length !== 1) throw new Error('One recipient at a time');
+    return { totals: [[valid[0]!, await freshTotals.get(valid[0]!)]], pending: [] };
+  }
+  const { badgesX, nostrDiscovery } = await xmrSettingsItem.getValue();
+  // without discovery, relays only hear about a recipient when the user opens their popup
+  if (!badgesX || !nostrDiscovery) return { totals: [], pending: [] };
+  const cache = await loadXapCache();
+  const out: [string, XapTotals][] = [];
+  const misses: string[] = [];
+  for (const pk of valid) {
+    const hit = cache.get(pk, Date.now(), XAP_TTL_MS);
+    if (hit) out.push([pk, hit]);
+    else misses.push(pk);
+  }
+  if (!misses.length) return { totals: out, pending: [] };
+  let bucket = xapBuckets.get(tabId);
+  if (!bucket) xapBuckets.set(tabId, (bucket = new TokenBucket(50, 2)));
+  const granted = bucket.take(misses.length);
+  const batch = misses.slice(0, granted);
+  if (batch.length) {
+    for (const [pk, t] of await countFor(batch, xapDeps)) {
+      cache.set(pk, t, Date.now());
+      out.push([pk, t]);
+    }
+    persistXapCache();
+  }
+  return { totals: out, pending: misses.slice(granted) };
 }
 
 /** Extension pages have no window.nostr, so signer calls run in a throwaway web page tab. */

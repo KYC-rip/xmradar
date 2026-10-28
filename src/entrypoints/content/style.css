@@ -93,6 +93,12 @@ a.button {
 }
 a.button.primary { background: #7b3fe4; color: #fff; }
 a.button[aria-disabled='true'] { opacity: 0.5; pointer-events: none; }
+.xap-totals { font-size: 14px; font-weight: 600; }
+.xap-confirm { display: flex; flex-direction: column; gap: 8px; padding: 10px; border: 1px solid #f26822; border-radius: 8px; font-size: 13px; }
+.xap-confirm.hidden { display: none; }
+.fiat { gap: 6px; }
+.fiat.hidden, .fiat.stale { display: none; }
+button.chip { padding: 3px 10px; border-radius: 999px; font-size: 13px; }
 .source-panel { font-size: 13px; }
 .source-panel summary { cursor: pointer; }
 .sources { margin: 6px 0; padding-left: 18px; word-break: break-all; }

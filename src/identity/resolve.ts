@@ -49,6 +49,15 @@ export function mergeBadge(handle: string, entries: BadgeEntry[]): Badge {
   };
 }
 
+/**
+ * The Nostr entry a Xap goes to (PLAN-XAP): the newest verified claim with a pubkey and a standard
+ * address or subaddress. xmr.bio may still be the badge's primary; receipts need a Nostr key.
+ */
+export function xapEntry(b: Badge): BadgeEntry | null {
+  const ok = b.entries.filter((e) => e.source === 'nostr' && e.pubkey && e.verified && e.check.ok && e.check.type !== 'integrated');
+  return ok.sort((a, c) => (c.createdAt ?? 0) - (a.createdAt ?? 0) || newerTweet(c.tweetId, a.tweetId))[0] ?? null;
+}
+
 /** The badge as it would be without Nostr sources (discovery turned off). */
 export const withoutNostr = (b: Badge): Badge =>
   b.entries.some((e) => e.source === 'nostr') ? mergeBadge(b.handle, b.entries.filter((e) => e.source !== 'nostr')) : b;

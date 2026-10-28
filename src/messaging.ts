@@ -30,6 +30,33 @@ export interface ResolveHandlesResult {
   pending: string[];
 }
 
+/** Xap totals for one recipient, amounts as decimal XMR so no BigInt crosses messaging. */
+export interface XapTotals {
+  verified: string;
+  verifiedTippers: number;
+  /** the user's own receipts still waiting for confirmations */
+  verifying: string;
+  claimed: string;
+  claimedTippers: number;
+  /** the recipient's current address the claimed figure was counted against */
+  address: string | null;
+  /** the user's own receipts to this recipient, newest first */
+  mine: { amount: string; state: 'verified' | 'verifying' | 'claimed' | 'uncounted'; recorded: boolean }[];
+  /** when it was counted (ms) */
+  at: number;
+}
+
+export interface XapTotalsResult {
+  totals: [string, XapTotals][];
+  /** recipients over the rate limit, to ask about again later */
+  pending: string[];
+}
+
+export interface XapPublishResult {
+  results: RelayResult[];
+  id: string;
+}
+
 /** What the options page asks to change; the background validates and fills in the rest. */
 export type SetupRequest =
   | { type: 'add-address'; address: string }
@@ -98,7 +125,10 @@ export type BgRequest =
   | { type: 'burner-import'; email: string; token: string }
   | { type: 'burner-burn' }
   | { type: 'burner-forget' }
-  | { type: 'share-menu-copy' };
+  | { type: 'share-menu-copy' }
+  | { type: 'xap-totals'; recipients: string[]; fresh?: boolean }
+  | { type: 'xap-publish'; recipient: string; address: string; amount: string }
+  | { type: 'xmr-price' };
 
 /** Port name for creating a free burner inbox; the open port keeps the worker busy during the proof of work. */
 export const BURNER_CREATE_PORT = 'burner-create';
@@ -138,7 +168,13 @@ export type BgResponse<T extends BgRequest['type']> = T extends 'fetch-image'
                               ? { burned: boolean }
                               : T extends 'share-menu-copy'
                                 ? null
-                              : never;
+                                : T extends 'xap-totals'
+                                  ? XapTotalsResult
+                                  : T extends 'xap-publish'
+                                    ? XapPublishResult
+                                    : T extends 'xmr-price'
+                                      ? { usd: number }
+                                      : never;
 
 /** Every response is wrapped so errors survive the message boundary. */
 export type Wrapped<T> = { ok: true; data: T } | { ok: false; error: string };

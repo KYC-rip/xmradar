@@ -36,6 +36,8 @@ export interface BadgeSlot {
   key: string;
   /** where the badge goes */
   anchor: Element;
+  /** set for tweets, which get a Xap button in the action bar instead of a badge */
+  article?: Element;
 }
 
 /** Author handle and slot for a timeline tweet. */
@@ -49,7 +51,7 @@ export function tweetSlot(article: Element): BadgeSlot | null {
   // and @handle rows, and a badge after both would sit on a line of its own
   const row = name.firstElementChild;
   const anchor = row && row.localName !== 'xmradar-badge' && row.querySelector('a[href^="/"]') ? row : name;
-  return { handle, key: `${tweetId}:${handle.toLowerCase()}`, anchor };
+  return { handle, key: `${tweetId}:${handle.toLowerCase()}`, anchor, article };
 }
 
 /** The profile header ("Name @handle" above the bio) on a profile page. */
@@ -60,3 +62,12 @@ export function profileSlot(doc: Document, loc: { hostname: string; pathname: st
   return handle && anchor ? { handle, key: `profile:${handle.toLowerCase()}`, anchor } : null;
 }
 
+
+/** The hover card X shows over a name or avatar: the badge goes after the name and verified tick. */
+export function hoverCardSlot(card: Element): BadgeSlot | null {
+  // the visible name link; the avatar and @handle links are tabindex=-1 copies
+  const link = [...card.querySelectorAll<HTMLAnchorElement>('a[href^="/"][role="link"]')].find((a) => a.getAttribute('tabindex') !== '-1' && fromPath(a.getAttribute('href')) && /^\/[A-Za-z0-9_]{1,15}$/.test(a.getAttribute('href')!));
+  const handle = fromPath(link?.getAttribute('href'));
+  const row = link?.firstElementChild;
+  return handle && row ? { handle, key: `hover:${handle.toLowerCase()}`, anchor: row } : null;
+}

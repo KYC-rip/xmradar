@@ -282,7 +282,7 @@ describe('patchSettings', () => {
 
 describe('popup switches', () => {
   it('two quick changes both stick', async () => {
-    document.body.innerHTML = '<div id="t"><input type="checkbox" data-xmr="badges"/><input type="checkbox" data-xmr="discovery"/></div>';
+    document.body.innerHTML = '<div id="t"><input type="checkbox" data-xmr="badges"/><input type="checkbox" data-xmr="discovery"/><input type="checkbox" data-xmr="receipts"/></div>';
     await mountXmrToggles(document.getElementById('t')!);
     document.querySelector<HTMLInputElement>('[data-xmr="badges"]')!.click();
     document.querySelector<HTMLInputElement>('[data-xmr="discovery"]')!.click();

@@ -148,7 +148,9 @@
 
         <section id="badges" data-section="badges">
           <h1>Badges on X</h1>
-          <p class="lead">An orange badge next to an author's name means they published a Monero address and proved their X handle. Click it to tip.</p>
+          <p class="lead">
+            When an author published a Monero address and proved their X handle, their tweets get a Xap button next to X's share button, and their profile and hover card show an orange badge. Click either to tip.
+          </p>
           <div id="badge-switches" class="card pad">
             <label class="setting">
               <div><span class="row-title">Show badges on X</span><span class="row-hint">Needs the author's proof tweet</span></div>
@@ -158,9 +160,14 @@
               <div><span class="row-title">Discover X badges via relays</span><span class="row-hint">Relays and X see which accounts you view</span></div>
               <input data-xmr="discovery" type="checkbox" role="switch" class="switch" />
             </label>
+            <label class="setting">
+              <div><span class="row-title">Ask to publish a Xap receipt after a tip</span><span class="row-hint">A public Nostr receipt (NKIP-0002), never your transaction id</span></div>
+              <input data-xmr="receipts" type="checkbox" role="switch" class="switch" />
+            </label>
           </div>
           <div id="badge-look" class="card pad">
-            <h2 class="card-head">Badge look</h2>
+            <h2 class="card-head">Profile badge look</h2>
+            <p class="row-hint">Tweets show a Xap button in the action bar instead.</p>
             <div class="looks" role="radiogroup" aria-label="Badge icon">
               <label class="look"><input type="radio" name="badge-icon" value="mono" aria-label="Monero symbol, white" /><span data-preview="mono"></span></label>
               <label class="look"><input type="radio" name="badge-icon" value="color" aria-label="Monero symbol, colour" /><span data-preview="color"></span></label>

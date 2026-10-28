@@ -1,4 +1,5 @@
 import { storage, type WxtStorageItem } from 'wxt/utils/storage';
+import type { Marks } from './xap/marks';
 import { isBadgeIcon, type BadgeIcon } from './identity/badge-look';
 
 export const DEFAULT_RELAYS = ['wss://relay.damus.io', 'wss://nos.lol', 'wss://relay.primal.net'];
@@ -68,7 +69,7 @@ export interface XmrSettingsV2 {
   badgesNostr: boolean;
   /** Look up NIP-39/NIP-A3 claims on relays for handles on screen (relays and X can see which handles). */
   nostrDiscovery: boolean;
-  /** Ask to post a kind 9042 receipt after a tip (read from R3 on). */
+  /** Ask to publish a Xap receipt (NKIP-0002 kind 9042) after a tip. */
   tipReceipts: boolean;
 }
 
@@ -108,4 +109,6 @@ export const xmrSettingsItem = storage.defineItem<XmrSettings>('sync:xmrSettings
 export const patchXmrSettings = patcher(xmrSettingsItem);
 
 /** The user's own X handle; `proven` once their NIP-39 proof tweet passed. Used by the identity setup and status. */
+/** the marks that make each Xap's amount unique, kept per recipient (src/xap/marks.ts) */
+export const xapMarksItem = storage.defineItem<Marks>('local:xapMarks', { fallback: [] });
 export const myHandleItem = storage.defineItem<{ handle: string; proven: boolean } | null>('local:myHandle', { fallback: null });
