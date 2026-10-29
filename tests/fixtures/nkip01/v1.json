@@ -1,0 +1,100 @@
+{
+  "public_key_b64u": "HaJVYrdjL9npQ6oqBOI7kasjRiRI0DCyNEzeEWd-bSM",
+  "key_id": "f1982d2c41e906f9",
+  "policy_text": "Example refund policy v1: deposits within 1% of deposit_amount are honoured.\n",
+  "manifest": {
+    "v": "nkip01/1",
+    "issuer": "example.swap",
+    "adopted_at": 1793000000,
+    "keys": [
+      {
+        "key_id": "f1982d2c41e906f9",
+        "alg": "ed25519",
+        "public_key": "HaJVYrdjL9npQ6oqBOI7kasjRiRI0DCyNEzeEWd-bSM",
+        "not_before": 1793000000,
+        "revoked_at": null,
+        "rotated_from": null,
+        "rotation_sig": null
+      }
+    ],
+    "nostr_pubkey": "0000000000000000000000000000000000000000000000000000000000000000",
+    "relays": [
+      "wss://relay.example.org",
+      "wss://relay.example.net",
+      "wss://relay.example.com"
+    ],
+    "policies": [
+      {
+        "policy_hash": "821df094624716488b10e5f2b844a4f2674ad37124dc792ad272b9b62606b9a7",
+        "url": "https://example.swap/policy/v1.txt"
+      }
+    ],
+    "disputes": {
+      "email": "disputes@example.swap"
+    }
+  },
+  "attestation": {
+    "v": "nkip01/1",
+    "issuer": "example.swap",
+    "commitment": "3d8019e0f9d40afaa4490aa841f858b67ed6162c3008eb88257faa050e09dc76",
+    "created_at": 1793000000,
+    "key_id": "f1982d2c41e906f9",
+    "sig": "_Zo0CQBp1UkgnMZ3709a6CqvVxrgIFwK1iyOPjlKoC86OhfQB4UfDb-vnnzSGORMOvl2UhcjoJ0RTQ8rHSQnAg"
+  },
+  "merkle": {
+    "leaves": [
+      "1e897f9b97cb54be8f03a70f257914a3b7d18a2685c33aaf7ce0292b00995e61",
+      "3d8019e0f9d40afaa4490aa841f858b67ed6162c3008eb88257faa050e09dc76",
+      "4704ce94ea354921b81c1b258854b6d568e8fb68127dfbd30b166bab842c10c7",
+      "7d1b51e6107a417eaa1bc079918a316d0d96b1b9ac9561d973b9b94b751bee47",
+      "a17a684e778f69af3870579a3da349a9082ddb4543b6606d39c23a500aca7292"
+    ],
+    "root": "1266e033d4c72440c1250ba3b11c9ac22b50d58f562db67919fa488433434b1d"
+  },
+  "vectors": [
+    {
+      "name": "valid",
+      "receipt": {
+        "v": "nkip01/1",
+        "issuer": "example.swap",
+        "order_id": "EX-0001",
+        "deposit_asset": "XMR",
+        "deposit_address": "84ExampleXmrDepositAddress0001",
+        "deposit_amount": "1500000000000",
+        "payout_asset": "BTC",
+        "payout_address": "bc1qexamplepayoutaddress0001",
+        "payout_amount": "820000",
+        "rate_type": "fixed",
+        "created_at": 1793000000,
+        "expires_at": 1793001800,
+        "policy_hash": "821df094624716488b10e5f2b844a4f2674ad37124dc792ad272b9b62606b9a7",
+        "key_id": "f1982d2c41e906f9",
+        "sig": "jCpa3ZBpTEMCuDqdT4w4GBRe65Zz7qL_3_Xqr0dO3OOqIueU1dw4lAoBpVuVyXoF_sIwbF5qOmJaaraWQdYMBw"
+      },
+      "jcs_without_sig": "{\"created_at\":1793000000,\"deposit_address\":\"84ExampleXmrDepositAddress0001\",\"deposit_amount\":\"1500000000000\",\"deposit_asset\":\"XMR\",\"expires_at\":1793001800,\"issuer\":\"example.swap\",\"key_id\":\"f1982d2c41e906f9\",\"order_id\":\"EX-0001\",\"payout_address\":\"bc1qexamplepayoutaddress0001\",\"payout_amount\":\"820000\",\"payout_asset\":\"BTC\",\"policy_hash\":\"821df094624716488b10e5f2b844a4f2674ad37124dc792ad272b9b62606b9a7\",\"rate_type\":\"fixed\",\"v\":\"nkip01/1\"}",
+      "valid": true,
+      "commitment": "3d8019e0f9d40afaa4490aa841f858b67ed6162c3008eb88257faa050e09dc76"
+    },
+    {
+      "name": "tampered-payout",
+      "receipt": {
+        "v": "nkip01/1",
+        "issuer": "example.swap",
+        "order_id": "EX-0001",
+        "deposit_asset": "XMR",
+        "deposit_address": "84ExampleXmrDepositAddress0001",
+        "deposit_amount": "1500000000000",
+        "payout_asset": "BTC",
+        "payout_address": "bc1qattackeraddress",
+        "payout_amount": "820000",
+        "rate_type": "fixed",
+        "created_at": 1793000000,
+        "expires_at": 1793001800,
+        "policy_hash": "821df094624716488b10e5f2b844a4f2674ad37124dc792ad272b9b62606b9a7",
+        "key_id": "f1982d2c41e906f9",
+        "sig": "jCpa3ZBpTEMCuDqdT4w4GBRe65Zz7qL_3_Xqr0dO3OOqIueU1dw4lAoBpVuVyXoF_sIwbF5qOmJaaraWQdYMBw"
+      },
+      "valid": false
+    }
+  ]
+}

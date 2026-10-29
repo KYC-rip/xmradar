@@ -15,6 +15,7 @@
           <li><a href="#identity" data-nav="identity">Monero identity <span id="nav-identity-count" class="count"></span></a></li>
           <li><a href="#badges" data-nav="badges">Badges on X</a></li>
           <li><a href="#burner" data-nav="burner">Burner email</a></li>
+          <li><a href="#receipts" data-nav="receipts">Swaps and sites</a></li>
         </ul>
         <p class="hint side-note">Changes save as you make them. Follows your system's light or dark mode.<br /><a id="build-info" target="_blank" rel="noopener"></a></p>
       </nav>
@@ -207,6 +208,37 @@
             </div>
           </div>
           <span data-burner="status" role="status" aria-live="polite"></span>
+        </section>
+
+        <section id="receipts" data-section="receipts">
+          <h1>Swaps and sites</h1>
+          <p class="lead">
+            On an exchange's order page that carries a signed NKIP-0001 receipt, XMRadar checks it against the key the site publishes, compares the page's addresses with the signed ones, and saves the receipt in this browser only.
+            Checking contacts only that site. Relays are asked about an order only when you press "Check public record", at least an hour after the order.
+          </p>
+          <div id="receipts-switch" class="card">
+            <label class="setting">
+              <div><span class="row-title">Check receipts on swap pages</span><span class="row-hint">The exchange's own site is asked for its key and policy</span></div>
+              <input data-receipts="check" type="checkbox" role="switch" class="switch" />
+            </label>
+          </div>
+          <div id="site-switches" class="card">
+            <label class="setting">
+              <div><span class="row-title">Site info from xmr.club</span><span class="row-hint">Grade, NKIP-0001 level and open incidents for the site you're on, in XMRadar's menu and on its icon</span></div>
+              <input data-receipts="site-info" type="checkbox" role="switch" class="switch" />
+            </label>
+            <label class="setting">
+              <div><span class="row-title">In-page warnings</span><span class="row-hint">A banner on sites with an open incident or a D–F grade</span></div>
+              <input data-receipts="site-warnings" type="checkbox" role="switch" class="switch" />
+            </label>
+          </div>
+          <p class="row-hint">
+            The only request is the list itself, from xmr.club, about twice a day: the same signed file for everyone, without cookies or identifiers. The site you're on is matched against it inside your browser and never sent anywhere. The download follows your browser's proxy or Tor settings. xmr.club is run by the same team as XMRadar.
+          </p>
+          <p class="row-hint">An export contains your swaps' addresses and salts: anyone with the file can link your deposits to your payouts. Keep it private.</p>
+          <div class="row"><button data-receipts="export-all">Export all</button></div>
+          <div data-receipts="list" class="cards"></div>
+          <span data-receipts="status" role="status" aria-live="polite"></span>
         </section>
       </main>
     </div>

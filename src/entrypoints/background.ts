@@ -15,10 +15,10 @@ import { setupStatusLast, xmrbioLinked } from '../identity/status';
 import { uploadBlob } from '../nostr/blossom';
 import { statusIdFromUrl } from '../extractors/x-article';
 import { KIND_ARTICLE, checkBlossomAuth, checkPublishable, checkSigned, dedupeKey, sha256Hex } from '../nostr/event';
-import { allRelaysFrom, fetchWriteRelays, publishToRelays, readEach } from '../nostr/relays';
+import { allRelaysFrom, fetchWriteRelays, publishToRelays, readEach, readRelay } from '../nostr/relays';
 import { assertFetchableImageUrl } from '../nostr/url-guard';
 import { checkSessionSender, checkShareMenuSender, isExtensionPageSender, isXUrl, shareMenuRateLimit, withoutTab } from '../sender';
-import { DEFAULT_RELAYS, INDEX_RELAYS, withoutIndex, myHandleItem, postedItem, pubkeyItem, settingsItem, xapMarksItem, xmrSettingsItem } from '../settings';
+import { DEFAULT_RELAYS, INDEX_RELAYS, withoutIndex, myHandleItem, postedItem, pubkeyItem, receiptsOn, settingsItem, siteInfoOn, xapMarksItem, xmrSettingsItem } from '../settings';
 import { storage } from 'wxt/utils/storage';
 import { activeInbox, burnerCreatingItem, burnerInboxItem, burnerLastErrorItem, burnFreeInbox, createFreeInbox, forgetImportedInbox, importInbox, type BurnerDeps } from '../burner/service';
 import { idbTokenStore } from '../burner/token-store';
@@ -26,8 +26,14 @@ import { xapPoolQuery } from '../xap/fetch';
 import { FreshTotals, countFor, countPosts, publishXap, validPosts, withSent, type PostRef, type SentXap, type XapDeps } from '../xap/service';
 import { parsePostKey, postKey } from '../xap/post';
 import { xapTtl } from '../xap/ttl';
-import type { XapPostTotalsResult, XapTotals, XapTotalsResult } from '../messaging';
+import type { SiteInfo, XapPostTotalsResult, XapTotals, XapTotalsResult } from '../messaging';
 import { trackCreate } from '../burner/tracked';
+import { checkPageReceipt, type CheckDeps } from '../receipts/check';
+import { badgeFor, FEED_READER_V, FEED_URL, readFeed, sitesFor, worstGrade, type SiteFeed, type TabState } from '../sites/feed';
+import { fetchManifest } from '../receipts/fetch';
+import { buildExport } from '../receipts/export';
+import { idbReceiptStore } from '../receipts/store';
+import { checkPublicRecord } from '../receipts/witness';
 import { fetchXmrUsd, PRICE_RETRY_MS, PRICE_TTL_MS } from '../xap/price';
 import { markFor, withMark } from '../xap/marks';
 
@@ -129,6 +135,18 @@ const freshPostTotals = new FreshTotals(async (key) => {
 const burner: BurnerDeps = { meta: { get: () => burnerInboxItem.getValue(), set: (v) => burnerInboxItem.setValue(v) }, tokens: idbTokenStore };
 
 export default defineBackground(() => {
+  // site info: a 12-hour alarm while it's on, and a fresh copy at startup when the kept one is old
+  browser.alarms.onAlarm.addListener((a) => {
+    if (a.name === SITE_FEED_ALARM) void refreshSiteFeed();
+  });
+  void xmrSettingsItem.getValue().then((s) => applySiteInfoSetting(siteInfoOn(s)));
+  xmrSettingsItem.watch((s, old) => {
+    if (siteInfoOn(s) !== siteInfoOn(old)) void applySiteInfoSetting(siteInfoOn(s));
+  });
+  // a tab that moves to another page starts with no receipt or site state (the browser resets its badge)
+  browser.tabs.onUpdated.addListener((tabId, change) => {
+    if (change.url) void dropTabState(tabId);
+  });
   browser.runtime.onInstalled.addListener(async () => {
     await browser.contextMenus.removeAll();
     browser.contextMenus.create({
@@ -166,6 +184,8 @@ export default defineBackground(() => {
   browser.tabs.onRemoved.addListener((tabId) => {
     buckets.delete(tabId);
     xapBuckets.delete(tabId);
+    receiptChecks.delete(tabId);
+    void dropTabState(tabId);
     void shareMenuLast.getValue().then((last) => (tabId in last ? shareMenuLast.setValue(withoutTab(last, tabId)) : undefined));
   });
 
@@ -336,6 +356,16 @@ async function handle(msg: BgRequest, sender: Browser.runtime.MessageSender): Pr
       const identifier = msg.event.tags.find((t) => t[0] === 'd')![1]!;
       return { results, nevent, naddr: naddrEncode({ kind: KIND_ARTICLE, pubkey: msg.event.pubkey, identifier, relays: okRelays.slice(0, 3) }) };
     }
+    case 'republish': {
+      // the same signed event again, to relays that failed: no new signature, no duplicate (same id),
+      // and only to relays from the user's own list
+      await requireSession(msg.sessionId, sender);
+      if (!verifyEvent(msg.event)) throw new Error('Refusing to publish an invalid event');
+      const allowed = new Set(await resolveRelays(msg.event.pubkey));
+      const relays = (Array.isArray(msg.relays) ? msg.relays : []).filter((r) => typeof r === 'string' && allowed.has(r));
+      if (!relays.length) throw new Error('No relays to retry');
+      return { results: await publishToRelays(relays, msg.event) };
+    }
     case 'check-duplicate': {
       await requireSession(msg.sessionId, sender);
       return { duplicate: (await postedItem.getValue()).includes(await dedupeKey(msg.sourceUrl, msg.text)) };
@@ -457,8 +487,209 @@ async function handle(msg: BgRequest, sender: Browser.runtime.MessageSender): Pr
       await forgetImportedInbox(burner);
       return null;
     }
+    case 'receipt-found': {
+      // the top frame of a tab; its URL comes from the browser, never from the message (PLAN-NKIP01 §4.2)
+      const tabId = sender.tab?.id;
+      const pageUrl = sender.tab?.url;
+      if (sender.id !== browser.runtime.id || tabId == null || sender.frameId !== 0 || !pageUrl) throw new Error('Not allowed');
+      if (!receiptsOn(await settingsItem.getValue())) throw new Error('Receipt checks are off');
+      if (typeof msg.text !== 'string') throw new Error('Bad receipt');
+      if (!receiptBudget(tabId)) throw new Error('Too many receipts on this page');
+      return checkPageReceipt(msg.text, pageUrl, receiptDeps, { eventId: typeof msg.eventId === 'string' ? msg.eventId : undefined });
+    }
+    case 'receipt-badge': {
+      // the receipt half of this tab's toolbar badge; the site half comes from 'site-info'
+      const tabId = sender.tab?.id;
+      if (sender.id !== browser.runtime.id || tabId == null || sender.frameId !== 0) throw new Error('Not allowed');
+      if (!['ok', 'caution', 'warn', 'none'].includes(msg.level)) throw new Error('Bad level');
+      await tabStateReady;
+      const state = tabStates.get(tabId) ?? {};
+      if (msg.level === 'none') delete state.receipt;
+      else state.receipt = msg.level;
+      tabStates.set(tabId, state);
+      persistTabState();
+      await applyBadge(tabId);
+      return null;
+    }
+    case 'site-info': {
+      // only the hostname arrives; the match runs here, on the device (PLAN-SITEFEED §2)
+      const tabId = sender.tab?.id;
+      if (sender.id !== browser.runtime.id || tabId == null || sender.frameId !== 0) throw new Error('Not allowed');
+      const empty = { sites: [], outOfDate: false, issuedAt: null };
+      if (!siteInfoOn(await xmrSettingsItem.getValue()) || typeof msg.host !== 'string') return empty;
+      const feed = await siteFeedItem.getValue();
+      if (!feed) return empty;
+      const sites = sitesFor(feed, msg.host);
+      const info = { sites, outOfDate: Date.now() / 1000 >= feed.expiresAt, issuedAt: feed.issuedAt };
+      await tabStateReady;
+      const state = tabStates.get(tabId) ?? {};
+      if (sites.length) state.site = { grade: worstGrade(sites), incident: sites.some((s) => s.incident) };
+      else delete state.site;
+      tabStates.set(tabId, state);
+      siteInfoByTab.set(tabId, info);
+      persistTabState();
+      await applyBadge(tabId);
+      return info;
+    }
+    case 'site-tab': {
+      // the popup asks by tab id, so it never needs the tab's URL
+      if (!isExtensionPage(sender)) throw new Error('Not allowed');
+      await tabStateReady;
+      return siteInfoByTab.get(msg.tabId) ?? { sites: [], outOfDate: false, issuedAt: null };
+    }
+    case 'receipts-list': {
+      if (!isExtensionPage(sender)) throw new Error('Not allowed');
+      return (await idbReceiptStore.list()).sort((a, b) => b.savedAt - a.savedAt);
+    }
+    case 'receipt-delete': {
+      if (!isExtensionPage(sender)) throw new Error('Not allowed');
+      await idbReceiptStore.delete(msg.commitment);
+      return null;
+    }
+    case 'receipt-export': {
+      if (!isExtensionPage(sender)) throw new Error('Not allowed');
+      const s = await idbReceiptStore.get(msg.commitment);
+      if (!s) throw new Error('No such receipt');
+      return buildExport(s, await idbReceiptStore.getPolicy(s.receipt.policy_hash), Date.now());
+    }
+    case 'receipt-record': {
+      // only from Options, at the user's request, an hour after the order at the earliest (§12)
+      if (!isExtensionPage(sender)) throw new Error('Not allowed');
+      const found = await idbReceiptStore.get(msg.commitment);
+      if (!found) throw new Error('No such receipt');
+      // the manifest as it is now: a key revoked or relays changed since the order page count
+      const fresh = await fetchManifest(found.receipt.issuer).catch(() => null);
+      const s = fresh ? { ...found, manifest: fresh } : found;
+      const mine = await resolveRelays((await pubkeyItem.getValue()) ?? '').catch(() => DEFAULT_RELAYS);
+      const record = await checkPublicRecord(s, mine, (relay, filter) => readRelay(relay, filter, 5000), Date.now());
+      await idbReceiptStore.put({ ...s, publicRecord: record });
+      return record;
+    }
   }
 }
+
+// ---- site info from the xmr.club feed (PLAN-SITEFEED) ----
+
+const siteFeedItem = storage.defineItem<SiteFeed | null>('local:siteFeed', { fallback: null });
+const SITE_FEED_ALARM = 'site-feed';
+const SITE_FEED_HOURS = 12;
+const tabStates = new Map<number, TabState>();
+const siteInfoByTab = new Map<number, SiteInfo>();
+// the per-tab state outlives a suspended service worker: kept in session storage, loaded before use
+const tabStateItem = storage.defineItem<[number, TabState, SiteInfo | null][]>('session:tabSiteState', { fallback: [] });
+const tabStateReady = tabStateItem.getValue().then((rows) => {
+  for (const [id, state, info] of Array.isArray(rows) ? rows : []) {
+    if (!tabStates.has(id)) tabStates.set(id, state);
+    if (info && !siteInfoByTab.has(id)) siteInfoByTab.set(id, info);
+  }
+});
+let tabStateWrite: ReturnType<typeof setTimeout> | undefined;
+function persistTabState() {
+  clearTimeout(tabStateWrite);
+  tabStateWrite = setTimeout(() => void tabStateItem.setValue([...tabStates].map(([id, s]) => [id, s, siteInfoByTab.get(id) ?? null])), 200);
+}
+/** Forget a tab's receipt and site state and clear its badge (navigation, close). */
+async function dropTabState(tabId: number) {
+  await tabStateReady;
+  tabStates.delete(tabId);
+  siteInfoByTab.delete(tabId);
+  persistTabState();
+  await browser.action.setBadgeText({ tabId, text: '' }).catch(() => {});
+}
+// bumped when the setting goes off, so a download that finishes later is dropped
+let siteFeedGeneration = 0;
+
+/** The toolbar badge for a tab, from its receipt and site state together (one owner, no flicker). */
+async function applyBadge(tabId: number) {
+  const { text, color } = badgeFor(tabStates.get(tabId) ?? {});
+  await browser.action.setBadgeText({ tabId, text }).catch(() => {});
+  if (text) await browser.action.setBadgeBackgroundColor({ tabId, color }).catch(() => {});
+}
+
+/** Download the feed: no cookies or referrer, no redirects, JSON, 2 MB, 15 s; one at a time; kept only if it verifies and is newer. */
+let siteFeedInFlight: Promise<void> | null = null;
+const refreshSiteFeed = () => (siteFeedInFlight ??= downloadSiteFeed().finally(() => (siteFeedInFlight = null)));
+
+async function downloadSiteFeed() {
+  const generation = siteFeedGeneration;
+  if (!siteInfoOn(await xmrSettingsItem.getValue())) return;
+  try {
+    const res = await fetch(FEED_URL, { credentials: 'omit', referrerPolicy: 'no-referrer', redirect: 'error', cache: 'no-store', signal: AbortSignal.timeout(15_000) });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    if (!/^application\/json\b/i.test(res.headers.get('content-type') ?? '')) throw new Error('Feed is not JSON');
+    const text = new TextDecoder().decode(await boundedBody(res, 2 * 1024 * 1024));
+    const kept = await siteFeedItem.getValue();
+    // a copy an older XMRadar parsed doesn't block a same-age one parsed with more fields
+    const keptAt = kept?.reader === FEED_READER_V ? kept.issuedAt : 0;
+    const feed = readFeed(JSON.parse(text), Math.floor(Date.now() / 1000), keptAt);
+    if (generation !== siteFeedGeneration || !siteInfoOn(await xmrSettingsItem.getValue())) return;
+    await siteFeedItem.setValue(feed);
+  } catch (e) {
+    // the kept copy stays; the popup says when it's out of date
+    console.warn('[XMRadar] site feed', (e as Error).message);
+  }
+}
+
+async function applySiteInfoSetting(on: boolean) {
+  if (on) {
+    await browser.alarms.create(SITE_FEED_ALARM, { periodInMinutes: SITE_FEED_HOURS * 60 });
+    const kept = await siteFeedItem.getValue();
+    if (!kept || kept.reader !== FEED_READER_V || Date.now() / 1000 - kept.issuedAt > SITE_FEED_HOURS * 3600) await refreshSiteFeed();
+    return;
+  }
+  siteFeedGeneration++;
+  await browser.alarms.clear(SITE_FEED_ALARM);
+  await siteFeedItem.removeValue();
+  await tabStateReady;
+  siteInfoByTab.clear();
+  for (const [tabId, state] of tabStates) {
+    delete state.site;
+    await applyBadge(tabId);
+  }
+  persistTabState();
+}
+
+/** A response body, refused past `max` bytes while it's still arriving. */
+async function boundedBody(res: Response, max: number): Promise<Uint8Array> {
+  if (Number(res.headers.get('content-length')) > max) throw new Error('Response too large');
+  const reader = res.body?.getReader();
+  if (!reader) throw new Error('No body');
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.length;
+    if (size > max) {
+      await reader.cancel();
+      throw new Error('Response too large');
+    }
+    chunks.push(value);
+  }
+  const out = new Uint8Array(size);
+  let at = 0;
+  for (const c of chunks) {
+    out.set(c, at);
+    at += c.length;
+  }
+  return out;
+}
+
+// at most 10 receipt checks per tab a minute: a page re-rendering doesn't refetch the manifest each time
+const receiptChecks = new Map<number, number[]>();
+function receiptBudget(tabId: number): boolean {
+  const now = Date.now();
+  const recent = (receiptChecks.get(tabId) ?? []).filter((t) => now - t < 60_000);
+  if (recent.length >= 10) return false;
+  receiptChecks.set(tabId, [...recent, now]);
+  return true;
+}
+
+const receiptDeps: CheckDeps = {
+  store: idbReceiptStore,
+  // Firefox grants host access separately from install; Chrome grants <all_urls> at install
+  hasAccess: (origin) => browser.permissions.contains({ origins: [`${origin}/*`] }),
+};
 
 function loadCaches() {
   caches ??= Promise.all([badgeCacheItem.getValue(), proofCacheItem.getValue()]).then(([b, p]) => ({

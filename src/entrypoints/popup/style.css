@@ -15,3 +15,10 @@ footer { display: flex; align-items: center; justify-content: space-between; gap
 .burner-head .mono { font-size: 13px; }
 #burner .row { margin-bottom: 4px; }
 #signed-in { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+#this-site { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+#this-site.hidden { display: none; }
+#this-site .site-row { display: flex; flex-direction: column; gap: 1px; padding-top: 6px; border-top: 1px solid var(--border); }
+#this-site .site-row:first-of-type { border-top: 0; padding-top: 0; }
+#this-site .grade { font-weight: 400; color: var(--muted); }
+#this-site .warn { color: var(--danger); }

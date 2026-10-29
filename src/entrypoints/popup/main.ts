@@ -5,6 +5,8 @@ import { currentBuild } from '../../build-info';
 import { badgeSummary, setupStatusLast, statusFor } from '../../identity/status';
 import { pubkeyItem } from '../../settings';
 import { mountTabs, popupTabItem } from '../../ui/tabs';
+import { renderSiteCard } from '../../ui/site-card';
+import { sendToBackground } from '../../messaging';
 
 const $ = (id: string) => document.getElementById(id)!;
 
@@ -44,6 +46,12 @@ async function renderHeader() {
 }
 
 void renderHeader();
+
+// the active tab's xmr.club listings, asked by tab id (no URL needed)
+void browser.tabs.query({ active: true, currentWindow: true }).then(async ([tab]) => {
+  if (tab?.id == null) return;
+  renderSiteCard($('this-site'), await sendToBackground({ type: 'site-tab', tabId: tab.id }).catch(() => null));
+});
 pubkeyItem.watch(() => void renderHeader());
 setupStatusLast.watch(() => void renderHeader());
 void popupTabItem.getValue().then((tab) => mountTabs($('tabs'), tab, show));

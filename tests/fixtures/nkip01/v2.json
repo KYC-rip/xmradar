@@ -1,0 +1,97 @@
+{
+  "public_key_b64u": "lYs_9Dq-YMB7u77EdqknGLtd4vAub0jVDqM5bgffkvE",
+  "test_wallet_private_view_key": "01ba78a651365d1c9245fea64df6eea73c899d18922df6918a556be589181c01",
+  "cases": [
+    {
+      "name": "BTC to XMR, primary address",
+      "receipt": {
+        "v": "nkip01/2",
+        "issuer": "example.swap",
+        "order_id": "EX-V2-7",
+        "deposit_asset": "BTC",
+        "deposit_address": "bc1qexampledepositv27",
+        "deposit_amount": "820000",
+        "payout_asset": "XMR",
+        "payout_address": "497raTyHwdNFVqt247QKVoPWgCLCDRj22CBY6zgP6Xoh6xuqR3Nncv4ejV819yTvzScMopZz65fmBc5abGkpKAkxDUs5zvf",
+        "payout_amount": "1500000000000",
+        "rate_type": "fixed",
+        "created_at": 1793000000,
+        "expires_at": 1793003660,
+        "policy_hash": "821df094624716488b10e5f2b844a4f2674ad37124dc792ad272b9b62606b9a7",
+        "salt": "44e58f0e520c6c311485d1ec501e90ca7d4b4da57a5357e7c3b966a974c46aff",
+        "key_id": "6af03ea7ea39237e",
+        "sig": "95-7DhyeaBSvF3_vmmPthxcnsYfyg-bANjlc5lVPEBtB77A8r6_58ST2ueREukkmLzFa8oAtgBgPj6YzmIdaBw"
+      },
+      "commitment": "86d024f212f8292e3d2ff87d89925d51d1f47fd0928b594eabde6220730fe10f",
+      "attestation": {
+        "v": "nkip01/2",
+        "issuer": "example.swap",
+        "commitment": "86d024f212f8292e3d2ff87d89925d51d1f47fd0928b594eabde6220730fe10f",
+        "created_at": 1793000000,
+        "key_id": "6af03ea7ea39237e",
+        "salt_box": {
+          "r": "b862409fb5c4c4123df2abf7462b88f041ad36dd6864ce872fd5472be363c5b1",
+          "ct": "00891bb6c90719f3aa03e9b488a5b3f2c20079063c7b1d01fa6da0905d01c490"
+        },
+        "sig": "EyOeEOmggZ-7tTZmg__fEi8kHXqG6w8IpO1mzF5CcNXrrPzlrP4CV4QnWuUWUazcsrJNeRrEU3nolDBEf7RHCg"
+      }
+    },
+    {
+      "name": "BTC to XMR, subaddress",
+      "receipt": {
+        "v": "nkip01/2",
+        "issuer": "example.swap",
+        "order_id": "EX-V2-11",
+        "deposit_asset": "BTC",
+        "deposit_address": "bc1qexampledepositv211",
+        "deposit_amount": "820000",
+        "payout_asset": "XMR",
+        "payout_address": "89oGX4G9ydvdiegCper9ULee5tUjzqrrhKApwoac2tgDPBzJCW8nt5bRRcFV4E1i4c6JCrjurGy9UQZXxSdVr9yq1g7ya56",
+        "payout_amount": "1500000000000",
+        "rate_type": "fixed",
+        "created_at": 1793000000,
+        "expires_at": 1793003660,
+        "policy_hash": "821df094624716488b10e5f2b844a4f2674ad37124dc792ad272b9b62606b9a7",
+        "salt": "67695b5c576215e3de5638cbc300e9a758e709e44aaa0d7de550b2f11fecbb99",
+        "key_id": "6af03ea7ea39237e",
+        "sig": "MEigwRYyLh2vwRte5m6QKOCB0lWVIwPr4UcogHNREUPlVfmeD8SZYLe17NgOfwQFOl-YLv3xgAnMos6jyFNHBg"
+      },
+      "commitment": "94c96eb5d7c0ba4bea3633f37325aaf932c083f710e9d4f3e77cdd6ac63bed4c",
+      "attestation": {
+        "v": "nkip01/2",
+        "issuer": "example.swap",
+        "commitment": "94c96eb5d7c0ba4bea3633f37325aaf932c083f710e9d4f3e77cdd6ac63bed4c",
+        "created_at": 1793000000,
+        "key_id": "6af03ea7ea39237e",
+        "salt_box": {
+          "r": "b490c1bc1238d009a98da47c831bc888bd9819eaa6e8bac7b1a8795997e2a633",
+          "ct": "10e1462e9ecc9ae2375fb03375907990056063160702e8d87fddabec528bae16"
+        },
+        "sig": "Ow5wo7XOMXvEFyyssTgSBP65Xhv6Fx6rbbE3XTeJmUbhPkhnhcd1LtBGaa8JHJuiBdm-9BAkJ7RMavDC9s-aAg"
+      }
+    },
+    {
+      "name": "XMR to BTC, zero salt (Monero deposit address is not observable)",
+      "receipt": {
+        "v": "nkip01/2",
+        "issuer": "example.swap",
+        "order_id": "EX-V2-XMRIN",
+        "deposit_asset": "XMR",
+        "deposit_address": "89oGX4G9ydvdiegCper9ULee5tUjzqrrhKApwoac2tgDPBzJCW8nt5bRRcFV4E1i4c6JCrjurGy9UQZXxSdVr9yq1g7ya56",
+        "deposit_amount": "1500000000000",
+        "payout_asset": "BTC",
+        "payout_address": "bc1qexamplepayoutv2",
+        "payout_amount": "820000",
+        "rate_type": "fixed",
+        "created_at": 1793000000,
+        "expires_at": 1793003660,
+        "policy_hash": "821df094624716488b10e5f2b844a4f2674ad37124dc792ad272b9b62606b9a7",
+        "salt": "0000000000000000000000000000000000000000000000000000000000000000",
+        "key_id": "6af03ea7ea39237e",
+        "sig": "Usv4MvG3Pp_UGtQe2-LwigrOZfzJXFqCH87rJSqlCzCXSxt2K6Bn1f8I18HL7Q3Ks0NCMJCB1D72LYDajcopBQ"
+      },
+      "commitment": "7d04b8e5220581dd36b7b47935e4856acfaa35808cb3783e9c76fa93d2c3b35d"
+    }
+  ],
+  "note": "Test keys only; the wallet is the throwaway NKIP-0003 test wallet. Never send funds."
+}

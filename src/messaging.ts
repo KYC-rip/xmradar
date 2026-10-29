@@ -2,6 +2,10 @@ import type { Event } from 'nostr-tools/pure';
 import type { ResolvedIdentity } from './identity/envelope';
 import type { Badge } from './identity/resolve';
 import type { ProofResult } from './identity/nostr';
+import type { PageCheck } from './receipts/check';
+import type { ReceiptExport } from './receipts/export';
+import type { PublicRecord, SavedReceipt } from './receipts/store';
+import type { SiteEntry } from './sites/feed';
 import type { AddressCheck } from './xmr/address';
 
 /** background → content */
@@ -56,6 +60,14 @@ export interface XapTotalsResult {
 export interface XapPostTotalsResult {
   totals: [string, XapTotals][];
   pending: { id: string; pubkey: string }[];
+}
+
+/** The xmr.club listings for a tab's host (PLAN-SITEFEED); `outOfDate` once the kept feed has expired. */
+export interface SiteInfo {
+  sites: SiteEntry[];
+  outOfDate: boolean;
+  /** unix seconds */
+  issuedAt: number | null;
 }
 
 export interface XapPublishResult {
@@ -117,6 +129,7 @@ export type BgRequest =
   | { type: 'fetch-image'; sessionId: string; url: string }
   | { type: 'upload-image'; sessionId: string; url: string; sha256: string; auth: string }
   | { type: 'publish'; sessionId: string; event: Event; sourceUrl: string; text: string }
+  | { type: 'republish'; sessionId: string; event: Event; relays: string[] }
   | { type: 'check-duplicate'; sessionId: string; sourceUrl: string; text: string }
   | { type: 'close-session'; sessionId: string }
   | { type: 'load-nip65'; pubkey: string }
@@ -135,7 +148,15 @@ export type BgRequest =
   | { type: 'xap-totals'; recipients: string[]; fresh?: boolean }
   | { type: 'xap-post-totals'; posts: { id: string; pubkey: string }[]; fresh?: boolean }
   | { type: 'xap-publish'; recipient: string; address: string; amount: string; post?: string }
-  | { type: 'xmr-price' };
+  | { type: 'xmr-price' }
+  | { type: 'receipt-found'; text: string; eventId?: string }
+  | { type: 'receipt-badge'; level: 'ok' | 'caution' | 'warn' | 'none' }
+  | { type: 'site-info'; host: string }
+  | { type: 'site-tab'; tabId: number }
+  | { type: 'receipts-list' }
+  | { type: 'receipt-delete'; commitment: string }
+  | { type: 'receipt-export'; commitment: string }
+  | { type: 'receipt-record'; commitment: string };
 
 /** Port name for creating a free burner inbox; the open port keeps the worker busy during the proof of work. */
 export const BURNER_CREATE_PORT = 'burner-create';
@@ -149,6 +170,8 @@ export type BgResponse<T extends BgRequest['type']> = T extends 'fetch-image'
     ? { url: string }
     : T extends 'publish'
       ? { results: RelayResult[]; nevent: string; naddr?: string }
+      : T extends 'republish'
+        ? { results: RelayResult[] }
       : T extends 'check-duplicate'
         ? { duplicate: boolean }
         : T extends 'load-nip65'
@@ -183,7 +206,21 @@ export type BgResponse<T extends BgRequest['type']> = T extends 'fetch-image'
                                     ? XapPublishResult
                                     : T extends 'xmr-price'
                                       ? { usd: number }
-                                      : never;
+                                      : T extends 'receipt-found'
+                                        ? PageCheck
+                                        : T extends 'receipt-badge'
+                                          ? null
+                                          : T extends 'site-info' | 'site-tab'
+                                            ? SiteInfo
+                                        : T extends 'receipts-list'
+                                          ? SavedReceipt[]
+                                          : T extends 'receipt-delete'
+                                            ? null
+                                            : T extends 'receipt-export'
+                                              ? ReceiptExport
+                                              : T extends 'receipt-record'
+                                                ? PublicRecord
+                                                : never;
 
 /** Every response is wrapped so errors survive the message boundary. */
 export type Wrapped<T> = { ok: true; data: T } | { ok: false; error: string };

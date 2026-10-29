@@ -21,9 +21,12 @@ export interface Settings {
   debug: boolean;
   /** "Copy to Nostr" in X's share menu; read with `shareMenuOn`, since settings saved before it lack the field. */
   shareMenuX?: boolean;
+  /** "Check receipts on swap pages" (NKIP-0001); read with `receiptsOn`, on unless switched off */
+  receiptsCheck?: boolean;
 }
 
 export const shareMenuOn = (s: Partial<Settings> | null | undefined) => s?.shareMenuX !== false;
+export const receiptsOn = (s: Partial<Settings> | null | undefined) => s?.receiptsCheck !== false;
 
 export const settingsItem = storage.defineItem<Settings>('sync:settings', {
   fallback: { relays: [], blossomServer: DEFAULT_BLOSSOM, appendSourceLink: false, debug: false },
@@ -78,7 +81,14 @@ export interface XmrSettings extends XmrSettingsV2 {
   badgeIcon: BadgeIcon;
   /** Show "XMR" next to the icon (always on with no icon). */
   badgeLabel: boolean;
+  /** "Site info from xmr.club" (PLAN-SITEFEED); read with `siteInfoOn`, on unless switched off */
+  siteInfo?: boolean;
+  /** "In-page warnings" for an incident or a D–F grade; read with `siteWarningsOn` */
+  siteWarnings?: boolean;
 }
+
+export const siteInfoOn = (s: Partial<XmrSettings> | null | undefined) => s?.siteInfo !== false;
+export const siteWarningsOn = (s: Partial<XmrSettings> | null | undefined) => siteInfoOn(s) && s?.siteWarnings !== false;
 
 /** v1, before the redesign: one switch for X badges. */
 export interface XmrSettingsV1 {

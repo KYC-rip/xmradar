@@ -4,6 +4,8 @@ import { settingsItem, shareMenuOn } from '../../settings';
 import { isXHost } from '../../sender';
 import { openComposer } from './composer';
 import { openTip } from './tip';
+import { startReceipts } from './receipt';
+import { startSiteInfo } from './site';
 import { startBadges } from './x-badges';
 import { shareMenu, type ShareMenu } from './x-share';
 import './style.css';
@@ -19,6 +21,10 @@ export default defineContentScript({
 
     const onX = window === window.top && isXHost(location.hostname);
     if (onX) startBadges(ctx);
+    // swap receipts (NKIP-0001) on any other site's top frame
+    startReceipts(ctx);
+    // site info from the xmr.club feed (badge, popup card, warnings)
+    startSiteInfo(ctx);
 
     // "Copy to Nostr" in X's share menu; switched live from the options page
     let share: ShareMenu | null = null;

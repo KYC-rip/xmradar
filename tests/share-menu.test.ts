@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { findTweet, shareButtonOf, shareMenu } from '../src/entrypoints/content/x-share';
+import { findTweet, hoverTint, shareButtonOf, shareMenu } from '../src/entrypoints/content/x-share';
 import { ownStatusId } from '../src/extractors/x';
 import { shareMenuOn } from '../src/settings';
 import { checkShareMenuSender, shareMenuRateLimit, withoutTab } from '../src/sender';
@@ -81,10 +81,27 @@ describe('share menu item', () => {
     expect(it.getAttribute('tabindex')).toBe('0');
     expect(it.querySelector('svg path')!.getAttribute('d')).not.toBe('M0 0');
     expect(it.querySelector('[stroke="currentColor"]')).not.toBeNull();
+    // hover like X's own items, which a copy doesn't inherit
+    (it as HTMLElement).dispatchEvent(new Event('pointerenter'));
+    expect((it as HTMLElement).style.backgroundColor).not.toBe('');
+    (it as HTMLElement).dispatchEvent(new Event('pointerleave'));
+    expect((it as HTMLElement).style.backgroundColor).toBe('');
     // X re-creates the menu on each open: one item per menu, never two
     m.onClick(click(share), true);
     doc.getElementById('layers')!.replaceChildren();
     openMenu();
+    await settle();
+    expect(item(doc).length).toBe(1);
+  });
+
+  it('appears when X marks the button expanded only after adding the menu', async () => {
+    const { doc, share, openMenu } = setup();
+    const { m } = menuFor(doc);
+    m.onClick(click(share), true);
+    openMenu(false);
+    await settle();
+    expect(item(doc).length).toBe(0);
+    share.setAttribute('aria-expanded', 'true');
     await settle();
     expect(item(doc).length).toBe(1);
   });
@@ -235,5 +252,15 @@ describe('share-menu background checks', () => {
     expect(shareMenuOn({ relays: [], blossomServer: '', appendSourceLink: false, debug: false })).toBe(true);
     expect(shareMenuOn(null)).toBe(true);
     expect(shareMenuOn({ shareMenuX: false })).toBe(false);
+  });
+});
+
+describe('share menu hover tint', () => {
+  it('dark on a light page, light on X’s dim and dark themes', () => {
+    document.body.style.backgroundColor = 'rgb(255, 255, 255)';
+    expect(hoverTint(document)).toBe('rgba(15, 20, 25, 0.03)');
+    document.body.style.backgroundColor = 'rgb(21, 32, 43)';
+    expect(hoverTint(document)).toBe('rgba(231, 233, 234, 0.03)');
+    document.body.style.backgroundColor = '';
   });
 });

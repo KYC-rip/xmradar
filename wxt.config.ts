@@ -22,7 +22,7 @@ export default defineConfig({
     // 4-part version so about:addons and chrome://extensions show the CI build: 0.1.0.142
     version: env.WXT_BUILD_NUMBER ? `${pkg.version}.${env.WXT_BUILD_NUMBER}` : pkg.version,
     description: 'Monero on the pages you use: tip badges on X, burner email, and copying posts to Nostr. Holds no keys and no funds.',
-    permissions: ['contextMenus', 'storage', 'activeTab', 'scripting', 'notifications'],
+    permissions: ['contextMenus', 'storage', 'activeTab', 'scripting', 'notifications', 'alarms'],
     host_permissions: ['<all_urls>'],
     commands: {
       'open-composer': {

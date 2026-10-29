@@ -7,6 +7,7 @@ import { extractPost, type ExtractedImage } from '../../extractors';
 import { expandTweet, xExtractor } from '../../extractors/x';
 import { sendToBackground, type OpenComposerMsg, type RelayResult } from '../../messaging';
 import { articleTemplate, articleTooLarge, blossomAuthTemplate, buildNote, checkSigned, encodeAuthHeader, wordCount, type PostImage } from '../../nostr/event';
+import { retryable } from '../../nostr/retry';
 import { settingsItem } from '../../settings';
 import { h, trapFocus } from './dom';
 
@@ -193,8 +194,33 @@ async function mountComposer(ctx: ContentScriptContext, msg: OpenComposerMsg, ta
         }
       };
 
-      const renderResults = (list: RelayResult[]) =>
-        results.replaceChildren(...list.map((r) => h('li', { class: r.ok ? 'ok' : 'error', textContent: `${r.ok ? '✓' : '✗'} ${r.relay}${r.ok ? '' : ` — ${r.message}`}` })));
+      // the latest result per relay, so a retry updates the list in place
+      let shown: RelayResult[] = [];
+      let published: Event | null = null;
+      const retryBtn = h('button', { class: 'link', textContent: '' });
+      const renderResults = (list: RelayResult[]) => {
+        shown = shown.length ? shown.map((r) => list.find((n) => n.relay === r.relay) ?? r) : list;
+        results.replaceChildren(...shown.map((r) => h('li', { class: r.ok ? 'ok' : 'error', textContent: `${r.ok ? '✓' : '✗'} ${r.relay}${r.ok ? '' : ` — ${r.message}`}` })));
+        const again = shown.filter(retryable);
+        if (published && again.length) {
+          retryBtn.textContent = `Retry ${again.length} failed ${again.length === 1 ? 'relay' : 'relays'}`;
+          results.append(h('li', {}, retryBtn));
+        }
+      };
+      retryBtn.addEventListener('click', async () => {
+        const again = shown.filter(retryable).map((r) => r.relay);
+        if (!published || !again.length || retryBtn.disabled) return;
+        retryBtn.disabled = true;
+        retryBtn.textContent = 'Retrying…';
+        try {
+          renderResults((await sendToBackground({ type: 'republish', sessionId: msg.sessionId, event: published, relays: again })).results);
+        } catch (e) {
+          setStatus((e as Error).message, 'error');
+          renderResults([]);
+        } finally {
+          retryBtn.disabled = false;
+        }
+      });
 
       let busy = false;
       let done = false;
@@ -241,6 +267,8 @@ async function mountComposer(ctx: ContentScriptContext, msg: OpenComposerMsg, ta
           if (closed) return;
           setStatus('Publishing…');
           const res = await sendToBackground({ type: 'publish', sessionId: msg.sessionId, event, sourceUrl: post.sourceUrl, text });
+          shown = [];
+          published = event;
           renderResults(res.results);
           if (res.results.some((r) => r.ok)) {
             done = true;

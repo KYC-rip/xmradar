@@ -54,6 +54,13 @@ function icon(doc: Document, like: Element | null): SVGSVGElement {
   return svg;
 }
 
+/** A light tint on a light page, a soft white one on X's dim and dark themes. */
+export function hoverTint(doc: Document): string {
+  const m = /rgba?\((\d+),\s*(\d+),\s*(\d+)/.exec(doc.defaultView?.getComputedStyle(doc.body).backgroundColor ?? '');
+  const light = !m || Number(m[1]) * 0.299 + Number(m[2]) * 0.587 + Number(m[3]) * 0.114 > 128;
+  return light ? 'rgba(15, 20, 25, 0.03)' : 'rgba(231, 233, 234, 0.03)';
+}
+
 export interface ShareMenu {
   /** capture-phase click handler for the document; `trusted` is overridable for tests only */
   onClick(e: Event, trusted?: boolean): void;
@@ -100,6 +107,13 @@ export function shareMenu(doc: Document, request: () => Promise<unknown>, now = 
     oldSvg?.replaceWith(icon(doc, oldSvg));
     const span = item.querySelector('span');
     if (span) span.textContent = 'Copy to Nostr';
+    // X's own items get their hover from React handlers a copy doesn't have: tint like X does, on the
+    // page's own background (light, dim or dark)
+    const tint = (on: boolean) => (item.style.backgroundColor = on ? hoverTint(doc) : '');
+    item.addEventListener('pointerenter', () => tint(true));
+    item.addEventListener('pointerleave', () => tint(doc.activeElement === item));
+    item.addEventListener('focus', () => tint(true));
+    item.addEventListener('blur', () => tint(false));
     item.addEventListener('click', (e) => activate(e));
     item.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' || e.key === ' ') activate(e);
@@ -148,6 +162,8 @@ export function shareMenu(doc: Document, request: () => Promise<unknown>, now = 
         stopWatching();
       });
       observer.observe(doc.getElementById('layers') ?? doc.body, { childList: true, subtree: true });
+      // X may add the menu before it marks the button expanded: the attribute flip is a cue too
+      observer.observe(button, { attributes: true, attributeFilter: ['aria-expanded'] });
       timer = setTimeout(stopWatching, MENU_WINDOW_MS);
     },
     takeTarget() {
