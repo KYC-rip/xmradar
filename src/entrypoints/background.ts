@@ -29,10 +29,14 @@ import { xapTtl } from '../xap/ttl';
 import type { SiteInfo, XapPostTotalsResult, XapTotals, XapTotalsResult } from '../messaging';
 import { trackCreate } from '../burner/tracked';
 import { checkPageReceipt, type CheckDeps } from '../receipts/check';
-import { badgeFor, FEED_READER_V, FEED_URL, readFeed, sitesFor, worstGrade, type SiteFeed, type TabState } from '../sites/feed';
+import { badgeFor, FEED_READER_V, FEED_URL, publicSite, readFeed, sitesFor, worstGrade, type SiteFeed, type TabState } from '../sites/feed';
 import { fetchManifest } from '../receipts/fetch';
 import { buildExport } from '../receipts/export';
 import { idbReceiptStore } from '../receipts/store';
+import { buildLetterExport } from '../log/export';
+import { verifyLetter } from '../log/pgp';
+import { checkFoundLetter, logPages } from '../log/service';
+import { idbLetterStore } from '../log/store';
 import { checkPublicRecord } from '../receipts/witness';
 import { fetchXmrUsd, PRICE_RETRY_MS, PRICE_TTL_MS } from '../xap/price';
 import { markFor, withMark } from '../xap/marks';
@@ -497,6 +501,23 @@ async function handle(msg: BgRequest, sender: Browser.runtime.MessageSender): Pr
       if (!receiptBudget(tabId)) throw new Error('Too many receipts on this page');
       return checkPageReceipt(msg.text, pageUrl, receiptDeps, { eventId: typeof msg.eventId === 'string' ? msg.eventId : undefined });
     }
+    case 'log-page': {
+      // which order this tab shows (PLAN-LOG §2): from the tab's URL, never the message; a projection without keys
+      const pageUrl = sender.tab?.url;
+      if (sender.id !== browser.runtime.id || sender.tab?.id == null || sender.frameId !== 0 || !pageUrl) throw new Error('Not allowed');
+      if (!(await letterChecksOn())) return [];
+      return logPages(await siteFeedItem.getValue(), pageUrl);
+    }
+    case 'log-found': {
+      const tabId = sender.tab?.id;
+      const pageUrl = sender.tab?.url;
+      if (sender.id !== browser.runtime.id || tabId == null || sender.frameId !== 0 || !pageUrl) throw new Error('Not allowed');
+      if (!(await letterChecksOn())) throw new Error('Letter checks are off');
+      if (typeof msg.siteId !== 'string' || typeof msg.text !== 'string') throw new Error('Bad letter');
+      // the same budget as receipts: a page can't make the worker verify without end
+      if (!receiptBudget(tabId)) throw new Error('Too many checks on this page');
+      return checkFoundLetter(await siteFeedItem.getValue(), pageUrl, msg.siteId, msg.text, { verifyLetter, store: idbLetterStore, now: Date.now });
+    }
     case 'receipt-badge': {
       // the receipt half of this tab's toolbar badge; the site half comes from 'site-info'
       const tabId = sender.tab?.id;
@@ -519,7 +540,7 @@ async function handle(msg: BgRequest, sender: Browser.runtime.MessageSender): Pr
       if (!siteInfoOn(await xmrSettingsItem.getValue()) || typeof msg.host !== 'string') return empty;
       const feed = await siteFeedItem.getValue();
       if (!feed) return empty;
-      const sites = sitesFor(feed, msg.host);
+      const sites = sitesFor(feed, msg.host).map(publicSite);
       const info = { sites, outOfDate: Date.now() / 1000 >= feed.expiresAt, issuedAt: feed.issuedAt };
       await tabStateReady;
       const state = tabStates.get(tabId) ?? {};
@@ -551,6 +572,21 @@ async function handle(msg: BgRequest, sender: Browser.runtime.MessageSender): Pr
       const s = await idbReceiptStore.get(msg.commitment);
       if (!s) throw new Error('No such receipt');
       return buildExport(s, await idbReceiptStore.getPolicy(s.receipt.policy_hash), Date.now());
+    }
+    case 'letters-list': {
+      if (!isExtensionPage(sender)) throw new Error('Not allowed');
+      return (await idbLetterStore.list()).sort((a, b) => b.savedAt - a.savedAt);
+    }
+    case 'letter-delete': {
+      if (!isExtensionPage(sender)) throw new Error('Not allowed');
+      await idbLetterStore.delete(msg.id);
+      return null;
+    }
+    case 'letter-export': {
+      if (!isExtensionPage(sender)) throw new Error('Not allowed');
+      const l = await idbLetterStore.get(msg.id);
+      if (!l) throw new Error('No such letter');
+      return buildLetterExport(l, Date.now());
     }
     case 'receipt-record': {
       // only from Options, at the user's request, an hour after the order at the earliest (§12)
@@ -684,6 +720,9 @@ function receiptBudget(tabId: number): boolean {
   receiptChecks.set(tabId, [...recent, now]);
   return true;
 }
+
+/** Letters of guarantee need both the receipt checks and the xmr.club feed (PLAN-LOG Round 3 switch matrix). */
+const letterChecksOn = async () => receiptsOn(await settingsItem.getValue()) && siteInfoOn(await xmrSettingsItem.getValue());
 
 const receiptDeps: CheckDeps = {
   store: idbReceiptStore,

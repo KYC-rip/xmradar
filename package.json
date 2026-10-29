@@ -20,6 +20,7 @@
     "@noble/hashes": "2.0.1",
     "@scure/base": "2.0.0",
     "nostr-tools": "2.25.2",
+    "openpgp": "6.3.2",
     "qrcode-generator": "2.0.4"
   },
   "devDependencies": {

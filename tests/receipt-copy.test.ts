@@ -19,7 +19,7 @@ const OTHER = '3J98t1WpEZ73CNmQviecrnyiWrnqRhWNLy';
 describe('copy check and page lines (content script)', () => {
   it('the card gets the address lines, the event line, and a copy warning', async () => {
     fakeBrowser.reset();
-    send.mockResolvedValue({ receipt, lines: [{ level: 'ok', text: 'Signed by example.swap' }], saved: true });
+    send.mockImplementation(async (m: { type: string }) => (m.type === 'log-page' ? [] : { receipt, lines: [{ level: 'ok', text: 'Signed by example.swap' }], saved: true }));
     document.body.innerHTML = `<script type="application/nkip01+json">${JSON.stringify(receipt)}</script><p>Deposit: ${receipt.deposit_address}</p>`;
     const off: (() => void)[] = [];
     startReceipts({ addEventListener: (t: EventTarget, e: string, h: EventListener) => t.addEventListener(e, h), onInvalidated: (cb: () => void) => off.push(cb) } as never);

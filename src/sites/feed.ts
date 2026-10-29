@@ -1,4 +1,5 @@
 import { verifySignedEnvelope } from '../identity/envelope';
+import { normalizeFingerprint } from '../log/fingerprint';
 
 /**
  * Site info from the signed xmr.club feed (PLAN-SITEFEED): one file, the same for everyone, downloaded
@@ -57,6 +58,16 @@ export interface IncidentDetail {
   sourceUrl: string | null;
 }
 
+/**
+ * Where a listing's per-order letter of guarantee is, and the key it must be signed with (PLAN-LOG §2,
+ * Round 4). Keys come only from here, inside the signed feed; nothing is fetched from `key_url`.
+ */
+export type SiteLog =
+  | { format: 'pgp'; url: string | null; fingerprint: string; publicKey: string | null }
+  | { format: 'mistproof'; url: string | null; ed25519Key: string }
+  /** checked through the NKIP-0001 receipt on the page, not through a letter */
+  | { format: 'nkip01' };
+
 export interface SiteEntry {
   id: string;
   name: string;
@@ -72,10 +83,13 @@ export interface SiteEntry {
   hosts: string[];
   /** absent: out of NKIP-0001 scope (not level 0) */
   nkip01?: SiteNkip01;
+  /** the operator's order page, with `{order}` once, as a whole path segment or query value */
+  orderUrl?: string;
+  log?: SiteLog;
 }
 
 /** bumped when XMRadar reads more of the feed, so a copy kept by an older version is fetched again */
-export const FEED_READER_V = 3;
+export const FEED_READER_V = 4;
 
 export interface SiteFeed {
   /** the FEED_READER_V that parsed it */
@@ -122,7 +136,53 @@ function parseSite(v: unknown): SiteEntry | null {
       l3VerifiedAt: int(n.l3_verified_at) ? (n.l3_verified_at as number) : null,
     };
   }
+  const orderUrl = templateUrl(v.order_url, hosts);
+  if (orderUrl) site.orderUrl = orderUrl;
+  const log = parseLog(v.log, hosts);
+  if (log) site.log = log;
   return site;
+}
+
+const MAX_KEY_CHARS = 64 * 1024;
+const ED25519_B64 = /^[A-Za-z0-9+/]{43}=$/;
+
+/**
+ * An https URL on one of the listing's hosts, at most 300 characters, with `{order}` exactly once as a
+ * whole path segment or a whole query value; otherwise null.
+ */
+export function templateUrl(v: unknown, hosts: string[]): string | null {
+  if (typeof v !== 'string' || v.length > 300 || v.split('{order}').length !== 2) return null;
+  let u: URL;
+  try {
+    u = new URL(v.replace('{order}', 'ORDERSLOT'));
+  } catch {
+    return null;
+  }
+  if (u.protocol !== 'https:' || u.username || u.password || u.port || u.hash || !hosts.includes(normalizeHost(u.hostname))) return null;
+  const inPath = u.pathname.split('/').includes('ORDERSLOT');
+  const inQuery = [...u.searchParams.values()].includes('ORDERSLOT');
+  return inPath !== inQuery ? v : null;
+}
+
+/** A `log` block, whole or not at all (a malformed one is dropped, never kept in part). */
+function parseLog(v: unknown, hosts: string[]): SiteLog | null {
+  if (!isObj(v)) return null;
+  const url = v.url === undefined || v.url === null ? null : templateUrl(v.url, hosts);
+  if (url === null && v.url !== undefined && v.url !== null) return null;
+  if (v.format === 'nkip01') return { format: 'nkip01' };
+  if (v.format === 'pgp') {
+    const fingerprint = typeof v.pgp_fingerprint === 'string' ? normalizeFingerprint(v.pgp_fingerprint) : null;
+    if (!fingerprint) return null;
+    const k = v.pgp_public_key;
+    const publicKey = typeof k === 'string' && k.length <= MAX_KEY_CHARS && k.trimStart().startsWith('-----BEGIN PGP PUBLIC KEY BLOCK-----') ? k : null;
+    if (k !== undefined && k !== null && !publicKey) return null;
+    return { format: 'pgp', url, fingerprint, publicKey };
+  }
+  if (v.format === 'mistproof') {
+    if (typeof v.ed25519_key !== 'string' || !ED25519_B64.test(v.ed25519_key)) return null;
+    return { format: 'mistproof', url, ed25519Key: v.ed25519_key };
+  }
+  return null;
 }
 
 /**
@@ -146,6 +206,12 @@ export const normalizeHost = (host: string) =>
     .toLowerCase()
     .replace(/\.$/, '')
     .replace(/^www\./, '');
+
+/** A listing as pages and the popup get it: without the order template and letter keys, which stay in the background. */
+export function publicSite(s: SiteEntry): SiteEntry {
+  const { orderUrl: _o, log: _l, ...rest } = s;
+  return rest;
+}
 
 /** Every listing for this exact host (all of them, never one picked); none for a platform host. */
 export function sitesFor(feed: SiteFeed, host: string): SiteEntry[] {
@@ -176,13 +242,19 @@ export interface TabState {
   site?: { grade: string; incident: boolean };
 }
 
+// xmr.club's own grade colours (its light theme, dark enough under the badge's white text); xmr.club gives
+// no E today, so an E takes F's red
+const GRADE_COLORS: Record<string, string> = { A: '#3f7a26', B: '#c45a1a', C: '#9c2e2e', D: '#5b5142', E: '#c91515', F: '#c91515' };
+/** The badge colour for a grade (`B-` counts as B); grey without one. */
+export const gradeColor = (grade: string) => GRADE_COLORS[grade.charAt(0).toUpperCase()] ?? '#6b6880';
+
 /** The badge from both inputs, highest first: receipt warn, site incident, receipt caution, receipt ok, listed site. */
 export function badgeFor(s: TabState): { text: string; color: string } {
   if (s.receipt === 'warn') return { text: '!', color: '#d93025' };
   if (s.site?.incident) return { text: s.site.grade || '!', color: '#d93025' };
   if (s.receipt === 'caution') return { text: '!', color: '#b26a00' };
   if (s.receipt === 'ok') return { text: '✓', color: '#1e7d34' };
-  if (s.site) return { text: s.site.grade || '•', color: '#6b6880' };
+  if (s.site) return { text: s.site.grade || '•', color: gradeColor(s.site.grade) };
   return { text: '', color: '#000000' };
 }
 

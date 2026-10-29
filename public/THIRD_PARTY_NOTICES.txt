@@ -44,3 +44,16 @@ developers
 
 
 Manrope font (@fontsource-variable/manrope): SIL Open Font License 1.1.
+
+------------------------------------------------------------------------------
+
+OpenPGP.js 6.3.2 (https://github.com/openpgpjs/openpgpjs), lightweight build,
+used in the background to verify swap operators' letters of guarantee.
+Licensed under the GNU Lesser General Public License v3.0 or later
+(https://www.gnu.org/licenses/lgpl-3.0.html). Its unmodified minified build
+(dist/lightweight/openpgp.min.mjs) is bundled into background.js; its source is
+at the URL above. XMRadar's own source is public
+(https://github.com/KYC-rip/xmradar), so the extension can be rebuilt with a
+different or modified OpenPGP.js (pnpm install, then pnpm build).
+
+Copyright (c) the OpenPGP.js contributors.

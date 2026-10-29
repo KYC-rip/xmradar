@@ -1,4 +1,5 @@
 import { MONERO_OUTER, MONERO_PARTS, MONERO_VIEWBOX } from '../../identity/badge-look';
+import type { LetterAddress } from '../../log/check';
 import type { Line } from '../../receipts/check';
 import type { Receipt } from '../../receipts/verify';
 import { h } from './dom';
@@ -10,8 +11,20 @@ import { h } from './dom';
  * page. A warning never shrinks: it stays open and red, and comes back if a new one appears.
  */
 
+/** A letter of guarantee for the order on this page (PLAN-LOG §7). */
+export interface CardLetter {
+  name: string;
+  orderId: string;
+  format: 'pgp' | 'mistproof' | 'nkip01';
+  verified: boolean;
+  addresses: LetterAddress[];
+  signedText: string;
+  recheck: () => void;
+}
+
 export interface CardEntry {
   receipt?: Receipt;
+  letter?: CardLetter;
   lines: Line[];
   saved: boolean;
   saveError?: string;
@@ -49,12 +62,15 @@ li .m { flex: none; width: 1em; text-align: center; }
 li.warn .m { color: #d93025; } li.caution .m { color: #b26a00; } li.ok .m { color: #1e7d34; } li.off .m { color: #777; }
 dl { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; margin: 8px 0 0; font-size: 12px; }
 dt { color: #6b6880; } dd { margin: 0; word-break: break-all; font-family: ui-monospace, Menlo, monospace; }
+details { margin-top: 6px; font-size: 12px; } summary { cursor: pointer; color: #6b6880; }
+pre { white-space: pre-wrap; word-break: break-all; max-height: 200px; overflow: auto; margin: 4px 0 0; font: 11px/1.4 ui-monospace, Menlo, monospace; }
+.row { margin-top: 8px; } .row button { font: inherit; border: 1px solid #d9d6e3; background: transparent; border-radius: 8px; padding: 2px 8px; cursor: pointer; color: inherit; }
 dd button { font: 11px system-ui, sans-serif; border: 1px solid #d9d6e3; background: transparent; border-radius: 6px; padding: 0 6px; cursor: pointer; color: inherit; }
 .note { font-size: 12px; color: #6b6880; margin-top: 8px; }
 .sep { border-top: 1px solid #eee; margin: 8px 0; }
 @media (prefers-color-scheme: dark) {
   .box { color: #ececf1; background: #1f1e26; border-color: #45434f; }
-  .head button, dd button { border-color: #45434f; }
+  .head button, dd button, .row button { border-color: #45434f; } summary { color: #a9a6b8; }
   dt, .note, .head .x { color: #a9a6b8; } .sep { border-color: #333; }
 }
 @media (prefers-reduced-motion: reduce) { .box, .box.enter { transition: none; transform: none; } }`;
@@ -68,6 +84,9 @@ export function amount(base: string, asset: string): string {
   const frac = s.slice(-decimals).replace(/0+$/, '');
   return `${s.slice(0, -decimals)}${frac ? `.${frac}` : ''} ${a}`;
 }
+
+/** what the card is about: a receipt, or only letters */
+const noun = (entries: CardEntry[]) => (entries.some((e) => e.receipt || !e.letter) ? 'Receipt' : 'Letter');
 
 export const worstOf = (lines: Line[]) => lines.reduce<Line['level']>((w, l) => (RANK[l.level] > RANK[w] ? l.level : w), 'off');
 
@@ -94,20 +113,49 @@ function moneroIcon(doc: Document): SVGSVGElement {
   return svg;
 }
 
+const ROLE_LABEL: Record<string, string> = { deposit: 'You send to', payout: 'You get at', refund: 'Refund to' };
+
+/** The copy button for a signed address, so the one you paste is the one that was signed. */
+function copyButton(v: string, label: string) {
+  const copy = h('button', { textContent: 'Copy', attrs: { 'aria-label': label } });
+  copy.addEventListener('click', () => void navigator.clipboard.writeText(v).then(() => (copy.textContent = 'Copied'), () => (copy.textContent = 'Select it')));
+  return copy;
+}
+
+function letterDetails(l: CardLetter, e: CardEntry): Node[] {
+  const out: Node[] = [];
+  const kind = l.format === 'mistproof' ? 'MistProof' : 'Letter of guarantee';
+  const rows: Node[] = [h('dt', { textContent: 'Order' }), h('dd', { textContent: `${l.orderId} at ${l.name}` })];
+  if (l.verified) {
+    // the full signed addresses, never shortened: a page that shortens one is compared with these
+    for (const a of l.addresses) {
+      const k = a.role ? ROLE_LABEL[a.role]! : 'In the letter';
+      rows.push(h('dt', { textContent: k }), h('dd', {}, a.address, ' ', copyButton(a.address, `Copy the signed address: ${k}`)));
+    }
+  }
+  out.push(h('dl', {}, ...rows));
+  if (l.verified && l.signedText) {
+    // amounts and rates are the operator's words: shown as signed, not read as checked
+    out.push(h('details', {}, h('summary', { textContent: `Signed text (${kind})` }), h('pre', { textContent: l.signedText })));
+    out.push(h('div', { class: 'note', textContent: e.saved ? 'Saved in this browser only ✓ (Options → Swaps and sites)' : (e.saveError ?? 'Not saved.') }));
+  }
+  const again = h('button', { textContent: 'Check again' });
+  again.addEventListener('click', () => l.recheck());
+  out.push(h('div', { class: 'row' }, again));
+  return out;
+}
+
 function details(entries: CardEntry[], extra: Line[]): HTMLElement {
   const body = h('div', { class: 'body' });
   for (const [i, e] of entries.entries()) {
     if (i) body.append(h('div', { class: 'sep' }));
     body.append(lineList(e.lines));
+    if (e.letter) body.append(...letterDetails(e.letter, e));
     const r = e.receipt;
     if (!r) continue;
     const row = (k: string, v: string) => [h('dt', { textContent: k }), h('dd', { textContent: v })];
     // the signed addresses, with Copy, so the one you paste is the one the exchange signed
-    const addressRow = (k: string, v: string) => {
-      const copy = h('button', { textContent: 'Copy', attrs: { 'aria-label': `Copy the signed ${k === 'To' ? 'deposit' : 'payout'} address` } });
-      copy.addEventListener('click', () => void navigator.clipboard.writeText(v).then(() => (copy.textContent = 'Copied'), () => (copy.textContent = 'Select it')));
-      return [h('dt', { textContent: k }), h('dd', {}, v, ' ', copy)];
-    };
+    const addressRow = (k: string, v: string) => [h('dt', { textContent: k }), h('dd', {}, v, ' ', copyButton(v, `Copy the signed ${k === 'To' ? 'deposit' : 'payout'} address`))];
     body.append(
       h(
         'dl',
@@ -123,7 +171,7 @@ function details(entries: CardEntry[], extra: Line[]): HTMLElement {
     );
   }
   if (extra.length) body.append(lineList(extra));
-  body.append(h('div', { class: 'note', textContent: 'XMRadar can’t see a page script or other software that changes your clipboard: compare the address in your wallet with the one above.' }));
+  body.append(h('div', { class: 'note', textContent: 'Before you send, check that your wallet shows the same address as above.' }));
   return body;
 }
 
@@ -133,6 +181,8 @@ export function toastText(entries: CardEntry[], extra: Line[]): string {
   const worst = worstOf(all);
   const issuer = entries.find((e) => e.receipt)?.receipt?.issuer;
   if (worst === 'warn' || worst === 'caution') return all.find((l) => l.level === worst)!.text;
+  const letter = entries.find((e) => e.letter?.verified)?.letter;
+  if (!issuer && letter) return `${letter.name} · ${letter.format === 'mistproof' ? 'MistProof' : 'Letter of guarantee'} checked${entries.some((e) => e.letter && e.saved) ? ' and saved' : ''} ✓`;
   if (!issuer) return all[0]?.text ?? 'Checking the receipt…';
   return `${issuer} supports NKIP-0001 · Receipt checked${entries.some((e) => e.saved) ? ' and saved' : ''} ✓`;
 }
@@ -220,7 +270,7 @@ export function mountReceiptCard(doc: Document, opts: { toastMs?: number } = {})
     );
     const icon = moneroIcon(doc);
     if (phase === 'chip') {
-      const label = h('button', { class: `label title ${worst}`, textContent: `Receipt ${MARK[worst]}`, attrs: { 'aria-expanded': 'false', title: toastText(entries, extra) } });
+      const label = h('button', { class: `label title ${worst}`, textContent: `${noun(entries)} ${MARK[worst]}`, attrs: { 'aria-expanded': 'false', title: toastText(entries, extra) } });
       label.addEventListener(
         'click',
         onClick(() => {
@@ -244,7 +294,7 @@ export function mountReceiptCard(doc: Document, opts: { toastMs?: number } = {})
       box.replaceChildren(h('div', { class: 'head' }, icon, h('span', { class: `msg title ${worst}`, textContent: toastText(entries, extra) }), more, close));
       return;
     }
-    const head: Node[] = [icon, h('span', { class: `msg title ${worst}`, textContent: `XMRadar · Receipt ${MARK[worst]}` })];
+    const head: Node[] = [icon, h('span', { class: `msg title ${worst}`, textContent: `XMRadar · ${noun(entries)} ${MARK[worst]}` })];
     // with a warning there's nothing to shrink to: × is the only way out
     if (worst !== 'warn') {
       const hide = h('button', { textContent: 'Hide', attrs: { 'aria-expanded': 'true' } });

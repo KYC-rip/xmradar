@@ -23,10 +23,13 @@ export interface Settings {
   shareMenuX?: boolean;
   /** "Check receipts on swap pages" (NKIP-0001); read with `receiptsOn`, on unless switched off */
   receiptsCheck?: boolean;
+  /** "Fetch letters of guarantee on order pages" (PLAN-LOG Round 2 item 9); read with `logFetchOn`, on unless switched off */
+  logFetch?: boolean;
 }
 
 export const shareMenuOn = (s: Partial<Settings> | null | undefined) => s?.shareMenuX !== false;
 export const receiptsOn = (s: Partial<Settings> | null | undefined) => s?.receiptsCheck !== false;
+export const logFetchOn = (s: Partial<Settings> | null | undefined) => receiptsOn(s) && s?.logFetch !== false;
 
 export const settingsItem = storage.defineItem<Settings>('sync:settings', {
   fallback: { relays: [], blossomServer: DEFAULT_BLOSSOM, appendSourceLink: false, debug: false },

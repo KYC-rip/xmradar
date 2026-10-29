@@ -63,9 +63,9 @@ function signedLine(r: Receipt, m: Manifest): Line {
  */
 export async function checkPageReceipt(text: string, pageUrl: string, deps: CheckDeps, opts: { eventId?: string } = {}): Promise<PageCheck> {
   const now = (deps.now ?? Date.now)();
-  if (text.length > MAX_RECEIPT_TEXT) return { lines: [{ level: 'warn', text: 'The receipt on this page is too large to check.' }], saved: false };
+  if (text.length > MAX_RECEIPT_TEXT) return { lines: [{ level: 'caution', text: 'This page has a receipt too large to check, so XMRadar didn\'t check it.' }], saved: false };
   const parsed = readReceipt(text);
-  if ('error' in parsed) return { lines: [{ level: 'warn', text: `The receipt on this page can't be read (${parsed.error}).` }], saved: false };
+  if ('error' in parsed) return { lines: [{ level: 'caution', text: `This page has a receipt XMRadar can't read (${parsed.error}), so it wasn't checked.` }], saved: false };
   const r = parsed.receipt;
   const c = commitment(r);
   let page: URL;

@@ -5,7 +5,7 @@ A browser extension for Chrome and Firefox that brings Monero to the pages you a
 - **Tip with Monero:** XMR badges on X for people who published a Monero address (via xmr.bio or Nostr), and a tip dialog that opens your own wallet.
 - **Your Monero identity:** publish your address on Nostr and link it to your X account, step by step.
 - **Burner email:** a throwaway GhostMail address in one click, for sign-ups.
-- **Swap receipts:** on an exchange's order page that carries a signed NKIP-0001 receipt, a check of the signature and the page's addresses, and a copy saved in your browser for disputes.
+- **Swap receipts and letters of guarantee:** on an exchange's order page that carries a signed NKIP-0001 receipt, or whose operator signs a letter of guarantee (PGP or MistProof), a check of the signature and the page's addresses, and a copy saved in your browser for disputes.
 - **Copy posts to Nostr:** from X, Bluesky, Mastodon, LinkedIn, Facebook, or any page.
 
 Free software under the GNU GPL v3 or later (see `LICENSE`). Releases: https://github.com/KYC-rip/xmradar/releases
@@ -105,13 +105,23 @@ A Xap is a Monero tip recorded on Nostr the way [NKIP-0002](https://github.com/n
   - **Public record:** the event id the page shows, if any. XMRadar doesn't ask relays from the order page: a relay would see your IP asking about your own order (the spec's trust model).
 - **Saved in this browser only** (IndexedDB), with the manifest, the policy bytes and the salt a dispute needs. **Options → Swap receipts** lists them, with Export (JSON; it contains your swap's addresses and salt), Delete, and **Check public record**, which asks up to 6 relays for the attestation, only when you press it and only an hour after the order.
 - **Not covered:** a page script that writes the clipboard directly, or other software that rewrites it (compare the address in your wallet); exchanges that embed their order page in an iframe from another host; the log-root check for receipts signed with a key that was revoked later (shown as △). XMRadar creates no orders, so it never sends a `recovery_pubkey` (R19).
-- **Missing-receipt warning (R12):** only on the order pages of exchanges XMRadar has checked live to carry receipts. That list is empty for now.
+- **Missing-receipt warning (R12):** on an order page that xmr.club's signed list says carries an NKIP-0001 receipt (kyc.rip today), a caution if the page shows a deposit address but no receipt for 15 s.
+
+## Letters of guarantee
+
+Some exchanges sign a letter of guarantee for each order instead of an NKIP-0001 receipt: a PGP clear-signed text (0trace, Bitania, BitcoinVN, SageSwap, StereoSwap, Pablo Cash) or a MistProof (Mistex, an Ed25519-signed JSON). xmr.club's signed list says, for each of them, what an order page's address looks like, where the letter is, and the operator's key.
+
+- **On an order page** the list names, XMRadar asks that same site for the order's letter: one request to the page's own origin, with the page's cookies (0trace and Bitania give the letter only to the browser that created the order), no redirects, 10 s, 256 KB. Nothing goes to any other host. With **Fetch letters of guarantee on order pages** off, or where the list names no letter URL, a letter is still checked when the page shows it or you copy it.
+- **Checked** in the background with the operator's key from xmr.club's list, after asserting the key's fingerprint matches the one listed. A key the page or the letter offers is never used, and no key is downloaded from the operator. PGP: OpenPGP.js 6.3.2, with MD5, RIPEMD-160 and SHA-1 refused and RSA under 2048 bits refused; every signed block must name this order. MistProof: the `key_id` must match the key, and the payload must be for this order.
+- **The page's addresses** (XMR, BTC, Tron, EVM) are compared with the signed ones, as for receipts: ✓ only when the signed deposit address is shown as the deposit and nothing unsigned is shown. A shortened address (`bc1q…gtx9`) that fits is only △, with the full signed address in the card. An address the letter doesn't name, on the page or in what you copy, is a red warning.
+- **Saved in this browser only**, only when it verified: the exact text and the key it was checked with. **Options → Swaps and sites** lists letters with receipts (tagged "Letter"), with Export: the letter, the key, the date of the xmr.club list it came from, and how to check it yourself with `gpg --verify`. The file contains your order id and addresses.
+- **What a verified letter proves:** the operator's key, as xmr.club lists it, signed this text for this order. Amounts and rates are shown as signed, not checked. The key is pinned by xmr.club's list, not by an independent source; a revocation the operator publishes arrives with the next list (about every 12 hours).
 
 ## Site info (xmr.club)
 
 XMRadar downloads xmr.club's signed site list (`https://xmr.club/api/v1/swap-sites.json`) at startup and every 12 hours. It's the same file for everyone, fetched without cookies or identifiers, and the download follows the browser's proxy or Tor settings. The site you're on is matched against it inside the browser; its address is never sent anywhere.
 
-- **Toolbar icon:** the site's grade (red with an open incident). On an order page the receipt check adds to it: a receipt warning (red !) comes first, then a site incident, then a receipt caution (amber !), then a checked receipt (green ✓), then the plain grade.
+- **Toolbar icon:** the site's grade, in xmr.club's colour for it (red with an open incident). On an order page the receipt check adds to it: a receipt warning (red !) comes first, then a site incident, then a receipt caution (amber !), then a checked receipt (green ✓), then the plain grade.
 - **Menu → This site:** every listing for the current host (kyc.rip has three), with its grade, NKIP-0001 level (verified receipts / attesting / manifest only / letter of guarantee only / no verifiable receipts yet), any open incident and a link to the listing.
 - **In-page warning:** only for an open incident or a D–F grade, bottom centre; × hides it on that site for 7 days.
 - **Platforms** (GitHub, YouTube, Reddit, X, …) never get a badge, even though some listings link to pages there.
@@ -132,6 +142,7 @@ In the options page, under **Monero identity**, a four-step tracker walks you th
 - A Xap receipt is signed only after a real click on **Publish receipt** in the popup, from the top frame of an x.com tab, at most once every 10 s, and only for a standard address or subaddress that the recipient's newest NIP-A3 list (or kind 0, without one) names right now, read fresh from relays. Your signer still asks first.
 - The tip and Xap popups' dollar shortcuts ($1, $5, $10, $20) need the XMR/USD price. It is fetched from `api.kyc.rip/v1/price/XMR` only when a tip popup opens, without cookies, at most once every 5 minutes (once a minute while it fails); nothing about you or the recipient is sent. If it fails, the shortcuts don't show.
 - Before uploading, the background checks that the Blossom auth event matches the image hash and is signed.
+- Letters of guarantee: the order page is matched from the browser's record of the tab, never from the page; the page learns the order id and letter URL, never a key. The letter request goes only to the page's own origin. OpenPGP.js is in the background only, never in the scripts that run on pages.
 - Swap receipts: the page URL a receipt is checked for comes from the browser's record of the tab, never from the page; only the top frame counts. The manifest and policy come from that host only, without cookies, referrer or redirects, at most 256 KB. Manifest relays used by the public-record check must be public `wss://` hosts on port 443; a public name that resolves to a private address isn't caught. Receipts are parsed strictly (duplicate keys, fractions and oversized numbers are refused).
 - Image URLs taken from the page are only fetched over http(s) or as `data:image`. Literal local and private addresses are refused, both for the original URL and for where any redirect ends up. A DNS name that resolves to a private IP is not caught; that's accepted for a personal tool.
 - **Remaining risk:** a hostile page can impersonate the signer's replies, for example by returning a fake pubkey. The worst it can do is get your text published under someone else's key, or block publishing. It can't use your key without your signer's prompt. Check the "Posting as npub…" line in the composer.
@@ -152,5 +163,6 @@ Each site has its own file in `src/extractors/` with a matching HTML fixture in 
 
 ## Third-party assets
 
+- Letters of guarantee are checked with OpenPGP.js 6.3.2 (LGPL-3.0, lightweight build, unmodified), bundled in the background script.
 - The UI font is Manrope (SIL Open Font License 1.1), bundled from `@fontsource-variable/manrope`. Nothing is loaded from a font CDN.
 - The Monero symbol on the badge is © The Monero Project, from `monero-project/monero-gui` (`images/monero-vector.svg`, commit 5265e52), BSD-3-Clause, and licensed CC BY-SA 4.0 on getmonero.org. The default look recolours it white. Monero and its symbol are trademarks of their owners; XMRadar is not affiliated with or endorsed by The Monero Project. Full notices: `public/THIRD_PARTY_NOTICES.txt` (shipped in the extension).

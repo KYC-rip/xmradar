@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'wxt';
 
 const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')) as { version: string };
@@ -13,6 +14,11 @@ if (env.WXT_RELEASE_URL && !env.WXT_RELEASE_URL.startsWith('https://github.com/K
 
 export default defineConfig({
   srcDir: 'src',
+  // openpgp exports its lightweight build for browsers only; WXT also loads entrypoints in Node to read
+  // their options, so the import is pointed at the file itself (the same file a browser build picks)
+  vite: () => ({
+    resolve: { alias: { 'openpgp/lightweight': fileURLToPath(new URL('./node_modules/openpgp/dist/lightweight/openpgp.min.mjs', import.meta.url)) } },
+  }),
   // visible in Finder, unlike the default .output
   outDir: 'output',
   // Firefox defaults to MV2; MAIN-world scripting and the same code path need MV3 (Firefox 140+)

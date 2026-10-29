@@ -1,13 +1,16 @@
 import { sendToBackground } from '../messaging';
+import { LETTER_EXPORT_WARNING } from '../log/export';
+import type { SavedLetter } from '../log/store';
 import { EXPORT_WARNING } from '../receipts/export';
 import type { SavedReceipt } from '../receipts/store';
 import { lookupWaitMs } from '../receipts/witness';
-import { patchSettings, patchXmrSettings, receiptsOn, settingsItem, siteInfoOn, siteWarningsOn, xmrSettingsItem } from '../settings';
+import { logFetchOn, patchSettings, patchXmrSettings, receiptsOn, settingsItem, siteInfoOn, siteWarningsOn, xmrSettingsItem } from '../settings';
 import { part, setStatus } from './dom';
 
 /**
  * Options → Swap receipts (PLAN-NKIP01 §1.3, §12): the receipts saved in this browser, Export and
  * Delete, and the public-record check, which runs only on request and only an hour after the order.
+ * Verified letters of guarantee (PLAN-LOG §5) are listed with them, tagged "Letter".
  */
 
 const DELETE_CONFIRM_MS = 5_000;
@@ -42,8 +45,19 @@ export async function mountReceiptsPanel(root: HTMLElement) {
   const status = part<HTMLElement>(root, 'receipts', 'status');
   const exportAll = part<HTMLButtonElement>(root, 'receipts', 'export-all');
 
-  toggle.checked = receiptsOn(await settingsItem.getValue());
+  // letter fetches need receipt checks and site info (PLAN-LOG Round 3 switch matrix)
+  const logFetch = part<HTMLInputElement>(root, 'receipts', 'log-fetch');
+  const showChecks = async () => {
+    const s = await settingsItem.getValue();
+    toggle.checked = receiptsOn(s);
+    logFetch.checked = logFetchOn(s);
+    logFetch.disabled = !receiptsOn(s) || !siteInfoOn(await xmrSettingsItem.getValue());
+  };
+  await showChecks();
+  settingsItem.watch(() => void showChecks());
+  xmrSettingsItem.watch(() => void showChecks());
   toggle.addEventListener('change', () => void patchSettings({ receiptsCheck: toggle.checked }));
+  logFetch.addEventListener('change', () => void patchSettings({ logFetch: logFetch.checked }));
 
   // site info from xmr.club; warnings need site info, so they follow it off
   const siteInfo = part<HTMLInputElement>(root, 'receipts', 'site-info');
@@ -59,10 +73,11 @@ export async function mountReceiptsPanel(root: HTMLElement) {
   siteWarnings.addEventListener('change', () => void patchXmrSettings({ siteWarnings: siteWarnings.checked }));
 
   let saved: SavedReceipt[] = [];
+  let letters: SavedLetter[] = [];
 
   async function load() {
     try {
-      saved = await sendToBackground({ type: 'receipts-list' });
+      [saved, letters] = await Promise.all([sendToBackground({ type: 'receipts-list' }), sendToBackground({ type: 'letters-list' })]);
     } catch (e) {
       return setStatus(status, (e as Error).message, 'error');
     }
@@ -71,13 +86,12 @@ export async function mountReceiptsPanel(root: HTMLElement) {
 
   function render() {
     const now = Date.now();
-    exportAll.disabled = !saved.length;
-    if (!saved.length) {
-      list.replaceChildren(el('p', 'No receipts saved yet. They appear here when you open an order page that carries one.', 'row-hint'));
+    exportAll.disabled = !saved.length && !letters.length;
+    if (!saved.length && !letters.length) {
+      list.replaceChildren(el('p', 'No receipts or letters saved yet. They appear here when you open an order page that carries one.', 'row-hint'));
       return;
     }
-    list.replaceChildren(
-      ...saved.map((s) => {
+    const receiptCards = saved.map((s) => {
         const r = s.receipt;
         const card = el('div', '', 'card pad');
         const expired = r.expires_at * 1000 <= now;
@@ -110,31 +124,62 @@ export async function mountReceiptsPanel(root: HTMLElement) {
           }
           render();
         });
-        // two steps, like Burn: Firefox options pages have no window.confirm in every context
-        const del = el('button', 'Delete');
-        let armed: ReturnType<typeof setTimeout> | null = null;
-        del.addEventListener('click', async () => {
-          if (!armed) {
-            del.textContent = 'Confirm delete';
-            armed = setTimeout(() => ((armed = null), (del.textContent = 'Delete')), DELETE_CONFIRM_MS);
-            return;
-          }
-          clearTimeout(armed);
-          await sendToBackground({ type: 'receipt-delete', commitment: s.commitment }).catch((e) => setStatus(status, (e as Error).message, 'error'));
-          await load();
-        });
+        const del = deleteButton(() => sendToBackground({ type: 'receipt-delete', commitment: s.commitment }));
         row.append(exp, check, del);
         card.append(row);
         return card;
-      }),
-    );
+      });
+    const letterCards = letters.map((l) => {
+      const card = el('div', '', 'card pad');
+      const title = el('h2', `${l.orderId} · ${l.siteName} `);
+      title.append(el('span', 'Letter', 'tag'));
+      card.append(
+        title,
+        el('div', `${l.format === 'mistproof' ? 'MistProof' : 'PGP letter of guarantee'} · ${new Date(l.savedAt).toLocaleString()}`, 'row-hint'),
+        el('div', l.page, 'row-hint'),
+      );
+      const row = el('div', '', 'row');
+      const exp = el('button', 'Export');
+      exp.addEventListener('click', async () => {
+        try {
+          download(`letter-${l.siteId}-${l.orderId}.json`, await sendToBackground({ type: 'letter-export', id: l.id }));
+          setStatus(status, LETTER_EXPORT_WARNING, 'warn');
+        } catch (e) {
+          setStatus(status, (e as Error).message, 'error');
+        }
+      });
+      row.append(exp, deleteButton(() => sendToBackground({ type: 'letter-delete', id: l.id })));
+      card.append(row);
+      return card;
+    });
+    // newest first, receipts and letters together
+    const at = new Map<HTMLElement, number>([...receiptCards.map((c, i) => [c, saved[i]!.savedAt] as const), ...letterCards.map((c, i) => [c, letters[i]!.savedAt] as const)]);
+    list.replaceChildren(...[...at.keys()].sort((a, b) => at.get(b)! - at.get(a)!));
+  }
+
+  /** Delete in two steps, like Burn: Firefox options pages have no window.confirm in every context. */
+  function deleteButton(remove: () => Promise<unknown>) {
+    const del = el('button', 'Delete');
+    let armed: ReturnType<typeof setTimeout> | null = null;
+    del.addEventListener('click', async () => {
+      if (!armed) {
+        del.textContent = 'Confirm delete';
+        armed = setTimeout(() => ((armed = null), (del.textContent = 'Delete')), DELETE_CONFIRM_MS);
+        return;
+      }
+      clearTimeout(armed);
+      await remove().catch((e) => setStatus(status, (e as Error).message, 'error'));
+      await load();
+    });
+    return del;
   }
 
   exportAll.addEventListener('click', async () => {
     try {
       const all = await Promise.all(saved.map((s) => sendToBackground({ type: 'receipt-export', commitment: s.commitment })));
-      download('xmradar-receipts.json', all);
-      setStatus(status, EXPORT_WARNING, 'warn');
+      const allLetters = await Promise.all(letters.map((l) => sendToBackground({ type: 'letter-export', id: l.id })));
+      download('xmradar-receipts.json', [...all, ...allLetters]);
+      setStatus(status, allLetters.length ? `${EXPORT_WARNING} ${LETTER_EXPORT_WARNING}` : EXPORT_WARNING, 'warn');
     } catch (e) {
       setStatus(status, (e as Error).message, 'error');
     }

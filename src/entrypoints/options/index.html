@@ -214,12 +214,17 @@
           <h1>Swaps and sites</h1>
           <p class="lead">
             On an exchange's order page that carries a signed NKIP-0001 receipt, XMRadar checks it against the key the site publishes, compares the page's addresses with the signed ones, and saves the receipt in this browser only.
+            On an order page xmr.club lists with a letter of guarantee, it checks the letter with the operator's key from xmr.club's list the same way.
             Checking contacts only that site. Relays are asked about an order only when you press "Check public record", at least an hour after the order.
           </p>
           <div id="receipts-switch" class="card">
             <label class="setting">
               <div><span class="row-title">Check receipts on swap pages</span><span class="row-hint">The exchange's own site is asked for its key and policy</span></div>
               <input data-receipts="check" type="checkbox" role="switch" class="switch" />
+            </label>
+            <label class="setting">
+              <div><span class="row-title">Fetch letters of guarantee on order pages</span><span class="row-hint">On an order page xmr.club lists, XMRadar asks that same site for the order's signed letter, which the site already links to your order. Off: a letter is still checked when the page shows it or you copy it. Needs site info from xmr.club.</span></div>
+              <input data-receipts="log-fetch" type="checkbox" role="switch" class="switch" />
             </label>
           </div>
           <div id="site-switches" class="card">
@@ -235,7 +240,7 @@
           <p class="row-hint">
             The only request is the list itself, from xmr.club, about twice a day: the same signed file for everyone, without cookies or identifiers. The site you're on is matched against it inside your browser and never sent anywhere. The download follows your browser's proxy or Tor settings. xmr.club is run by the same team as XMRadar.
           </p>
-          <p class="row-hint">An export contains your swaps' addresses and salts: anyone with the file can link your deposits to your payouts. Keep it private.</p>
+          <p class="row-hint">An export contains your swaps' addresses and salts, and your letters' order ids: anyone with the file can link your deposits to your payouts. Keep it private.</p>
           <div class="row"><button data-receipts="export-all">Export all</button></div>
           <div data-receipts="list" class="cards"></div>
           <span data-receipts="status" role="status" aria-live="polite"></span>

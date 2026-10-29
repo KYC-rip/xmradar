@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fakeBrowser } from 'wxt/testing/fake-browser';
 import { amount, mountReceiptCard } from '../src/entrypoints/content/receipt-card';
 import { startReceipts } from '../src/entrypoints/content/receipt';
-import { adopterFor, missingReceiptText } from '../src/receipts/issuers';
+import { missingReceiptText } from '../src/receipts/issuers';
 import { recordText } from '../src/ui/receipts-panel';
 import { LOOKUP_MIN_AGE_MS } from '../src/receipts/witness';
 import type { SavedReceipt } from '../src/receipts/store';
@@ -90,7 +90,7 @@ describe('order pages (content script)', () => {
   };
   beforeEach(() => {
     fakeBrowser.reset();
-    send.mockReset().mockResolvedValue({ receipt, commitment: v2.cases[0].commitment, lines: [{ level: 'ok', text: 'Signed by example.swap' }], saved: true });
+    send.mockReset().mockImplementation(async (m: { type: string }) => (m.type === 'log-page' ? [] : { receipt, commitment: v2.cases[0].commitment, lines: [{ level: 'ok', text: 'Signed by example.swap' }], saved: true }));
   });
   afterEach(() => {
     for (const cb of invalidate) cb();
@@ -116,12 +116,35 @@ describe('order pages (content script)', () => {
     await vi.waitFor(() => expect(document.querySelector('xmradar-receipt')).toBeNull(), { timeout: 4000 });
     expect(send).toHaveBeenLastCalledWith({ type: 'receipt-badge', level: 'none' });
   });
+  it('kyc.rip’s unsigned witness pointer is not a receipt: its event id goes with the real one', async () => {
+    const id = 'ef'.repeat(32);
+    const pointer = { v: receipt.v, issuer: receipt.issuer, order_id: receipt.order_id, event_id: id, commitment: 'ab'.repeat(32), deposit_address: receipt.deposit_address };
+    document.body.innerHTML = `<script type="application/nkip01+json">${JSON.stringify(receipt)}</script><script type="application/nkip01+json">${JSON.stringify(pointer)}</script><p>Deposit: ${receipt.deposit_address}</p>`;
+    startReceipts(ctx as never);
+    await vi.waitFor(() => expect(send).toHaveBeenCalledWith({ type: 'receipt-found', text: JSON.stringify(receipt), eventId: id }));
+    expect(send.mock.calls.filter(([m]) => m.type === 'receipt-found')).toHaveLength(1);
+  });
   it('a page without one sends nothing and shows nothing', async () => {
     document.body.innerHTML = `<p>Deposit: ${receipt.deposit_address}</p>`;
     startReceipts(ctx as never);
     await new Promise((r) => setTimeout(r, 30));
-    expect(send).not.toHaveBeenCalled();
+    // only the question whether this is a listed order page (no URL in it)
+    expect(send.mock.calls.map(([m]) => m)).toEqual([{ type: 'log-page' }]);
     expect(document.querySelector('xmradar-receipt')).toBeNull();
+  });
+  it('letters follow the site-info switch while the page is open', async () => {
+    const page = { siteId: 'mistex', name: 'Mistex', format: 'mistproof', orderId: 'DX-36N87L', letterUrl: null };
+    send.mockImplementation(async (m: { type: string }) => (m.type === 'log-page' ? [page] : null));
+    document.body.innerHTML = '<p>Order</p>';
+    startReceipts(ctx as never);
+    await vi.waitFor(() => expect(document.querySelector('xmradar-receipt')).not.toBeNull());
+    const xmr = { badgesX: true, badgesNostr: true, nostrDiscovery: false, tipReceipts: true, badgeIcon: 'mono', badgeLabel: true };
+    await fakeBrowser.storage.sync.set({ xmrSettings: { ...xmr, siteInfo: false } });
+    await vi.waitFor(() => expect(document.querySelector('xmradar-receipt')).toBeNull());
+    send.mockClear();
+    await fakeBrowser.storage.sync.set({ xmrSettings: { ...xmr, siteInfo: true } });
+    await vi.waitFor(() => expect(send).toHaveBeenCalledWith({ type: 'log-page' }));
+    await vi.waitFor(() => expect(document.querySelector('xmradar-receipt')).not.toBeNull());
   });
   it('switched off in Options: nothing runs', async () => {
     await fakeBrowser.storage.sync.set({ settings: { relays: [], blossomServer: '', appendSourceLink: false, debug: false, receiptsCheck: false } });
@@ -132,16 +155,63 @@ describe('order pages (content script)', () => {
   });
 });
 
-describe('adopters and the missing-receipt warning (§1.4)', () => {
-  const a = { host: 'example.swap', receipts_live_at: 1000, order_paths: ['/order/:id'] };
-  it('applies only on an adopter’s order path, from receipts_live_at on, over https', () => {
-    expect(adopterFor(new URL('https://example.swap/order/X1'), 1000, [a])).toBe(a);
-    expect(adopterFor(new URL('https://www.example.swap/order/X1'), 1000, [a])).toBe(a);
-    expect(adopterFor(new URL('https://example.swap/order/X1'), 999, [a])).toBeNull();
-    expect(adopterFor(new URL('https://example.swap/about'), 1000, [a])).toBeNull();
-    expect(adopterFor(new URL('http://example.swap/order/X1'), 1000, [a])).toBeNull();
-    expect(adopterFor(new URL('https://example.swap/order/X1'), 1000)).toBeNull(); // the bundled list starts empty
-    expect(missingReceiptText(a)).toContain('keep a dated screenshot');
+describe('the missing-receipt warning (§1.4, PLAN-LOG §6)', () => {
+  let invalidate: (() => void)[] = [];
+  const ctx = {
+    addEventListener: (t: EventTarget, e: string, h: EventListener) => t.addEventListener(e, h),
+    onInvalidated: (cb: () => void) => invalidate.push(cb),
+  };
+  const nkip = { siteId: 'kyc-rip-aggregator', name: 'kyc.rip', format: 'nkip01', orderId: 'ABCD1234', letterUrl: null };
+  afterEach(() => {
+    for (const cb of invalidate) cb();
+    invalidate = [];
+    vi.useRealTimers();
+    document.body.innerHTML = '';
+  });
+
+  it('an order page xmr.club lists with receipts, showing a deposit address but no receipt for 15 s: a caution', async () => {
+    fakeBrowser.reset();
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    send.mockReset().mockImplementation(async (m: { type: string }) => (m.type === 'log-page' ? [nkip] : null));
+    document.body.innerHTML = `<p>Deposit address: ${receipt.deposit_address}</p>`;
+    startReceipts(ctx as never);
+    await vi.waitFor(() => expect(send).toHaveBeenCalledWith({ type: 'log-page' }));
+    await vi.advanceTimersByTimeAsync(15_500);
+    expect(document.querySelector('xmradar-receipt')).not.toBeNull();
+    expect(send).toHaveBeenCalledWith({ type: 'receipt-badge', level: 'caution' });
+    expect(missingReceiptText(['kyc.rip'])).toContain('keep a dated screenshot');
+  });
+
+  it('goes with site info, and the 15 s start over when it comes back', async () => {
+    fakeBrowser.reset();
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    send.mockReset().mockImplementation(async (m: { type: string }) => (m.type === 'log-page' ? [nkip] : null));
+    document.body.innerHTML = `<p>Deposit address: ${receipt.deposit_address}</p>`;
+    startReceipts(ctx as never);
+    await vi.waitFor(() => expect(send).toHaveBeenCalledWith({ type: 'log-page' }));
+    await vi.advanceTimersByTimeAsync(15_500);
+    await vi.waitFor(() => expect(document.querySelector('xmradar-receipt')).not.toBeNull());
+    const xmr = { badgesX: true, badgesNostr: true, nostrDiscovery: false, tipReceipts: true, badgeIcon: 'mono', badgeLabel: true };
+    await fakeBrowser.storage.sync.set({ xmrSettings: { ...xmr, siteInfo: false } });
+    await vi.waitFor(() => expect(document.querySelector('xmradar-receipt')).toBeNull());
+    send.mockClear();
+    await fakeBrowser.storage.sync.set({ xmrSettings: { ...xmr, siteInfo: true } });
+    await vi.waitFor(() => expect(send).toHaveBeenCalledWith({ type: 'log-page' }));
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(document.querySelector('xmradar-receipt')).toBeNull();
+    await vi.advanceTimersByTimeAsync(11_000);
+    await vi.waitFor(() => expect(document.querySelector('xmradar-receipt')).not.toBeNull());
+  });
+
+  it('not on a page the feed doesn’t list with receipts', async () => {
+    fakeBrowser.reset();
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    send.mockReset().mockImplementation(async (m: { type: string }) => (m.type === 'log-page' ? [] : null));
+    document.body.innerHTML = `<p>Deposit address: ${receipt.deposit_address}</p>`;
+    startReceipts(ctx as never);
+    await vi.waitFor(() => expect(send).toHaveBeenCalledWith({ type: 'log-page' }));
+    await vi.advanceTimersByTimeAsync(16_000);
+    expect(document.querySelector('xmradar-receipt')).toBeNull();
   });
 });
 

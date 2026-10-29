@@ -1,21 +1,28 @@
 import type { ContentScriptContext } from 'wxt/utils/content-script-context';
 import { sendToBackground } from '../../messaging';
 import type { Line, PageCheck } from '../../receipts/check';
-import { adopterFor, missingReceiptText } from '../../receipts/issuers';
+import { missingReceiptText } from '../../receipts/issuers';
 import { addressLines, copyWarning, depositShown, pageEventId, receiptTexts } from '../../receipts/page';
 import { isXHost } from '../../sender';
-import { receiptsOn, settingsItem } from '../../settings';
-import { mountReceiptCard, worstOf, type ReceiptCard } from './receipt-card';
+import { logFetchOn, receiptsOn, settingsItem, siteInfoOn, xmrSettingsItem } from '../../settings';
+import { letterWatch } from './letter';
+import { mountReceiptCard, worstOf, type CardEntry, type ReceiptCard } from './receipt-card';
 
 /**
  * Swap receipts on order pages (NKIP-0001, PLAN-NKIP01 §4.1): the top frame only, never on x.com.
  * A page carrying `<script type="application/nkip01+json">` gets the card; the receipt is checked and
  * saved by the background, and the page's addresses are compared with it here. Rescans while the page
- * changes, at most once every 2 s.
+ * changes, at most once every 2 s. Letters of guarantee (PLAN-LOG) share the card, the badge and the rescans.
  */
 
 const RESCAN_MS = 2000;
-const MISSING_AFTER_MS = 10_000;
+const MISSING_AFTER_MS = 15_000;
+
+/** The page's visible text with its line breaks, and form values, for a letter shown on it. */
+function pageLetterText(): string {
+  const values = [...document.querySelectorAll<HTMLTextAreaElement>('textarea')].map((t) => t.value);
+  return [document.body?.innerText ?? '', ...values].join('\n');
+}
 
 export function startReceipts(ctx: ContentScriptContext) {
   if (window !== window.top || isXHost(location.hostname)) return;
@@ -28,15 +35,28 @@ export function startReceipts(ctx: ContentScriptContext) {
   let depositSince = 0;
   // bumped by stop(): an answer that arrives for an earlier page state is dropped
   let generation = 0;
+  // letters need the xmr.club feed too (PLAN-LOG Round 3 switch matrix)
+  const letters = letterWatch({ onChange: () => render(), fetchOn: async () => logFetchOn(await settingsItem.getValue()) && siteInfoOn(await xmrSettingsItem.getValue()) });
+  let siteInfo: boolean | null = null;
+  // the copy warning came from a letter (it goes when site info does)
+  let copyFromLetter = false;
 
   const render = () => {
-    const entries = [...checks.values()].map((c) => ({
+    const entries: CardEntry[] = [...checks.values()].map((c) => ({
       receipt: c.receipt,
       saved: c.saved,
       saveError: c.saveError,
       // the page's addresses against this receipt, and the public record as the page shows it (§12)
       lines: c.receipt ? [...c.lines, ...addressLines(document, c.receipt), eventLine()] : c.lines,
     }));
+    for (const l of letters.entries(document)) {
+      entries.push({
+        lines: l.lines,
+        saved: !!l.reply?.saved,
+        saveError: l.reply?.saveError,
+        letter: { name: l.page.name, orderId: l.page.orderId, format: l.page.format, verified: !!l.reply?.verified, addresses: l.reply?.addresses ?? [], signedText: l.reply?.signedText ?? '', recheck: () => letters.recheck(l.page.siteId) },
+      });
+    }
     if (!entries.length && !extra.size) {
       // the page took its receipts away: so does the card
       card?.remove();
@@ -83,20 +103,22 @@ export function startReceipts(ctx: ContentScriptContext) {
       if (gen !== generation) return;
       checks.set(text, result);
     }
+    // a letter the page shows (Mistex: after "Show MistProof"); innerText keeps its line breaks
+    if (letters.waiting) letters.capture(pageLetterText());
     missingCheck(current.length);
     render();
   }
 
-  // R12: an adopter's order page that shows a deposit address but no receipt for 10 s
+  // R12: an order page xmr.club lists as carrying receipts that shows a deposit address but no receipt for 15 s
   function missingCheck(receipts: number) {
-    const adopter = adopterFor(new URL(location.href), Date.now() / 1000);
-    if (!adopter || receipts || !depositShown(document)) {
+    const sites = letters.receiptSites;
+    if (!sites.length || receipts || !depositShown(document)) {
       depositSince = 0;
       extra.delete('missing');
       return;
     }
     depositSince ||= Date.now();
-    if (Date.now() - depositSince >= MISSING_AFTER_MS) extra.set('missing', { level: 'warn', text: missingReceiptText(adopter) });
+    if (Date.now() - depositSince >= MISSING_AFTER_MS) extra.set('missing', { level: 'caution', text: missingReceiptText(sites) });
     else schedule(MISSING_AFTER_MS);
   }
 
@@ -110,7 +132,10 @@ export function startReceipts(ctx: ContentScriptContext) {
 
   const onCopy = () => {
     const copied = window.getSelection()?.toString() ?? '';
-    const warning = [...checks.values()].map((c) => c.receipt && copyWarning(copied, c.receipt)).find(Boolean);
+    letters.capture(copied);
+    const receiptWarning = [...checks.values()].map((c) => c.receipt && copyWarning(copied, c.receipt)).find(Boolean);
+    const warning = receiptWarning || letters.copyWarning(copied);
+    copyFromLetter = !receiptWarning && !!warning;
     // the latest copy decides: copying a signed address clears an earlier warning
     if (warning) extra.set('copy', { level: 'warn', text: warning });
     else if (!extra.delete('copy')) return;
@@ -124,10 +149,22 @@ export function startReceipts(ctx: ContentScriptContext) {
     observer.observe(document.documentElement, { childList: true, subtree: true, characterData: true });
     document.addEventListener('copy', onCopy, true);
     void scan();
+    // the order-page match also says whether a receipt is expected here: check again once it's known
+    startLetters();
   }
+
+  // once the order page is known, look again at once: the missing-receipt clock starts there
+  // (not after stop(): the page state it would look at is gone)
+  const startLetters = () => {
+    const gen = generation;
+    void letters.start().then(() => {
+      if (gen === generation) void scan();
+    });
+  };
 
   function stop() {
     generation++;
+    letters.stop();
     depositSince = 0;
     observer?.disconnect();
     observer = null;
@@ -148,6 +185,22 @@ export function startReceipts(ctx: ContentScriptContext) {
   };
   void settingsItem.getValue().then((s) => apply(receiptsOn(s)));
   const unwatch = settingsItem.watch((s) => apply(receiptsOn(s)));
+  // site info switched while the page is open: letters stop, or start, with it
+  const unwatchSite = xmrSettingsItem.watch((x) => {
+    const next = siteInfoOn(x);
+    if (next === siteInfo) return;
+    siteInfo = next;
+    if (!on) return;
+    letters.stop();
+    // what the letters and the feed said goes with them
+    depositSince = 0;
+    extra.delete('missing');
+    if (copyFromLetter) extra.delete('copy');
+    copyFromLetter = false;
+    if (next) startLetters();
+    render();
+  });
+  void xmrSettingsItem.getValue().then((x) => (siteInfo ??= siteInfoOn(x)));
   // a single-page app moving to another order: start over
   ctx.addEventListener(window, 'wxt:locationchange', () => {
     if (!on) return;
@@ -156,6 +209,8 @@ export function startReceipts(ctx: ContentScriptContext) {
   });
   ctx.onInvalidated(() => {
     unwatch();
+    unwatchSite();
+    on = false;
     stop();
   });
 }

@@ -2,7 +2,7 @@ import { ed25519 } from '@noble/curves/ed25519.js';
 import { bytesToHex } from '@noble/hashes/utils.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fakeBrowser } from 'wxt/testing/fake-browser';
-import { badgeFor, firstSentence, levelText, needsBanner, PLATFORM_HOSTS, readFeed, sitesFor, worstGrade, type SiteEntry, type SiteFeed } from '../src/sites/feed';
+import { badgeFor, FEED_READER_V, firstSentence, levelText, needsBanner, PLATFORM_HOSTS, readFeed, sitesFor, worstGrade, type SiteEntry, type SiteFeed } from '../src/sites/feed';
 import { bannerText, startSiteInfo } from '../src/entrypoints/content/site';
 import { renderSiteCard } from '../src/ui/site-card';
 
@@ -22,7 +22,7 @@ const payload = (over: Record<string, unknown> = {}) => ({ v: 1, issuer: 'xmr.cl
 
 describe('the xmr.club feed: trust', () => {
   it('accepts a feed signed with a pinned key', () => {
-    expect(readFeed(sign(payload()), NOW, 0, KEYS)).toMatchObject({ reader: 3, issuedAt: NOW, sites: [{ id: 'kyc-rip-aggregator', hosts: ['kyc.rip'] }] });
+    expect(readFeed(sign(payload()), NOW, 0, KEYS)).toMatchObject({ reader: FEED_READER_V, issuedAt: NOW, sites: [{ id: 'kyc-rip-aggregator', hosts: ['kyc.rip'] }] });
   });
   it('refuses an unknown key, a bad signature, another issuer or version', () => {
     expect(() => readFeed(sign(payload(), ed25519.utils.randomSecretKey()), NOW, 0, KEYS)).toThrow('unknown key');
@@ -103,6 +103,9 @@ describe('what the listings mean (§3)', () => {
     expect(badgeFor({ receipt: 'ok', site: site('B') })).toEqual({ text: '✓', color: '#1e7d34' });
     expect(badgeFor({ site: site('B') }).text).toBe('B');
     expect(badgeFor({ site: site('') }).text).toBe('•');
+    // each grade in xmr.club's colour; a + or − keeps its letter's
+    expect(['A', 'B-', 'C+', 'D', 'E', 'F'].map((g) => badgeFor({ site: site(g) }).color)).toEqual(['#3f7a26', '#c45a1a', '#9c2e2e', '#5b5142', '#c91515', '#c91515']);
+    expect(badgeFor({ site: site('') }).color).toBe('#6b6880');
     expect(badgeFor({}).text).toBe('');
   });
   it('incident detail: date, severity and the first sentence; only for an open incident', () => {

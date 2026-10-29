@@ -71,14 +71,19 @@ export async function saveReceipt(store: ReceiptStore, r: SavedReceipt, nowSecs:
 const DB_NAME = 'xmradar-receipts';
 const RECEIPTS = 'receipts';
 const POLICIES = 'policies';
+/** letters of guarantee (PLAN-LOG §5), from version 2; see `src/log/store.ts` */
+export const LETTERS = 'letters';
 let dbPromise: Promise<IDBDatabase> | null = null;
 
 function openDb(): Promise<IDBDatabase> {
   dbPromise ??= new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, 1);
-    req.onupgradeneeded = () => {
-      req.result.createObjectStore(RECEIPTS, { keyPath: 'commitment' });
-      req.result.createObjectStore(POLICIES);
+    const req = indexedDB.open(DB_NAME, 2);
+    req.onupgradeneeded = (e) => {
+      if (e.oldVersion < 1) {
+        req.result.createObjectStore(RECEIPTS, { keyPath: 'commitment' });
+        req.result.createObjectStore(POLICIES);
+      }
+      if (e.oldVersion < 2) req.result.createObjectStore(LETTERS, { keyPath: 'id' });
     };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => {
@@ -90,7 +95,7 @@ function openDb(): Promise<IDBDatabase> {
 }
 
 /** Resolves when the transaction commits, so a write that aborts later (quota) is not taken as stored. */
-async function run<T>(name: string, mode: IDBTransactionMode, op: (s: IDBObjectStore) => IDBRequest): Promise<T> {
+export async function run<T>(name: string, mode: IDBTransactionMode, op: (s: IDBObjectStore) => IDBRequest): Promise<T> {
   const db = await openDb();
   return new Promise((resolve, reject) => {
     const tx = db.transaction(name, mode);

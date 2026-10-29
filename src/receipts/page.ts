@@ -12,16 +12,33 @@ import { KIND_ATTESTATION, type Receipt } from './verify';
 export const RECEIPT_SELECTOR = 'script[type="application/nkip01+json"]';
 export const MAX_RECEIPTS_PER_PAGE = 5;
 
-export const receiptTexts = (doc: Document) => [...doc.querySelectorAll(RECEIPT_SELECTOR)].slice(0, MAX_RECEIPTS_PER_PAGE).map((s) => s.textContent ?? '');
+const scriptTexts = (doc: Document) => [...doc.querySelectorAll(RECEIPT_SELECTOR)].map((s) => s.textContent ?? '');
 
-type Role = 'deposit' | 'payout' | null;
+/**
+ * kyc.rip also puts an unsigned pointer to its witness event ({event_id, commitment, …}, no `sig`) in a
+ * receipt script. It isn't a receipt: its event id is read like one the page shows, and checked the same way.
+ */
+function eventPointer(text: string): string | undefined {
+  try {
+    const v: unknown = JSON.parse(text);
+    if (!v || typeof v !== 'object' || 'sig' in v) return undefined;
+    const id = (v as { event_id?: unknown }).event_id;
+    return typeof id === 'string' && /^[0-9a-f]{64}$/.test(id) ? id : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+export const receiptTexts = (doc: Document) => scriptTexts(doc).filter((t) => !eventPointer(t)).slice(0, MAX_RECEIPTS_PER_PAGE);
+
+export type Role = 'deposit' | 'payout' | null;
 const DEPOSIT_LABEL = /\b(deposit|send (?:exactly )?(?:to|the)|pay to|payment address|send)\b/i;
 const PAYOUT_LABEL = /\b(payout|receive|recipient|destination|you get|receiving)\b/i;
 const EVENT_LABEL = /\b(event|attestation|witness|record)\b/i;
 const SKIP = 'script, style, template, noscript, [hidden], [aria-hidden="true"]';
 
 /** Is this element rendered: not in a skipped subtree, not a hidden input, and with a box. */
-function shown(el: Element): boolean {
+export function shown(el: Element): boolean {
   if (el.closest(SKIP)) return false;
   if (el instanceof HTMLInputElement && el.type === 'hidden') return false;
   const v = (el as Element & { checkVisibility?: (o?: object) => boolean }).checkVisibility;
@@ -51,15 +68,15 @@ const ALL_FAMILIES: ReadonlySet<Family> = new Set(['XMR', 'BTC']);
 
 /**
  * The role `address` is shown in: the issuer's `data-nkip01` markup, else the closest level whose text
- * names exactly one role. The climb stops at a level naming both, or holding another address: a label
- * there may belong to that one.
+ * names exactly one role. The climb stops at a level naming both, or holding another address
+ * (`holdsOther`, by default an XMR or BTC one): a label there may belong to that one.
  */
-function roleOf(el: Element, address: string): Role {
+export function roleOf(el: Element, address: string, holdsOther = (text: string) => findAddresses(text, ALL_FAMILIES).some((a) => !sameAddress(a.address, address))): Role {
   const marked = el.closest('[data-nkip01]')?.getAttribute('data-nkip01');
   if (marked === 'deposit_address') return 'deposit';
   if (marked === 'payout_address') return 'payout';
   for (const text of labelLevels(el)) {
-    if (findAddresses(text, ALL_FAMILIES).some((a) => !sameAddress(a.address, address))) return null;
+    if (holdsOther(text)) return null;
     const d = DEPOSIT_LABEL.test(text);
     const p = PAYOUT_LABEL.test(text);
     if (d !== p) return d ? 'deposit' : 'payout';
@@ -69,7 +86,7 @@ function roleOf(el: Element, address: string): Role {
 }
 
 /** Every visible text holder: text nodes' parents and input/textarea values. */
-function* visibleTexts(doc: Document): Generator<{ el: Element; text: string }> {
+export function* visibleTexts(doc: Document): Generator<{ el: Element; text: string }> {
   const walker = doc.createTreeWalker(doc.body ?? doc.documentElement, NodeFilter.SHOW_TEXT);
   for (let n = walker.nextNode(); n; n = walker.nextNode()) {
     const el = n.parentElement;
@@ -80,6 +97,10 @@ function* visibleTexts(doc: Document): Generator<{ el: Element; text: string }> 
 
 /** The attestation event id the page shows next to a label (§12.1): 64 hex or a kind 3711 nevent. */
 export function pageEventId(doc: Document): string | undefined {
+  for (const t of scriptTexts(doc)) {
+    const id = eventPointer(t);
+    if (id) return id;
+  }
   for (const { el, text } of visibleTexts(doc)) {
     if (!EVENT_LABEL.test(labelOf(el))) continue;
     const hex = /\b[0-9a-f]{64}\b/.exec(text)?.[0];

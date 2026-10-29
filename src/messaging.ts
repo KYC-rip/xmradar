@@ -2,6 +2,9 @@ import type { Event } from 'nostr-tools/pure';
 import type { ResolvedIdentity } from './identity/envelope';
 import type { Badge } from './identity/resolve';
 import type { ProofResult } from './identity/nostr';
+import type { LetterExport } from './log/export';
+import type { LetterReply, LogPage } from './log/service';
+import type { SavedLetter } from './log/store';
 import type { PageCheck } from './receipts/check';
 import type { ReceiptExport } from './receipts/export';
 import type { PublicRecord, SavedReceipt } from './receipts/store';
@@ -156,7 +159,12 @@ export type BgRequest =
   | { type: 'receipts-list' }
   | { type: 'receipt-delete'; commitment: string }
   | { type: 'receipt-export'; commitment: string }
-  | { type: 'receipt-record'; commitment: string };
+  | { type: 'receipt-record'; commitment: string }
+  | { type: 'log-page' }
+  | { type: 'log-found'; siteId: string; text: string }
+  | { type: 'letters-list' }
+  | { type: 'letter-delete'; id: string }
+  | { type: 'letter-export'; id: string };
 
 /** Port name for creating a free burner inbox; the open port keeps the worker busy during the proof of work. */
 export const BURNER_CREATE_PORT = 'burner-create';
@@ -220,7 +228,17 @@ export type BgResponse<T extends BgRequest['type']> = T extends 'fetch-image'
                                               ? ReceiptExport
                                               : T extends 'receipt-record'
                                                 ? PublicRecord
-                                                : never;
+                                                : T extends 'log-page'
+                                                  ? LogPage[]
+                                                  : T extends 'log-found'
+                                                    ? LetterReply
+                                                    : T extends 'letters-list'
+                                                      ? SavedLetter[]
+                                                      : T extends 'letter-delete'
+                                                        ? null
+                                                        : T extends 'letter-export'
+                                                          ? LetterExport
+                                                          : never;
 
 /** Every response is wrapped so errors survive the message boundary. */
 export type Wrapped<T> = { ok: true; data: T } | { ok: false; error: string };
