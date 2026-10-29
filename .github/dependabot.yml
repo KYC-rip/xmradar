@@ -6,3 +6,7 @@ updates:
   - package-ecosystem: npm
     directory: /
     schedule: { interval: weekly }
+    ignore:
+      # nostr-tools pins these exactly; a newer copy of our own would bundle both. Bump with nostr-tools.
+      - dependency-name: '@noble/curves'
+      - dependency-name: '@noble/hashes'
