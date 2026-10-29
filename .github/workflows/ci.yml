@@ -21,7 +21,11 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm compile
+      # the build first, so the test of where openpgp.js lands has something to read
+      - run: pnpm build
       - run: pnpm test
+        env:
+          XMRADAR_REQUIRE_BUILD: '1'
 
   reproducible:
     # Builds the same commit twice in clean trees and fails if any zip differs.

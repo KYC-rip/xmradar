@@ -39,6 +39,8 @@ export function logPages(feed: SiteFeed | null, pageUrl: string): LogPage[] {
 export interface FoundDeps extends LetterDeps {
   store: LetterStore;
   now: () => number;
+  /** asked again right before saving: checks switched off while this one ran save nothing */
+  mayStore?: () => Promise<boolean>;
 }
 
 /** origin and path: what is kept of the page */
@@ -54,6 +56,10 @@ export async function checkFoundLetter(feed: SiteFeed | null, pageUrl: string, s
   const c = await checkLetter(text, { siteName: m.site.name, log: m.log, orderId: m.orderId }, deps, new Date(deps.now()));
   const reply: LetterReply = { verified: c.verified, lines: c.lines, addresses: c.addresses, signedText: c.signedText, saved: false };
   if (!c.verified) return reply;
+  if (deps.mayStore && !(await deps.mayStore())) {
+    reply.saveError = 'Not saved: letter checks were switched off';
+    return reply;
+  }
   const log = m.log;
   try {
     await saveLetter(deps.store, {
@@ -74,4 +80,47 @@ export async function checkFoundLetter(feed: SiteFeed | null, pageUrl: string, s
     reply.saveError = `Not saved: ${(e as Error).message}`;
   }
   return reply;
+}
+
+/** The parts of a message sender these requests look at. */
+export interface PageSender {
+  id?: string;
+  frameId?: number;
+  tab?: { id?: number; url?: string };
+}
+
+export interface RequestDeps extends Omit<FoundDeps, 'mayStore'> {
+  runtimeId: string;
+  /** receipt checks and site info both on (PLAN-LOG Round 3 switch matrix) */
+  checksOn: () => Promise<boolean>;
+  feed: () => Promise<SiteFeed | null>;
+  /** false once this tab has used up its checks for the minute */
+  budget: (tabId: number) => boolean;
+}
+
+/** The top frame of a tab in this extension, with the tab's URL from the browser (never the message). */
+function topFrame(sender: PageSender, runtimeId: string): { tabId: number; pageUrl: string } {
+  const tabId = sender.tab?.id;
+  const pageUrl = sender.tab?.url;
+  if (sender.id !== runtimeId || tabId == null || sender.frameId !== 0 || !pageUrl) throw new Error('Not allowed');
+  return { tabId, pageUrl };
+}
+
+/** The background's `log-page` and `log-found` handlers. */
+export function letterRequests(deps: RequestDeps) {
+  return {
+    async logPage(sender: PageSender): Promise<LogPage[]> {
+      const { pageUrl } = topFrame(sender, deps.runtimeId);
+      if (!(await deps.checksOn())) return [];
+      return logPages(await deps.feed(), pageUrl);
+    },
+    async logFound(msg: { siteId?: unknown; text?: unknown }, sender: PageSender): Promise<LetterReply> {
+      const { tabId, pageUrl } = topFrame(sender, deps.runtimeId);
+      if (!(await deps.checksOn())) throw new Error('Letter checks are off');
+      if (typeof msg.siteId !== 'string' || typeof msg.text !== 'string') throw new Error('Bad letter');
+      // the same budget as receipts: a page can't make the worker verify without end
+      if (!deps.budget(tabId)) throw new Error('Too many checks on this page');
+      return checkFoundLetter(await deps.feed(), pageUrl, msg.siteId, msg.text, { ...deps, mayStore: deps.checksOn });
+    },
+  };
 }

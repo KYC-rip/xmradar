@@ -8,7 +8,7 @@ import { letterWatch } from '../src/entrypoints/content/letter';
 import { buildLetterExport, LETTER_EXPORT_WARNING } from '../src/log/export';
 import { fetchLetter, letterFromHtml, letterInText, MAX_FETCH_BYTES } from '../src/log/fetch';
 import { verifyLetter } from '../src/log/pgp';
-import { checkFoundLetter, logPages, type LetterReply, type LogPage } from '../src/log/service';
+import { checkFoundLetter, letterRequests, logPages, type LetterReply, type LogPage } from '../src/log/service';
 import { MAX_LETTERS, memoryLetterStore, saveLetter, type SavedLetter } from '../src/log/store';
 import { verifyMistProof } from '../src/log/mistproof';
 import { readFeed } from '../src/sites/feed';
@@ -108,6 +108,49 @@ describe('checkFoundLetter: verified letters are saved, once', () => {
       throw new Error('quota');
     };
     expect(await checkFoundLetter(feed, STEREO_PAGE, 'stereoswap', STEREO, d)).toMatchObject({ verified: true, saved: false, saveError: 'Not saved: quota' });
+  });
+});
+
+describe('the background’s log-page and log-found handlers', () => {
+  const tab = { id: 7, url: STEREO_PAGE };
+  const me = { id: 'xmradar', frameId: 0, tab };
+  const setup = (over: { on?: () => Promise<boolean>; budget?: () => boolean } = {}) => {
+    const store = memoryLetterStore();
+    const r = letterRequests({ runtimeId: 'xmradar', checksOn: over.on ?? (async () => true), feed: async () => feed, budget: over.budget ?? (() => true), verifyLetter, store, now: () => at });
+    return { r, store };
+  };
+
+  it('only the top frame of a tab in this extension, with the tab’s own URL', async () => {
+    const { r } = setup();
+    expect(await r.logPage(me)).toEqual([{ siteId: 'stereoswap', name: 'stereoswap', format: 'pgp', orderId: 'STRRSXUE', letterUrl: 'https://stereoswap.app/swap/STRRSXUE/letter.asc' }]);
+    for (const bad of [{ ...me, id: 'other' }, { ...me, frameId: 1 }, { ...me, tab: undefined }, { ...me, tab: { id: 7 } }]) {
+      await expect(r.logPage(bad)).rejects.toThrow('Not allowed');
+      await expect(r.logFound({ siteId: 'stereoswap', text: STEREO }, bad)).rejects.toThrow('Not allowed');
+    }
+  });
+
+  it('checks off: no order, no letter', async () => {
+    const { r, store } = setup({ on: async () => false });
+    expect(await r.logPage(me)).toEqual([]);
+    await expect(r.logFound({ siteId: 'stereoswap', text: STEREO }, me)).rejects.toThrow('off');
+    expect(store.letters.size).toBe(0);
+  });
+
+  it('a malformed message, or a tab out of budget, is refused', async () => {
+    await expect(setup().r.logFound({ siteId: 1, text: STEREO }, me)).rejects.toThrow('Bad letter');
+    await expect(setup().r.logFound({ siteId: 'stereoswap' }, me)).rejects.toThrow('Bad letter');
+    await expect(setup({ budget: () => false }).r.logFound({ siteId: 'stereoswap', text: STEREO }, me)).rejects.toThrow('Too many');
+  });
+
+  it('verifies and saves; switched off while it verified: checked, but nothing saved', async () => {
+    const { r, store } = setup();
+    expect(await r.logFound({ siteId: 'stereoswap', text: STEREO }, me)).toMatchObject({ verified: true, saved: true });
+    expect(store.letters.size).toBe(1);
+    // on for the first ask, off by the time the letter would be saved
+    let asks = 0;
+    const late = setup({ on: async () => asks++ === 0 });
+    expect(await late.r.logFound({ siteId: 'stereoswap', text: STEREO }, me)).toMatchObject({ verified: true, saved: false, saveError: expect.stringContaining('switched off') });
+    expect(late.store.letters.size).toBe(0);
   });
 });
 
@@ -263,6 +306,16 @@ describe('letterWatch: the content side', () => {
     expect(send).toHaveBeenCalledWith({ type: 'log-found', siteId: 'stereoswap', text: STEREO_BLOCK });
     await vi.waitFor(() => expect(w.entries(document)[0]!.reply?.verified).toBe(true));
     expect(w.copyWarning('bc1qmumua59vdrukll6segkjm2zh0zgp5fphrtgtx9')).toBeNull();
+    // the other order's id, shortened on the page, is not a stray address for this one
+    document.body.innerHTML = '<p>Also open: 3ZZZ...9999</p><p>Deposit to <code>bc1qmumua59vdrukll6segkjm2zh0zgp5fphrtgtx9</code></p>';
+    const otherId = { ...other, orderId: '3ZZZ-0000-9999' };
+    send.mockImplementation(async (m: { type: string }) => (m.type === 'log-page' ? [{ ...page, letterUrl: null }, otherId] : verified));
+    const w2 = letterWatch({ onChange: () => {}, fetchOn: async () => true });
+    await w2.start();
+    w2.capture(STEREO);
+    await vi.waitFor(() => expect(w2.entries(document)[0]!.reply?.verified).toBe(true));
+    expect(w2.entries(document)[0]!.lines.map((l) => l.level)).not.toContain('caution');
+    document.body.innerHTML = '';
   });
 
   it('stop() cancels a letter request still in flight', async () => {
@@ -289,14 +342,20 @@ describe('letterWatch: the content side', () => {
 });
 
 describe('the build: openpgp.js in the background only', () => {
-  // runs after `pnpm build`; the source boundary is tested in log.test.ts either way
+  // runs after `pnpm build`, which CI does first (XMRADAR_REQUIRE_BUILD: a missing build fails there);
+  // locally it skips without one. The source boundary is tested in log.test.ts either way.
+  const required = !!process.env.XMRADAR_REQUIRE_BUILD;
   for (const target of ['chrome-mv3', 'firefox-mv3']) {
     const dir = join(process.cwd(), 'output', target);
-    it.skipIf(!existsSync(join(dir, 'background.js')))(target, () => {
-      const has = (f: string) => readFileSync(join(dir, f), 'utf8').includes('readCleartextMessage');
+    it.skipIf(!required && !existsSync(join(dir, 'background.js')))(target, () => {
+      const read = (f: string) => readFileSync(join(dir, f), 'utf8');
+      const has = (f: string) => read(f).includes('readCleartextMessage');
       expect(has('background.js')).toBe(true);
       expect(has('content-scripts/content.js')).toBe(false);
       for (const f of readdirSync(join(dir, 'chunks'))) expect(has(`chunks/${f}`)).toBe(false);
+      // size budgets (PLAN-LOG Round 3): openpgp.js is about 240 KB, so a leak into the page script shows here
+      expect(read('content-scripts/content.js').length).toBeLessThan(250_000);
+      expect(read('background.js').length).toBeLessThan(700_000);
     });
   }
 });

@@ -35,7 +35,7 @@ import { buildExport } from '../receipts/export';
 import { idbReceiptStore } from '../receipts/store';
 import { buildLetterExport } from '../log/export';
 import { verifyLetter } from '../log/pgp';
-import { checkFoundLetter, logPages } from '../log/service';
+import { letterRequests } from '../log/service';
 import { idbLetterStore } from '../log/store';
 import { checkPublicRecord } from '../receipts/witness';
 import { fetchXmrUsd, PRICE_RETRY_MS, PRICE_TTL_MS } from '../xap/price';
@@ -501,23 +501,11 @@ async function handle(msg: BgRequest, sender: Browser.runtime.MessageSender): Pr
       if (!receiptBudget(tabId)) throw new Error('Too many receipts on this page');
       return checkPageReceipt(msg.text, pageUrl, receiptDeps, { eventId: typeof msg.eventId === 'string' ? msg.eventId : undefined });
     }
-    case 'log-page': {
-      // which order this tab shows (PLAN-LOG §2): from the tab's URL, never the message; a projection without keys
-      const pageUrl = sender.tab?.url;
-      if (sender.id !== browser.runtime.id || sender.tab?.id == null || sender.frameId !== 0 || !pageUrl) throw new Error('Not allowed');
-      if (!(await letterChecksOn())) return [];
-      return logPages(await siteFeedItem.getValue(), pageUrl);
-    }
-    case 'log-found': {
-      const tabId = sender.tab?.id;
-      const pageUrl = sender.tab?.url;
-      if (sender.id !== browser.runtime.id || tabId == null || sender.frameId !== 0 || !pageUrl) throw new Error('Not allowed');
-      if (!(await letterChecksOn())) throw new Error('Letter checks are off');
-      if (typeof msg.siteId !== 'string' || typeof msg.text !== 'string') throw new Error('Bad letter');
-      // the same budget as receipts: a page can't make the worker verify without end
-      if (!receiptBudget(tabId)) throw new Error('Too many checks on this page');
-      return checkFoundLetter(await siteFeedItem.getValue(), pageUrl, msg.siteId, msg.text, { verifyLetter, store: idbLetterStore, now: Date.now });
-    }
+    // which order this tab shows (PLAN-LOG §2), and letters found there: from the tab's URL, never the message
+    case 'log-page':
+      return letters().logPage(sender);
+    case 'log-found':
+      return letters().logFound(msg, sender);
     case 'receipt-badge': {
       // the receipt half of this tab's toolbar badge; the site half comes from 'site-info'
       const tabId = sender.tab?.id;
@@ -723,6 +711,8 @@ function receiptBudget(tabId: number): boolean {
 
 /** Letters of guarantee need both the receipt checks and the xmr.club feed (PLAN-LOG Round 3 switch matrix). */
 const letterChecksOn = async () => receiptsOn(await settingsItem.getValue()) && siteInfoOn(await xmrSettingsItem.getValue());
+const letters = () =>
+  letterRequests({ runtimeId: browser.runtime.id, checksOn: letterChecksOn, feed: () => siteFeedItem.getValue(), budget: receiptBudget, verifyLetter, store: idbLetterStore, now: Date.now });
 
 const receiptDeps: CheckDeps = {
   store: idbReceiptStore,

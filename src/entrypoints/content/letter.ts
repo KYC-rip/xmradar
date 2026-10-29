@@ -117,10 +117,12 @@ export function letterWatch(opts: { onChange: () => void; fetchOn: () => Promise
     },
 
     entries(doc: Document): LetterEntry[] {
+      // every order id on this page may be shown shortened (0trace: 1c3571ba...0185); none is an address
+      const orderIds = states.map((s) => s.page.orderId);
       return states.map((s) => ({
         page: s.page,
         reply: s.reply,
-        lines: s.reply ? [...s.reply.lines, ...(s.reply.verified ? letterAddressLines(doc, s.reply.addresses, [s.page.orderId]) : [])] : s.status,
+        lines: s.reply ? [...s.reply.lines, ...(s.reply.verified ? letterAddressLines(doc, s.reply.addresses, orderIds) : [])] : s.status,
       }));
     },
 

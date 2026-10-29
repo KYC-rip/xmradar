@@ -24,6 +24,7 @@
     "qrcode-generator": "2.0.4"
   },
   "devDependencies": {
+    "fake-indexeddb": "6.2.5",
     "happy-dom": "21.0.4",
     "typescript": "7.0.2",
     "vitest": "5.0.5",
