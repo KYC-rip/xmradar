@@ -24,8 +24,8 @@ importers:
         specifier: 2.25.2
         version: 2.25.2(typescript@7.0.2)
       qrcode-generator:
-        specifier: 1.5.2
-        version: 1.5.2
+        specifier: 2.0.4
+        version: 2.0.4
     devDependencies:
       happy-dom:
         specifier: 21.0.4
@@ -799,8 +799,8 @@ packages:
     engines: {node: '>=22.0.0'}
     hasBin: true
 
-  qrcode-generator@1.5.2:
-    resolution: {integrity: sha512-pItrW0Z9HnDBnFmgiNrY1uxRdri32Uh9EjNYLPVC2zZ3ZRIIEqBoDgm4DkvDwNNDHTK7FNkmr8zAa77BYc9xNw==}
+  qrcode-generator@2.0.4:
+    resolution: {integrity: sha512-mZSiP6RnbHl4xL2Ap5HfkjLnmxfKcPWpWe/c+5XxCuetEenqmNFf1FH/ftXPCtFG5/TDobjsjz6sSNL0Sr8Z9g==}
 
   quansync@0.2.11:
     resolution: {integrity: sha512-AifT7QEbW9Nri4tAwR5M/uzpBuqfZf+zwaEM/QkzEjj7NBuFD2rBuy0K3dE+8wltbezDV7JMA0WfnCPYRSYbXA==}
@@ -1663,7 +1663,7 @@ snapshots:
       cac: 7.1.0
       tasuku: 2.3.0
 
-  qrcode-generator@1.5.2: {}
+  qrcode-generator@2.0.4: {}
 
   quansync@0.2.11: {}
 
