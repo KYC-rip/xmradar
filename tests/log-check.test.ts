@@ -171,6 +171,13 @@ describe('letterAddressLines: the page against a verified letter', () => {
     expect(lines[0]!.text).toContain('bc1q…zzzz');
   });
 
+  it('a shortened order id that starts like an address is not a stray address (0trace: 1c3571ba...0185)', () => {
+    const html = `<p>ID: 1c3571ba...0185</p><p>Deposit to <code>bc1qmumua59vdrukll6segkjm2zh0zgp5fphrtgtx9</code></p>`;
+    const orderId = '1c3571ba-cfac-42e0-bd85-db5be2f60185';
+    expect(letterAddressLines(page(html), signed, [orderId])).toMatchObject([{ level: 'ok' }]);
+    expect(letterAddressLines(page(html), signed).map((l) => l.level)).toContain('caution');
+  });
+
   it('cautions when the deposit address is not on the page as text, naming the signed one', () => {
     const lines = letterAddressLines(page('<img alt="QR">'), signed);
     expect(lines).toMatchObject([{ level: 'caution' }]);

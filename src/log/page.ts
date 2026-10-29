@@ -50,8 +50,11 @@ const fits = (a: string, prefix: string, suffix: string) => {
 };
 const short = (a: string) => `${a.slice(0, 8)}…${a.slice(-8)}`;
 const signedHas = (addresses: LetterAddress[], a: string) => addresses.some((s) => sameLetterAddress(s.address, a));
-/** The address lines for a verified letter on this page. */
-export function letterAddressLines(doc: Document, addresses: LetterAddress[]): Line[] {
+/**
+ * The address lines for a verified letter on this page. `notAddresses` are other things the page may
+ * shorten the same way (the order id: 0trace shows `1c3571ba...0185`, which starts like a BTC address).
+ */
+export function letterAddressLines(doc: Document, addresses: LetterAddress[], notAddresses: string[] = []): Line[] {
   const families = FAMILIES;
   const { text, cut } = visiblePageText(doc);
   const lines: Line[] = [];
@@ -85,7 +88,7 @@ export function letterAddressLines(doc: Document, addresses: LetterAddress[]): L
   const shortened = [...text.matchAll(SHORT_RE)].map((m) => ({ prefix: m[1]!, suffix: m[2]! }));
   const split = [...text.matchAll(SPLIT_RE)].map((m) => ({ prefix: m[1]!, suffix: m[2]! }));
   // shortened tokens that look like the start of an address but fit nothing signed
-  const strayShort = shortened.filter(({ prefix, suffix }) => ADDRESS_START.test(prefix) && !addresses.some((a) => fits(a.address, prefix, suffix)));
+  const strayShort = shortened.filter(({ prefix, suffix }) => ADDRESS_START.test(prefix) && !addresses.some((a) => fits(a.address, prefix, suffix)) && !notAddresses.some((x) => fits(x, prefix, suffix)));
   if (strayShort.length && !unsigned.size) {
     lines.push({ level: 'caution', text: `The page shows a shortened address that doesn't fit the signed letter (${strayShort[0]!.prefix}…${strayShort[0]!.suffix}). Use only the address in the letter.` });
   }
