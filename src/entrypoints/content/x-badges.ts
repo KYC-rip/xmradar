@@ -5,7 +5,7 @@ import { normalizeHandle } from '../../identity/envelope';
 import { xapEntry, type Badge } from '../../identity/resolve';
 import { articleViewSlot, hoverCardSlot, profileHeader, profileSlot, tweetSlot, userCellSlot, type BadgeSlot } from '../../identity/x-handle';
 import { sendToBackground, type XapTotals } from '../../messaging';
-import { xmrSettingsItem } from '../../settings';
+import { directoryStatusItem, xmrSettingsItem } from '../../settings';
 import { openTip } from './tip';
 import { XAP_SELECTOR, actionBars, insertXap, ownXaps, setXapCount, xapSummary } from './x-xap';
 import { parsePostKey, postKey } from '../../xap/post';
@@ -335,8 +335,16 @@ export function startBadges(ctx: ContentScriptContext) {
     setEnabled(s.badgesX);
     if (s.badgesX) scan(document);
   });
+  // a new xmr.bio directory, or none: badges on screen were looked up against the old one
+  const unwatchDirectory = directoryStatusItem.watch((st, old) => {
+    if (st?.generatedAt === old?.generatedAt) return;
+    results.clear();
+    removeAll();
+    if (enabled) scan(document);
+  });
   ctx.onInvalidated(() => {
     unwatch();
+    unwatchDirectory();
     setEnabled(false);
   });
 }

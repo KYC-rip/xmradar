@@ -371,6 +371,12 @@ describe('badge popup', () => {
     expect(hrefs).toContain(`https://njump.me/${npubEncode(pk)}`);
   });
 
+  it('an xmr.bio directory entry says xmr.bio verified the account, not a proof tweet', () => {
+    const el = badgePanel(mergeBadge('franz_fk19', [{ source: 'xmrbio', address: STD, check: { ok: true, type: 'standard' }, verified: true, method: 'xmrbio:directory' }]));
+    expect(el.textContent).toContain('X account @franz_fk19 verified by xmr.bio; from its signed directory');
+    expect(el.textContent).not.toContain('proof tweet');
+  });
+
   it('renders hostile notes as text and skips links for bad values', () => {
     const el = badgePanel(mergeBadge('alice', [entry({ pubkey: 'zz', verified: false, note: '<img src=x onerror=alert(1)>', tweetId: 'javascript:1' })]));
     expect(el.querySelector('img')).toBeNull();

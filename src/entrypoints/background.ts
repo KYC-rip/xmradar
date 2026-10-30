@@ -7,6 +7,7 @@ import { HANDLE_RE, normalizeHandle } from '../identity/envelope';
 import { KIND_IDENTITIES, KIND_PAYTO, moneroPayto, parseTweetProof, twitterClaims, verifyTwitterProof, type ProofResult } from '../identity/nostr';
 import { buildMerged, kindFor, newestOwn, setupTargets, tweetUrl, type SetupAction } from '../identity/setup';
 import { validateMoneroAddress } from '../xmr/address';
+import { directoryKeeper, type StoredDirectory } from '../identity/directory';
 import { mergeBadge, resolveHandles, withoutNostr, type Badge } from '../identity/resolve';
 import { resolveXmrbio, type SeenEntries } from '../identity/xmrbio';
 import { BURNER_CREATE_PORT, type BurnerCreateEvent } from '../messaging';
@@ -18,7 +19,7 @@ import { KIND_ARTICLE, checkBlossomAuth, checkPublishable, checkSigned, dedupeKe
 import { allRelaysFrom, fetchWriteRelays, publishToRelays, readEach, readRelay } from '../nostr/relays';
 import { assertFetchableImageUrl } from '../nostr/url-guard';
 import { checkSessionSender, checkShareMenuSender, isExtensionPageSender, isXUrl, shareMenuRateLimit, withoutTab } from '../sender';
-import { DEFAULT_RELAYS, INDEX_RELAYS, withoutIndex, myHandleItem, postedItem, pubkeyItem, receiptsOn, settingsItem, siteInfoOn, xapMarksItem, xmrSettingsItem } from '../settings';
+import { DEFAULT_RELAYS, directoryStatusItem, INDEX_RELAYS, withoutIndex, myHandleItem, postedItem, pubkeyItem, receiptsOn, settingsItem, siteInfoOn, xapMarksItem, xmrSettingsItem } from '../settings';
 import { storage } from 'wxt/utils/storage';
 import { activeInbox, burnerCreatingItem, burnerInboxItem, burnerLastErrorItem, burnFreeInbox, createFreeInbox, forgetImportedInbox, importInbox, type BurnerDeps } from '../burner/service';
 import { idbTokenStore } from '../burner/token-store';
@@ -142,10 +143,13 @@ export default defineBackground(() => {
   // site info: a 12-hour alarm while it's on, and a fresh copy at startup when the kept one is old
   browser.alarms.onAlarm.addListener((a) => {
     if (a.name === SITE_FEED_ALARM) void refreshSiteFeed();
+    void directory.onAlarm(a.name);
   });
+  void xmrSettingsItem.getValue().then((s) => directory.apply(s.badgesX));
   void xmrSettingsItem.getValue().then((s) => applySiteInfoSetting(siteInfoOn(s)));
   xmrSettingsItem.watch((s, old) => {
     if (siteInfoOn(s) !== siteInfoOn(old)) void applySiteInfoSetting(siteInfoOn(s));
+    if (s.badgesX !== old?.badgesX) void directory.apply(s.badgesX);
   });
   // a tab that moves to another page starts with no receipt or site state (the browser resets its badge)
   browser.tabs.onUpdated.addListener((tabId, change) => {
@@ -599,6 +603,22 @@ async function handle(msg: BgRequest, sender: Browser.runtime.MessageSender): Pr
 // ---- site info from the xmr.club feed (PLAN-SITEFEED) ----
 
 const siteFeedItem = storage.defineItem<SiteFeed | null>('local:siteFeed', { fallback: null });
+
+// the xmr.bio directory (2d): downloaded whole every 6 hours while badges are on, never per handle
+const directoryItem = storage.defineItem<StoredDirectory | null>('local:xmrbioDirectory', { fallback: null });
+const directory = directoryKeeper({
+  held: directoryItem,
+  status: directoryStatusItem,
+  fetch: (...args) => fetch(...args),
+  readBody: boundedBody,
+  alarms: browser.alarms,
+  enabled: async () => (await xmrSettingsItem.getValue()).badgesX,
+  // badges looked up before may now have, lose or change an xmr.bio entry; x.com tabs follow the status item
+  changed: async () => {
+    (await loadCaches()).badges.clear();
+    persistCaches();
+  },
+});
 const SITE_FEED_ALARM = 'site-feed';
 const SITE_FEED_HOURS = 12;
 const tabStates = new Map<number, TabState>();
@@ -767,9 +787,11 @@ async function resolveBadges(handles: string[], tabId: number): Promise<ResolveH
     else out.push([hit.handle, nostrDiscovery ? hit : withoutNostr(hit)]);
   }
   if (!misses.length) return { badges: out, pending: [] };
+  // the local directory costs nothing and tells no one anything, so it is never throttled (RATE-2)
+  const lookup = await directory.lookup();
   if (!nostrDiscovery) {
-    // no other passive source until the signed directory (Phase 2d)
-    for (const h of misses) out.push([normalizeHandle(h), mergeBadge(h, [])]);
+    // not cached: the directory is already local, and a new build applies at once
+    for (const h of misses) out.push([normalizeHandle(h), mergeBadge(h, lookup(normalizeHandle(h)))]);
     return { badges: out, pending: [] };
   }
   let bucket = buckets.get(tabId);
@@ -778,7 +800,7 @@ async function resolveBadges(handles: string[], tabId: number): Promise<ResolveH
   const batch = misses.slice(0, granted);
   if (batch.length) {
     const { relays } = await settingsItem.getValue();
-    const found = await resolveHandles(batch, { discovery: true, relays: [...new Set([...DEFAULT_RELAYS, ...INDEX_RELAYS, ...relays])], verify: cachedVerify });
+    const found = await resolveHandles(batch, { discovery: true, relays: [...new Set([...DEFAULT_RELAYS, ...INDEX_RELAYS, ...relays])], verify: cachedVerify, directory: lookup });
     for (const [key, badge] of found) {
       cache.set(key, badge, Date.now());
       out.push([key, badge]);

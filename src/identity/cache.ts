@@ -34,6 +34,10 @@ export class EntryCache<V> {
     this.map.delete(key);
   }
 
+  clear() {
+    this.map.clear();
+  }
+
   entries(): [string, { v: V; at: number }][] {
     return [...this.map];
   }

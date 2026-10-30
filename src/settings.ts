@@ -1,3 +1,4 @@
+import type { DirectoryStatus } from './identity/directory';
 import { storage, type WxtStorageItem } from 'wxt/utils/storage';
 import type { Marks } from './xap/marks';
 import { isBadgeIcon, type BadgeIcon } from './identity/badge-look';
@@ -125,3 +126,6 @@ export const patchXmrSettings = patcher(xmrSettingsItem);
 /** the marks that make each Xap's amount unique, kept per recipient (src/xap/marks.ts) */
 export const xapMarksItem = storage.defineItem<Marks>('local:xapMarks', { fallback: [] });
 export const myHandleItem = storage.defineItem<{ handle: string; proven: boolean } | null>('local:myHandle', { fallback: null });
+
+/** The xmr.bio directory (2d) as the options page shows it; the directory itself is kept by the background. */
+export const directoryStatusItem = storage.defineItem<DirectoryStatus | null>('local:xmrbioDirectoryStatus', { fallback: null });

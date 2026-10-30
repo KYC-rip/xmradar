@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fakeBrowser } from 'wxt/testing/fake-browser';
 import { startBadges } from '../src/entrypoints/content/x-badges';
 import type { Badge } from '../src/identity/resolve';
-import { myHandleItem, xmrSettingsItem } from '../src/settings';
+import { directoryStatusItem, myHandleItem, xmrSettingsItem } from '../src/settings';
 
 const send = vi.hoisted(() => vi.fn());
 const openTip = vi.hoisted(() => vi.fn());
@@ -129,6 +129,19 @@ describe('badges on X', () => {
     await vi.waitFor(() => expect(document.querySelector('xmradar-badge')).not.toBe(first));
     expect(badges()).toBe(1);
     expect(lookups()).toBe(1);
+  });
+
+  it('a new xmr.bio directory makes badges on screen look up again; a status-only change doesn’t', async () => {
+    document.body.innerHTML = card;
+    startBadges(ctx as never);
+    await vi.waitFor(() => expect(badges()).toBe(1), { timeout: 3000 });
+    expect(lookups()).toBe(1);
+    await directoryStatusItem.setValue({ state: 'not-live', at: 1 });
+    await new Promise((r) => setTimeout(r, 1200));
+    expect(lookups()).toBe(1);
+    await directoryStatusItem.setValue({ state: 'ok', at: 2, count: 1, generatedAt: 5 });
+    await vi.waitFor(() => expect(lookups()).toBe(2), { timeout: 3000 });
+    await vi.waitFor(() => expect(badges()).toBe(1), { timeout: 3000 });
   });
 
   it('clicking the pill opens the tip without following the card link', async () => {

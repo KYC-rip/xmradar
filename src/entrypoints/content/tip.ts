@@ -268,7 +268,13 @@ function entryLine(handle: string, e: BadgeEntry, primary: boolean): HTMLElement
   li.append(`: ${shortAddr(e.address)}`);
   if (primary) li.append(h('strong', { textContent: ' (shown above)' }));
   const tweet = links.tweet(handle, e.tweetId);
-  const status = !e.check.ok ? `invalid address (${e.check.reason})` : e.verified ? `linked to @${handle} by a proof tweet, checked by XMRadar (${e.method})` : `unverified: ${e.note ?? 'no proof'}`;
+  const status = !e.check.ok
+    ? `invalid address (${e.check.reason})`
+    : e.source === 'xmrbio'
+      ? `X account @${handle} verified by xmr.bio; from its signed directory`
+      : e.verified
+        ? `linked to @${handle} by a proof tweet, checked by XMRadar (${e.method})`
+        : `unverified: ${e.note ?? 'no proof'}`;
   li.append(h('div', { class: 'small' }, status, tweet ? ' · ' : '', tweet ? h('a', { href: tweet, target: '_blank', rel: 'noopener noreferrer', textContent: 'proof tweet' }) : ''));
   if (e.createdAt) li.append(h('div', { class: 'small' }, `claim published ${new Date(e.createdAt * 1000).toLocaleString()}`));
   return li;
