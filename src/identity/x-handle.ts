@@ -77,12 +77,21 @@ export function articleViewSlot(article: Element, loc: { hostname: string; pathn
   return handle && m ? { handle, key: `${m[2]}:${handle.toLowerCase()}`, anchor: article, article, statusId: m[2]! } : null;
 }
 
-/** The profile header ("Name @handle" above the bio) on a profile page. */
+/** The profile header in the main column: X keeps it while it swaps in the next profile's text. */
+export const profileHeader = (doc: Document) => doc.querySelector('[data-testid="primaryColumn"] [data-testid="UserName"]') ?? doc.querySelector('[data-testid="UserName"]');
+
+/**
+ * The profile header ("Name @handle" above the bio) on a profile page, only once it shows the page's
+ * @handle: right after X's client-side navigation the header still shows the previous profile.
+ */
 export function profileSlot(doc: Document, loc: { hostname: string; pathname: string }): BadgeSlot | null {
   if (!isXHost(loc.hostname)) return null;
   const handle = fromPath(loc.pathname);
-  const anchor = doc.querySelector('[data-testid="UserName"]');
-  return handle && anchor ? { handle, key: `profile:${handle.toLowerCase()}`, anchor } : null;
+  const anchor = profileHeader(doc);
+  if (!handle || !anchor) return null;
+  // the @handle row comes after the name, so the last @handle in the header is the one
+  const shown = [...(anchor.textContent ?? '').matchAll(/@([A-Za-z0-9_]{1,15})(?![A-Za-z0-9_])/g)].pop()?.[1];
+  return shown?.toLowerCase() === handle.toLowerCase() ? { handle, key: `profile:${handle.toLowerCase()}`, anchor } : null;
 }
 
 

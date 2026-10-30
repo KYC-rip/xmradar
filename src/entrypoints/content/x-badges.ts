@@ -3,7 +3,7 @@ import { badgeLook, mountBadge, type BadgeLook } from '../../identity/badge-look
 import { PendingQueue } from '../../identity/bucket';
 import { normalizeHandle } from '../../identity/envelope';
 import { xapEntry, type Badge } from '../../identity/resolve';
-import { articleViewSlot, hoverCardSlot, profileSlot, tweetSlot, userCellSlot, type BadgeSlot } from '../../identity/x-handle';
+import { articleViewSlot, hoverCardSlot, profileHeader, profileSlot, tweetSlot, userCellSlot, type BadgeSlot } from '../../identity/x-handle';
 import { sendToBackground, type XapTotals } from '../../messaging';
 import { xmrSettingsItem } from '../../settings';
 import { openTip } from './tip';
@@ -218,10 +218,14 @@ export function startBadges(ctx: ContentScriptContext) {
       if (slot) apply(slot);
     }
     // the profile header only needs a document-wide lookup when it could have changed
-    if (root === document || (root instanceof Element && root.querySelector('[data-testid="UserName"]'))) {
-      const profile = profileSlot(document, location);
-      if (profile) apply(profile);
-    }
+    if (root === document || (root instanceof Element && (root.querySelector('[data-testid="UserName"]') || root.closest('[data-testid="UserName"]')))) scanProfile();
+  }
+
+  /** The profile header's badge, or none while the header shows another profile than the page's. */
+  function scanProfile() {
+    const profile = profileSlot(document, location);
+    if (profile) apply(profile);
+    else profileHeader(document)?.querySelector(`:scope > ${HOST_TAG}`)?.remove();
   }
 
   function schedule(ms: number) {
@@ -258,14 +262,19 @@ export function startBadges(ctx: ContentScriptContext) {
   function connect() {
     if (observer || !enabled || document.hidden) return;
     observer = new MutationObserver((records) => {
+      let header = false;
       for (const r of records) {
         for (const n of r.addedNodes) {
           if (n instanceof Element && !isOurs(n)) scan(n);
         }
+        // X swaps the header's text in place when moving between profiles
+        const el = r.target instanceof Element ? r.target : r.target.parentElement;
+        if (!header && el && !isOurs(el) && el.closest('[data-testid="UserName"]')) header = true;
       }
+      if (header) scanProfile();
     });
     // body survives X's client-side navigation, so one observer covers every page
-    observer.observe(document.body, { childList: true, subtree: true });
+    observer.observe(document.body, { childList: true, subtree: true, characterData: true });
     scan(document);
     if (totalsQueue.size) totalsTimer ??= setTimeout(() => void flushTotals(), BATCH_DELAY_MS);
   }

@@ -329,7 +329,7 @@ describe('EntryCache', () => {
 
 describe('badge slots', () => {
   const html = `<article data-testid="tweet"><div data-testid="User-Name"><a href="/Alice">Alice</a><a href="/Alice">@Alice</a><a href="/Alice/status/42"><time>1h</time></a></div></article>
-    <div data-testid="UserName"><span>Bob</span></div>`;
+    <div data-testid="UserName"><span>Bob</span><span>@bob</span></div>`;
   const doc = makeDoc('https://x.com/bob', html);
   it('keys tweets by tweet ID and handle', () => {
     const slot = tweetSlot(doc.querySelector('article')!)!;
@@ -346,9 +346,14 @@ describe('badge slots', () => {
     expect(slot).toMatchObject({ handle: 'XBToshi', key: '7:xbtoshi' });
     expect(slot.anchor.className).toBe('name');
   });
-  it('finds the profile header on profile pages only', () => {
+  it('finds the profile header on profile pages only, once it shows that profile', () => {
     expect(profileSlot(doc, { hostname: 'x.com', pathname: '/bob' })).toMatchObject({ handle: 'bob', key: 'profile:bob' });
     expect(profileSlot(doc, { hostname: 'x.com', pathname: '/home' })).toBeNull();
+    // right after moving from @XBToshi to @xmr_club, X still shows the old header (seen 2026-10-30)
+    const header = (shown: string) => makeDoc('https://x.com/', `<div data-testid="primaryColumn"><div data-testid="UserName"><span>Name @fake</span><div><span>${shown}</span></div></div></div>`);
+    expect(profileSlot(header('@XBToshi'), { hostname: 'x.com', pathname: '/xmr_club' })).toBeNull();
+    expect(profileSlot(header('@xmr_club'), { hostname: 'x.com', pathname: '/xmr_club' })).toMatchObject({ handle: 'xmr_club' });
+    expect(profileSlot(header('@xmr_club_2'), { hostname: 'x.com', pathname: '/xmr_club' })).toBeNull();
   });
 });
 
