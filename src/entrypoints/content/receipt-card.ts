@@ -1,6 +1,7 @@
 import { MONERO_OUTER, MONERO_PARTS, MONERO_VIEWBOX } from '../../identity/badge-look';
 import type { LetterAddress } from '../../log/check';
 import type { Line } from '../../receipts/check';
+import { unitsOf } from '../../receipts/units';
 import type { Receipt } from '../../receipts/verify';
 import { h } from './dom';
 
@@ -75,14 +76,14 @@ dd button { font: 11px system-ui, sans-serif; border: 1px solid #d9d6e3; backgro
 }
 @media (prefers-reduced-motion: reduce) { .box, .box.enter { transition: none; transform: none; } }`;
 
-/** Base units shown as XMR (12 decimals) or BTC (8); other assets stay raw, labelled. */
-export function amount(base: string, asset: string): string {
-  const a = asset.toUpperCase();
-  const decimals = a === 'XMR' ? 12 : a === 'BTC' ? 8 : null;
-  if (decimals === null) return `${base} base units ${asset}`;
+/** Base units shown in coins when the decimals are known (for a token, from its address's network); otherwise raw, labelled. */
+export function amount(base: string, asset: string, address: string): string {
+  const units = unitsOf(asset, address);
+  if (!units) return `${base} base units of ${asset} (the network sets the decimals)`;
+  const { decimals, network } = units;
   const s = base.padStart(decimals + 1, '0');
   const frac = s.slice(-decimals).replace(/0+$/, '');
-  return `${s.slice(0, -decimals)}${frac ? `.${frac}` : ''} ${a}`;
+  return `${s.slice(0, -decimals)}${frac ? `.${frac}` : ''} ${asset.trim().toUpperCase()}${network ? ` on ${network}` : ''}`;
 }
 
 /** what the card is about: a receipt, or only letters */
@@ -161,9 +162,9 @@ function details(entries: CardEntry[], extra: Line[]): HTMLElement {
         'dl',
         {},
         ...row('Order', `${r.order_id} at ${r.issuer}`),
-        ...row('You send', amount(r.deposit_amount, r.deposit_asset)),
+        ...row('You send', amount(r.deposit_amount, r.deposit_asset, r.deposit_address)),
         ...addressRow('To', r.deposit_address),
-        ...row(r.rate_type === 'float' ? 'You get at least' : 'You get', amount(r.payout_amount, r.payout_asset)),
+        ...row(r.rate_type === 'float' ? 'You get at least' : 'You get', amount(r.payout_amount, r.payout_asset, r.payout_address)),
         ...addressRow('At', r.payout_address),
         ...(r.refund_address ? row('Refund to', r.refund_address) : []),
       ),

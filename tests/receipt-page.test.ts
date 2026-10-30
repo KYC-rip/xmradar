@@ -48,7 +48,17 @@ describe('order page (§4.3, §11)', () => {
     expect(levels(`<p>${DEP}</p>`)).toEqual(['caution']);
   });
   it('an asset XMRadar can’t check is said so', () => {
-    expect(addressLines(doc(`<p>Deposit ${DEP}</p>`), { ...r, deposit_asset: 'USDT', payout_asset: 'USDC' })).toEqual([{ level: 'off', text: 'Addresses not checked for USDT.' }]);
+    expect(addressLines(doc(`<p>Deposit ${DEP}</p>`), { ...r, deposit_asset: 'USDT', payout_asset: 'USDC' })).toEqual([
+      { level: 'off', text: 'Deposit address not checked for USDT: check that your wallet sends to bc1qw508…7kv8f3t4.' },
+    ]);
+  });
+  it('a USDT deposit for BTC (kyc.rip via Bitania): no deposit verdict, only the payout check', () => {
+    const usdt = { ...r, deposit_asset: 'USDT', deposit_address: 'TDRbGEu5EFRTaFJJmoU3qKwH1RvyXQvvWp', payout_asset: 'BTC', payout_address: DEP };
+    const page = (body: string) => addressLines(doc(`<p>Send to TDRbGEu5EFRTaFJJmoU3qKwH1RvyXQvvWp</p>${body}`), usdt).map((l) => l.level + ': ' + l.text);
+    expect(page('')).toEqual(['off: Deposit address not checked for USDT: check that your wallet sends to TDRbGEu5…vyXQvvWp.']);
+    expect(page(`<p>You receive at ${DEP}</p>`)[1]).toBe('ok: The payout address on this page is the one the exchange signed.');
+    expect(page(`<p>Deposit address: ${DEP}</p>`)[1]).toMatch(/^warn: The page shows the payout address where the deposit/);
+    expect(page(`<p>Payout: ${OTHER_BTC}</p>`)[1]).toMatch(/^warn: .*didn't sign/);
   });
   it('copying an unsigned address warns; a signed one doesn’t', () => {
     expect(copyWarning(` ${OTHER_BTC}\n`, r)).toContain('didn\'t sign');

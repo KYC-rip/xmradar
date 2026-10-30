@@ -18,9 +18,17 @@ const receipt = { ...v2.cases[0].receipt, deposit_address: 'bc1qw508d6qejxtdg4y5
 describe('the receipt card', () => {
   afterEach(() => (document.documentElement.querySelectorAll('xmradar-receipt').forEach((e) => e.remove())));
   it('shows amounts in coins, and base units for other assets', () => {
-    expect(amount('820000', 'BTC')).toBe('0.0082 BTC');
-    expect(amount('1500000000000', 'xmr')).toBe('1.5 XMR');
-    expect(amount('5', 'USDT')).toBe('5 base units USDT');
+    expect(amount('820000', 'BTC', '')).toBe('0.0082 BTC');
+    expect(amount('1500000000000', 'xmr', '')).toBe('1.5 XMR');
+    expect(amount('5', 'DOGE', '')).toBe('5 base units of DOGE (the network sets the decimals)');
+  });
+  it('USDT and USDC in coins when the signed address tells the network; never a guess for 0x', () => {
+    expect(amount('10000000000', 'USDT', 'TDRbGEu5EFRTaFJJmoU3qKwH1RvyXQvvWp')).toBe('10000 USDT on TRON');
+    expect(amount('2500000', 'usdc', '9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM')).toBe('2.5 USDC on Solana');
+    // 6 decimals on Ethereum, 18 on BNB Chain: the address can't tell them apart
+    expect(amount('10000000000', 'USDT', `0x${'ab'.repeat(20)}`)).toMatch(/^10000000000 base units of USDT/);
+    // a T… address with a bad checksum isn't TRON
+    expect(amount('10000000000', 'USDT', 'TDRbGEu5EFRTaFJJmoU3qKwH1RvyXQvvWq')).toMatch(/base units/);
   });
   it('mounts once, in a closed shadow root at the end of the page', () => {
     const card = mountReceiptCard(document);

@@ -127,7 +127,7 @@ export function addressLines(doc: Document, r: Receipt): Line[] {
   const payoutFamily = familyOf(r.payout_asset);
   const families = new Set<Family>([depositFamily, payoutFamily].filter((f): f is Family => !!f));
   const lines: Line[] = [];
-  if (!depositFamily) lines.push({ level: 'off', text: `Addresses not checked for ${r.deposit_asset}.` });
+  if (!depositFamily) lines.push({ level: 'off', text: `Deposit address not checked for ${r.deposit_asset}: check that your wallet sends to ${short(r.deposit_address)}.` });
   if (!families.size) return lines;
 
   const signed = signedOf(r);
@@ -149,7 +149,11 @@ export function addressLines(doc: Document, r: Receipt): Line[] {
   }
   if (payoutAs.has('deposit')) lines.push({ level: 'warn', text: 'The page shows the payout address where the deposit address should be. Don’t send.' });
   else if (depositAs.has('payout')) lines.push({ level: 'warn', text: 'The page shows the deposit address where your payout address should be. Check the order before sending.' });
-  else if (depositFamily && !depositAs.size) lines.push({ level: 'caution', text: `Deposit address not found as text (QR only?): check that your wallet shows ${short(r.deposit_address)}.` });
+  // only the payout address can be checked: say what was seen of it, not a deposit verdict
+  else if (!depositFamily) {
+    if (payoutAs.has('payout')) lines.push({ level: 'ok', text: 'The payout address on this page is the one the exchange signed.' });
+    else if (payoutAs.size) lines.push({ level: 'ok', text: 'The payout address on this page is the one the exchange signed, but it isn’t labelled as yours.' });
+  } else if (!depositAs.size) lines.push({ level: 'caution', text: `Deposit address not found as text (QR only?): check that your wallet shows ${short(r.deposit_address)}.` });
   else if (depositAs.has('deposit') && !unsigned.size)
     lines.push({
       level: 'ok',
