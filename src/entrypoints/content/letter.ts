@@ -122,7 +122,7 @@ export function letterWatch(opts: { onChange: () => void; fetchOn: () => Promise
       return states.map((s) => ({
         page: s.page,
         reply: s.reply,
-        lines: s.reply ? [...s.reply.lines, ...(s.reply.verified ? letterAddressLines(doc, s.reply.addresses, orderIds) : [])] : s.status,
+        lines: s.reply ? [...s.reply.lines, ...(s.reply.verified ? letterAddressLines(doc, s.reply.addresses, orderIds, s.reply.unreadDeposit) : [])] : s.status,
       }));
     },
 

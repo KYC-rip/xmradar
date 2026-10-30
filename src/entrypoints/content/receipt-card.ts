@@ -52,13 +52,13 @@ const CSS = `
 .icon { width: 18px; height: 18px; flex: none; }
 .title { font-weight: 600; }
 .title.warn { color: #d93025; } .title.caution { color: #b26a00; } .title.ok { color: #1e7d34; }
-.msg { flex: 1; min-width: 0; }
+.msg { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .head button { font: inherit; border: 1px solid #d9d6e3; background: transparent; border-radius: 8px; padding: 2px 8px; cursor: pointer; color: inherit; }
 .head .x { border: 0; padding: 0 4px; font-size: 16px; line-height: 1; color: #6b6880; }
 .chip .label { border: 0; padding: 0 2px; font-weight: 600; }
 .body { padding: 0 12px 10px; }
 ul { margin: 0; padding: 0; list-style: none; }
-li { display: flex; gap: 6px; margin: 4px 0; }
+li { display: flex; gap: 6px; margin: 4px 0; overflow-wrap: anywhere; }
 li .m { flex: none; width: 1em; text-align: center; }
 li.warn .m { color: #d93025; } li.caution .m { color: #b26a00; } li.ok .m { color: #1e7d34; } li.off .m { color: #777; }
 dl { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; margin: 8px 0 0; font-size: 12px; }
@@ -114,7 +114,7 @@ function moneroIcon(doc: Document): SVGSVGElement {
   return svg;
 }
 
-const ROLE_LABEL: Record<string, string> = { deposit: 'You send to', payout: 'You get at', refund: 'Refund to' };
+const ROLE_LABEL: Record<string, string> = { deposit: 'You send to', payout: 'You get at', refund: 'Refund to', token: 'Token contract (not a send address)' };
 
 /** The copy button for a signed address, so the one you paste is the one that was signed. */
 function copyButton(v: string, label: string) {
@@ -123,7 +123,13 @@ function copyButton(v: string, label: string) {
   return copy;
 }
 
-function letterDetails(l: CardLetter, e: CardEntry): Node[] {
+/** The "check your wallet shows the same address" note: only under a signed deposit address, never beside a "Don't send" (the copy check's included). */
+export function showsSendNote(entries: CardEntry[], extra: Line[]): boolean {
+  const deposit = entries.some((e) => e.receipt || (e.letter?.verified && e.letter.addresses.some((a) => a.role === 'deposit')));
+  return deposit && ![...entries.flatMap((e) => e.lines), ...extra].some((l) => l.level === 'warn');
+}
+
+export function letterDetails(l: CardLetter, e: CardEntry): Node[] {
   const out: Node[] = [];
   const kind = l.format === 'mistproof' ? 'MistProof' : 'Letter of guarantee';
   const rows: Node[] = [h('dt', { textContent: 'Order' }), h('dd', { textContent: `${l.orderId} at ${l.name}` })];
@@ -131,7 +137,8 @@ function letterDetails(l: CardLetter, e: CardEntry): Node[] {
     // the full signed addresses, never shortened: a page that shortens one is compared with these
     for (const a of l.addresses) {
       const k = a.role ? ROLE_LABEL[a.role]! : 'In the letter';
-      rows.push(h('dt', { textContent: k }), h('dd', {}, a.address, ' ', copyButton(a.address, `Copy the signed address: ${k}`)));
+      // a token's contract is never pasted as a destination: no Copy
+      rows.push(h('dt', { textContent: k }), a.role === 'token' ? h('dd', { textContent: a.address }) : h('dd', {}, a.address, ' ', copyButton(a.address, `Copy the signed address: ${k}`)));
     }
   }
   out.push(h('dl', {}, ...rows));
@@ -172,7 +179,7 @@ function details(entries: CardEntry[], extra: Line[]): HTMLElement {
     );
   }
   if (extra.length) body.append(lineList(extra));
-  body.append(h('div', { class: 'note', textContent: 'Before you send, check that your wallet shows the same address as above.' }));
+  if (showsSendNote(entries, extra)) body.append(h('div', { class: 'note', textContent: 'Before you send, check that your wallet shows the same address as above.' }));
   return body;
 }
 

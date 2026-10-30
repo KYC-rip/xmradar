@@ -2,7 +2,7 @@ import { sha256 } from '@noble/hashes/sha2.js';
 import { bytesToHex } from '@noble/hashes/utils.js';
 import type { Line } from '../receipts/check';
 import type { SiteFeed } from '../sites/feed';
-import { checkLetter, type LetterAddress, type LetterDeps } from './check';
+import { checkLetter, type LetterAddress, type LetterDeps, type UnreadDeposit } from './check';
 import { matchOrderPage } from './order';
 import { saveLetter, type LetterStore } from './store';
 
@@ -27,6 +27,7 @@ export interface LetterReply {
   lines: Line[];
   addresses: LetterAddress[];
   signedText: string;
+  unreadDeposit?: UnreadDeposit;
   saved: boolean;
   saveError?: string;
 }
@@ -54,7 +55,7 @@ export async function checkFoundLetter(feed: SiteFeed | null, pageUrl: string, s
   const m = feed && matchOrderPage(feed.sites, pageUrl).find((x) => x.site.id === siteId);
   if (!feed || !m || m.log.format === 'nkip01') throw new Error('Not an order page with a letter');
   const c = await checkLetter(text, { siteName: m.site.name, log: m.log, orderId: m.orderId }, deps, new Date(deps.now()));
-  const reply: LetterReply = { verified: c.verified, lines: c.lines, addresses: c.addresses, signedText: c.signedText, saved: false };
+  const reply: LetterReply = { verified: c.verified, lines: c.lines, addresses: c.addresses, signedText: c.signedText, ...(c.unreadDeposit ? { unreadDeposit: c.unreadDeposit } : {}), saved: false };
   if (!c.verified) return reply;
   if (deps.mayStore && !(await deps.mayStore())) {
     reply.saveError = 'Not saved: letter checks were switched off';

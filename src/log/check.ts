@@ -1,6 +1,6 @@
 import type { Line } from '../receipts/check';
 import type { SiteLog } from '../sites/feed';
-import { findLetterAddresses, type LetterFamily } from './families';
+import { findLetterAddresses, letterKey, type LetterFamily } from './families';
 import { verifyMistProof } from './mistproof';
 import type { verifyLetter as VerifyLetter } from './pgp';
 
@@ -11,11 +11,17 @@ import type { verifyLetter as VerifyLetter } from './pgp';
  * text as it is.
  */
 
-export type AddressRole = 'deposit' | 'payout' | 'refund' | null;
+/** `token`: a token's contract or mint the letter names (BitcoinVN's `token_identifier`), never a send address */
+export type AddressRole = 'deposit' | 'payout' | 'refund' | 'token' | null;
 export interface LetterAddress {
   address: string;
   /** from a labelled line (or MistProof's fields); null if the label names no role */
   role: AddressRole;
+}
+
+/** The letter names its deposit address, but on a network XMRadar doesn't read (`network`: as the letter names it) */
+export interface UnreadDeposit {
+  network: string | null;
 }
 
 export interface LetterCheck {
@@ -29,6 +35,7 @@ export interface LetterCheck {
   signedText: string;
   /** ms, PGP: the latest block's signature time */
   signedAt?: number;
+  unreadDeposit?: UnreadDeposit;
 }
 
 export interface LetterOrder {
@@ -43,10 +50,15 @@ export interface LetterDeps {
 
 // a `Label: value` line, as every operator's letter writes its fields
 const FIELD_RE = /^\s*([A-Za-z][A-Za-z _-]{1,40}):\s*(.*)$/;
-const FAMILIES: ReadonlySet<LetterFamily> = new Set(['XMR', 'BTC', 'TRON', 'EVM']);
+const FAMILIES: ReadonlySet<LetterFamily> = new Set(['XMR', 'BTC', 'TRON', 'EVM', 'SOL', 'TON']);
+// Solana has no checksum and TON tokens are plain base64: read only on a labelled line that can hold an address
+const LOOSE: ReadonlySet<LetterFamily> = new Set(['SOL', 'TON']);
+const NOT_ADDRESS_LABEL = /network|asset|amount|fee|rate|name|service|domain|fingerprint|uuid|code|time|date|deadline|window|min|max|expir|issued|_id$|\bid$/i;
 
 function roleOfLabel(label: string): AddressRole {
   const l = label.toLowerCase();
+  // first: `payout_token_identifier` names the payout's token, not the payout
+  if (/token|contract|mint|identifier/.test(l)) return 'token';
   if (/refund/.test(l)) return 'refund';
   if (/deposit|to our|send to|pay to/.test(l)) return 'deposit';
   if (/payout|destination|to your|receiv|recipient/.test(l)) return 'payout';
@@ -54,19 +66,46 @@ function roleOfLabel(label: string): AddressRole {
 }
 
 /**
- * The valid addresses (XMR, BTC, Tron, EVM) a signed letter names, without duplicates: with the role its
- * `Label:` names, else null. A role-labelled line wins over an earlier unlabelled mention.
+ * The valid addresses (XMR, BTC, Tron, EVM; Solana and TON on labelled lines) a signed letter names,
+ * without duplicates (one TON account in two forms is one): with the role its `Label:` names, else null.
+ * A role-labelled line wins over an earlier unlabelled mention.
  */
 export function letterAddresses(text: string): LetterAddress[] {
   const out = new Map<string, LetterAddress>();
-  // bech32 and EVM hex are the same address in either case
-  const key = (a: string) => (/^(bc1|0x)/i.test(a) ? a.toLowerCase() : a);
   for (const line of text.split(/\r?\n/)) {
     const m = FIELD_RE.exec(line);
     const role = m ? roleOfLabel(m[1]!) : null;
-    for (const { address } of findLetterAddresses(m ? m[2]! : line, FAMILIES)) if (!out.get(key(address))?.role) out.set(key(address), { address, role });
+    const loose = !!m && (role !== null || !NOT_ADDRESS_LABEL.test(m[1]!));
+    const found = findLetterAddresses(m ? m[2]! : line, FAMILIES).filter((f) => loose || !LOOSE.has(f.family));
+    for (const { address } of found) if (!out.get(letterKey(address))?.role) out.set(letterKey(address), { address, role });
   }
   return [...out.values()];
+}
+
+const NONE = /^["'\s]*(null|none|not provided|none given|n\/a|-)?["'\s]*$/i;
+
+/**
+ * No deposit address read, though a deposit-address line holds one: an address on a network XMRadar
+ * doesn't read. The network as the letter names it (`network_name`, else `network`), if it does.
+ */
+export function unreadDeposit(text: string, addresses: LetterAddress[]): UnreadDeposit | undefined {
+  if (addresses.some((a) => a.role === 'deposit')) return undefined;
+  let named = false;
+  let networkName: string | null = null;
+  let networkCode: string | null = null;
+  for (const line of text.split(/\r?\n/)) {
+    const m = FIELD_RE.exec(line);
+    if (!m) continue;
+    const label = m[1]!.toLowerCase();
+    const value = m[2]!.replace(/\{\s*"address"\s*:\s*|\}/g, '');
+    const named_ = NONE.test(value) ? null : value.replace(/["']/g, '').trim() || null;
+    if (/^network[ _]name$/.test(label)) networkName = named_ ?? networkName;
+    else if (/^network$/.test(label)) networkCode = named_ ?? networkCode;
+    // a deposit line holding something address-like (`Deposit address:`, `Send to:`, `deposit_destination:`),
+    // not "Deposit window" or "Required deposit amount"
+    if (roleOfLabel(m[1]!) === 'deposit' && !NOT_ADDRESS_LABEL.test(label) && !NONE.test(value) && /[A-Za-z0-9]{20,}/.test(value)) named = true;
+  }
+  return named ? { network: networkName ?? networkCode } : undefined;
 }
 
 const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -113,12 +152,15 @@ export async function checkLetter(raw: string, o: LetterOrder, deps: LetterDeps,
   // every block (Bitania adds one per step) must be for this order
   if (!r.blocks.every((b) => namesOrder(b.text, orderId))) return fail([{ level: 'warn', text: `The signed letter is for a different order than this page (${orderId}). Don't rely on it.` }]);
   const signedText = r.blocks.map((b) => b.text).join('\n\n');
+  const addresses = letterAddresses(signedText);
+  const unread = unreadDeposit(signedText, addresses);
   return {
     format: 'pgp',
     verified: true,
     lines: [{ level: 'ok', text: `Letter of guarantee signed by ${siteName}'s key (${tail(log.fingerprint)}, from xmr.club), for this order.` }],
-    addresses: letterAddresses(signedText),
+    addresses,
     signedText,
     signedAt: Math.max(...r.blocks.map((b) => b.signedAt)),
+    ...(unread ? { unreadDeposit: unread } : {}),
   };
 }

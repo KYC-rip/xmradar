@@ -15,7 +15,7 @@ const pgp = (site: string): SiteLog => ({ format: 'pgp', url: null, fingerprint:
 describe('letterAddresses: the labelled addresses of each real letter', () => {
   it.each([
     // the USDT contract it names is a valid Tron address too, with no role
-    ['bitcoinvn-BV97MXQZ.asc', [{ address: 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t', role: null }, { address: 'TDmAwaqvQms5G6XmgX3hDpiN44ejYY1ara', role: 'deposit' }, { address: PAYOUT, role: 'payout' }]],
+    ['bitcoinvn-BV97MXQZ.asc', [{ address: 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t', role: 'token' }, { address: 'TDmAwaqvQms5G6XmgX3hDpiN44ejYY1ara', role: 'deposit' }, { address: PAYOUT, role: 'payout' }]],
     ['0trace-89839aca.asc', [{ address: 'bc1q0mnej0zw66mu59q7cnw32pc3lh8zuqrmxsac06', role: 'deposit' }, { address: PAYOUT, role: 'payout' }]],
     ['bitania-jbstqmqrr6.asc', [{ address: '33oxUEHe5VLTzZZZrdbuAvpVgnyCiPUi7p', role: 'deposit' }, { address: PAYOUT, role: 'payout' }]],
     ['sageswap-ded558e8.asc', [{ address: 'bc1q9a6k7z7wvzcvsy9tlrefl0kz67ma593spst9kv', role: 'deposit' }, { address: PAYOUT, role: 'payout' }]],
