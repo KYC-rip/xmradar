@@ -10,6 +10,7 @@ import { articleTemplate, articleTooLarge, blossomAuthTemplate, buildNote, check
 import { retryable } from '../../nostr/retry';
 import { settingsItem } from '../../settings';
 import { h, trapFocus } from './dom';
+import { MAX_PASTED_IMAGES, MAX_PASTED_TOTAL, onPasteOrDrop } from './paste';
 
 let open = false;
 
@@ -47,6 +48,8 @@ async function mountComposer(ctx: ContentScriptContext, msg: OpenComposerMsg, ta
   const settings = await settingsItem.getValue();
   const previousFocus = document.activeElement as HTMLElement | null;
   let closed = false;
+  // pictures pasted or dropped in: page-local blob: URLs, released when the composer goes
+  const pasted = new Map<ExtractedImage, number>();
 
   const ui = await createShadowRootUi(ctx, {
     name: 'xmradar-ui',
@@ -80,15 +83,14 @@ async function mountComposer(ctx: ContentScriptContext, msg: OpenComposerMsg, ta
       );
 
       const selected = new Set<ExtractedImage>(post.images);
-      const imageGrid = h(
-        'div',
-        { class: 'images' },
-        ...post.images.map((img) => {
-          const box = h('input', { type: 'checkbox', checked: true, attrs: { 'aria-label': 'Include image' } });
-          box.addEventListener('change', () => (box.checked ? selected.add(img) : selected.delete(img)));
-          return h('label', { class: 'thumb' }, h('img', { src: img.url, alt: img.alt ?? '' }), box);
-        }),
-      );
+      // the post's images, then any pasted or dropped in (notes only); pasted ones live in this page only
+      const images = [...post.images];
+      const thumb = (img: ExtractedImage) => {
+        const box = h('input', { type: 'checkbox', checked: true, attrs: { 'aria-label': 'Include image' } });
+        box.addEventListener('change', () => (box.checked ? selected.add(img) : selected.delete(img)));
+        return h('label', { class: 'thumb' }, h('img', { src: img.url, alt: img.alt ?? (pasted.has(img) ? 'Pasted image' : '') }), box);
+      };
+      const imageGrid = h('div', { class: images.length ? 'images' : 'images hidden' }, ...images.map(thumb));
 
       const reupload = h('input', { type: 'checkbox', checked: true });
       const appendSource = h('input', { type: 'checkbox', checked: settings.appendSourceLink });
@@ -110,7 +112,7 @@ async function mountComposer(ctx: ContentScriptContext, msg: OpenComposerMsg, ta
         textarea,
         art ? wordsLine : '',
         art ? sizeLine : '',
-        post.images.length ? imageGrid : '',
+        imageGrid,
         h(
           'div',
           { class: 'options' },
@@ -161,6 +163,25 @@ async function mountComposer(ctx: ContentScriptContext, msg: OpenComposerMsg, ta
         wordsLine.textContent = `${wordCount(textarea.value).toLocaleString()} words`;
       };
       checkSize();
+      // a picture pasted or dropped into a note is added to its images and always uploaded to Blossom
+      const pasteTarget = {
+        accepts: () => !art && !busy && !done,
+        room: () => ({ count: MAX_PASTED_IMAGES - pasted.size, bytes: MAX_PASTED_TOTAL - [...pasted.values()].reduce((a, b) => a + b, 0) }),
+        add: (file: File) => {
+          const img: ExtractedImage = { url: URL.createObjectURL(file) };
+          images.push(img);
+          pasted.set(img, file.size);
+          selected.add(img);
+          imageGrid.append(thumb(img));
+          imageGrid.classList.remove('hidden');
+        },
+        status: setStatus,
+      };
+      textarea.addEventListener('paste', (e) => onPasteOrDrop(e, e.clipboardData, 'paste', pasteTarget));
+      textarea.addEventListener('dragover', (e) => {
+        if (e.dataTransfer?.types.includes('Files')) e.preventDefault();
+      });
+      textarea.addEventListener('drop', (e) => onPasteOrDrop(e, e.dataTransfer, 'drop', pasteTarget));
       textarea.addEventListener('input', () => {
         checkSize();
         clearTimeout(dupeTimer);
@@ -175,7 +196,7 @@ async function mountComposer(ctx: ContentScriptContext, msg: OpenComposerMsg, ta
       };
 
       const prepareImage = async (img: ExtractedImage): Promise<PostImage> => {
-        if (!reupload.checked) {
+        if (!reupload.checked && !pasted.has(img)) {
           if (img.url.startsWith('blob:')) throw new Error('This image only exists in the page; enable re-upload or untick it');
           return { url: img.url, alt: img.alt };
         }
@@ -240,7 +261,7 @@ async function mountComposer(ctx: ContentScriptContext, msg: OpenComposerMsg, ta
             if (err) throw new Error(err);
           }
           const prepared = new Map<ExtractedImage, PostImage>();
-          for (const img of post.images.filter((i) => selected.has(i))) {
+          for (const img of images.filter((i) => selected.has(i))) {
             setStatus(`Uploading image ${prepared.size + 1}…`);
             prepared.set(img, await prepareImage(img));
             if (closed) return;
@@ -300,6 +321,8 @@ async function mountComposer(ctx: ContentScriptContext, msg: OpenComposerMsg, ta
     onRemove() {
       open = false;
       closed = true;
+      for (const img of pasted.keys()) URL.revokeObjectURL(img.url);
+      pasted.clear();
       void sendToBackground({ type: 'close-session', sessionId: msg.sessionId }).catch(() => {});
       previousFocus?.focus?.();
     },

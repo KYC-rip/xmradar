@@ -326,6 +326,8 @@ async function handle(msg: BgRequest, sender: Browser.runtime.MessageSender): Pr
       await requireSession(msg.sessionId, sender);
       const { bytes, mime } = await loadImage(msg.url);
       const sha256 = await sha256Hex(bytes);
+      // a few images per post at most; an abandoned one doesn't stay for the worker's lifetime
+      if (imageCache.size >= 8) imageCache.delete(imageCache.keys().next().value!);
       imageCache.set(sha256, { bytes, mime });
       return { sha256, mime, size: bytes.byteLength, dim: await imageDim(bytes, mime) } satisfies ImageInfo;
     }
@@ -336,11 +338,13 @@ async function handle(msg: BgRequest, sender: Browser.runtime.MessageSender): Pr
         img = await loadImage(msg.url);
         if ((await sha256Hex(img.bytes)) !== msg.sha256) throw new Error('Image changed since it was hashed');
       }
-      checkBlossomAuth(msg.auth, msg.sha256);
-      const { blossomServer } = await settingsItem.getValue();
-      const url = await uploadBlob(blossomServer, img.bytes, img.mime, msg.sha256, msg.auth);
-      imageCache.delete(msg.sha256);
-      return { url };
+      try {
+        checkBlossomAuth(msg.auth, msg.sha256);
+        const { blossomServer } = await settingsItem.getValue();
+        return { url: await uploadBlob(blossomServer, img.bytes, img.mime, msg.sha256, msg.auth) };
+      } finally {
+        imageCache.delete(msg.sha256);
+      }
     }
     case 'publish': {
       await requireSession(msg.sessionId, sender);
