@@ -2,6 +2,7 @@ import type { Event } from 'nostr-tools/pure';
 import type { ResolvedIdentity } from './identity/envelope';
 import type { Badge } from './identity/resolve';
 import type { ProofResult } from './identity/nostr';
+import type { ClaimPlace, ClaimValues } from './identity/xclaims';
 import type { LetterExport } from './log/export';
 import type { LetterReply, LogPage } from './log/service';
 import type { SavedLetter } from './log/store';
@@ -139,6 +140,8 @@ export type BgRequest =
   | { type: 'test-signer' }
   | { type: 'xmrbio-resolve'; handle: string }
   | { type: 'resolve-handles'; handles: string[] }
+  /** what a profile page shows in one place (PLAN-XCLAIMS); null claim = seen without one */
+  | { type: 'x-claims-seen'; handle: string; place: ClaimPlace; claim: ClaimValues | null; tweetId?: string }
   | { type: 'setup-status' }
   | { type: 'setup-prepare'; action: SetupRequest }
   | { type: 'setup-sign'; id: string }
@@ -214,6 +217,8 @@ export type BgResponse<T extends BgRequest['type']> = T extends 'fetch-image'
                                     ? XapPublishResult
                                     : T extends 'xmr-price'
                                       ? { usd: number }
+                                      : T extends 'x-claims-seen'
+                                        ? { changed: boolean }
                                       : T extends 'receipt-found'
                                         ? PageCheck
                                         : T extends 'receipt-badge'

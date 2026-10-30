@@ -354,6 +354,8 @@ describe('badge slots', () => {
     expect(profileSlot(header('@XBToshi'), { hostname: 'x.com', pathname: '/xmr_club' })).toBeNull();
     expect(profileSlot(header('@xmr_club'), { hostname: 'x.com', pathname: '/xmr_club' })).toMatchObject({ handle: 'xmr_club' });
     expect(profileSlot(header('@xmr_club_2'), { hostname: 'x.com', pathname: '/xmr_club' })).toBeNull();
+    // an account that follows you: "Follows you" runs on in textContent ("@Mr_XMR_Follows you", seen 2026-10-30)
+    expect(profileSlot(header('@Mr_XMR_</span><span>Follows you'), { hostname: 'x.com', pathname: '/Mr_XMR_' })).toMatchObject({ handle: 'Mr_XMR_' });
   });
 });
 
@@ -375,6 +377,21 @@ describe('badge popup', () => {
     const el = badgePanel(mergeBadge('franz_fk19', [{ source: 'xmrbio', address: STD, check: { ok: true, type: 'standard' }, verified: true, method: 'xmrbio:directory' }]));
     expect(el.textContent).toContain('X account @franz_fk19 verified by xmr.bio; from its signed directory');
     expect(el.textContent).not.toContain('proof tweet');
+  });
+
+  it('X self-claims are labelled as such, with where and when they were seen', () => {
+    const seenAt = Date.parse('2026-11-01T12:00:00Z');
+    const ok = { ok: true, type: 'standard' } as const;
+    const self = (over: Partial<BadgeEntry>): BadgeEntry => ({ source: 'xself', address: STD, check: ok, verified: true, method: 'x-bio', seenAt, confirmedAt: seenAt, ...over });
+    const bio = renderBadge(mergeBadge('foo', [self({})]));
+    expect(bio.textContent).toContain('Self-claim on X (not verified)');
+    expect(bio.textContent).toContain(`from @foo's X bio, seen ${new Date(seenAt).toLocaleDateString()}`);
+    expect(bio.textContent).toContain(`From @foo's X bio, seen`);
+    const link = badgePanel(mergeBadge('foo', [self({ method: 'x-url-xmrbio', xmrbio: 'foo_tips' })]));
+    expect(link.textContent).toContain(`From @foo's Website field: links xmr.bio/foo_tips (address signed by xmr.bio)`);
+    const pinned = badgePanel(mergeBadge('foo', [self({ method: 'x-pinned', tweetId: '77' })]));
+    expect(pinned.querySelector('a')!.textContent).toBe('pinned post');
+    expect(pinned.querySelector('a')!.getAttribute('href')).toBe('https://x.com/foo/status/77');
   });
 
   it('renders hostile notes as text and skips links for bad values', () => {

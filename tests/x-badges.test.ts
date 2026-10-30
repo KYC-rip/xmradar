@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fakeBrowser } from 'wxt/testing/fake-browser';
 import { startBadges } from '../src/entrypoints/content/x-badges';
 import type { Badge } from '../src/identity/resolve';
-import { directoryStatusItem, myHandleItem, xmrSettingsItem } from '../src/settings';
+import { directoryStatusItem, myHandleItem, xClaimsChangedItem, xmrSettingsItem } from '../src/settings';
 
 const send = vi.hoisted(() => vi.fn());
 const openTip = vi.hoisted(() => vi.fn());
@@ -142,6 +142,69 @@ describe('badges on X', () => {
     await directoryStatusItem.setValue({ state: 'ok', at: 2, count: 1, generatedAt: 5 });
     await vi.waitFor(() => expect(lookups()).toBe(2), { timeout: 3000 });
     await vi.waitFor(() => expect(badges()).toBe(1), { timeout: 3000 });
+  });
+
+  describe('X self-claims on a profile page', () => {
+    const SUB = '89fM69NVioz94JQrJFLGPDa8PMpjea7TV8JQktbLBLpX9gKMfrt3dge7KMdqg86coZjCxCm3fn1WKdM8WBMJhEdaUimo8Q3';
+    const PIN = '<svg><path d="M13 21l-1 2-1-2v-5H4.5v-2.287"></path></svg>';
+    const profile = (bio: string) => `<div data-testid="primaryColumn">
+      <div data-testid="UserName"><span>Foo</span><span>@foo</span></div>
+      <div data-testid="UserDescription">${bio}</div>
+      <div data-testid="UserProfileHeader_Items"><a data-testid="UserUrl">xmr.bio/foo_tips</a></div>
+      <article data-testid="tweet"><div><div>${PIN}</div><span data-testid="socialContext">Pinned</span></div>
+        <div data-testid="User-Name"><a href="/foo">Foo</a><a href="/foo/status/77"><time></time></a></div>
+        <div data-testid="tweetText">pay ${SUB}</div></article></div>`;
+    const sent = () => send.mock.calls.map(([m]) => m).filter((m) => m.type === 'x-claims-seen');
+    beforeEach(() => (window as unknown as { happyDOM: { setURL(u: string): void } }).happyDOM.setURL('https://x.com/foo'));
+    afterEach(() => (window as unknown as { happyDOM: { setURL(u: string): void } }).happyDOM.setURL('http://localhost:3000/'));
+
+    it('reads bio and Website once settled, the pinned post once it stayed; only changes are sent again', async () => {
+      send.mockImplementation(async (m: { type: string }) => (m.type === 'x-claims-seen' ? { changed: true } : { badges: [], pending: [] }));
+      document.body.innerHTML = profile(`Monero: ${ADDR}`);
+      startBadges(ctx as never);
+      await vi.waitFor(() => expect(sent().length).toBe(2), { timeout: 3000 });
+      expect(sent()).toEqual([
+        { type: 'x-claims-seen', handle: 'foo', place: 'bio', claim: { address: ADDR } },
+        { type: 'x-claims-seen', handle: 'foo', place: 'url', claim: { xmrbio: 'foo_tips' } },
+      ]);
+      await vi.waitFor(() => expect(sent().length).toBe(3), { timeout: 4000 });
+      expect(sent()[2]).toEqual({ type: 'x-claims-seen', handle: 'foo', place: 'pinned', claim: { address: SUB }, tweetId: '77' });
+      // the bio changes: only the bio goes again, now without a claim
+      document.querySelector('[data-testid="UserDescription"]')!.textContent = 'just a bio';
+      await vi.waitFor(() => expect(sent().length).toBe(4), { timeout: 3000 });
+      expect(sent()[3]).toEqual({ type: 'x-claims-seen', handle: 'foo', place: 'bio', claim: null });
+    }, 10_000);
+
+    it('a complete profile with no posts says it has no pinned post, after a wait', async () => {
+      send.mockImplementation(async (m: { type: string }) => (m.type === 'x-claims-seen' ? { changed: false } : { badges: [], pending: [] }));
+      document.body.innerHTML = profile('just a bio').replace(/<article[\s\S]*<\/article>/, '');
+      startBadges(ctx as never);
+      await vi.waitFor(() => expect(sent().length).toBe(2), { timeout: 3000 });
+      await new Promise((r) => setTimeout(r, 3000));
+      // not yet: the timeline may still be loading
+      expect(sent().some((m) => m.place === 'pinned')).toBe(false);
+      await vi.waitFor(() => expect(sent().find((m) => m.place === 'pinned')).toEqual({ type: 'x-claims-seen', handle: 'foo', place: 'pinned', claim: null }), { timeout: 5000 });
+    }, 12_000);
+
+    it('nothing is read with the switch off', async () => {
+      await xmrSettingsItem.setValue({ ...(await xmrSettingsItem.getValue()), xClaims: false });
+      document.body.innerHTML = profile(`Monero: ${ADDR}`);
+      startBadges(ctx as never);
+      await new Promise((r) => setTimeout(r, 1500));
+      expect(sent()).toEqual([]);
+    });
+
+    it('a changed claim makes that handle look up again, and only that one', async () => {
+      document.body.innerHTML = card;
+      startBadges(ctx as never);
+      await vi.waitFor(() => expect(badges()).toBe(1), { timeout: 3000 });
+      await xClaimsChangedItem.setValue({ handle: 'someone_else', at: 1 });
+      await new Promise((r) => setTimeout(r, 1200));
+      expect(lookups()).toBe(1);
+      await xClaimsChangedItem.setValue({ handle: 'xbtoshi', at: 2 });
+      await vi.waitFor(() => expect(lookups()).toBe(2), { timeout: 3000 });
+      await vi.waitFor(() => expect(badges()).toBe(1), { timeout: 3000 });
+    });
   });
 
   it('clicking the pill opens the tip without following the card link', async () => {

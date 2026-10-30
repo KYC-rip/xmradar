@@ -3,9 +3,10 @@ import { badgeLook, mountBadge, type BadgeLook } from '../../identity/badge-look
 import { PendingQueue } from '../../identity/bucket';
 import { normalizeHandle } from '../../identity/envelope';
 import { xapEntry, type Badge } from '../../identity/resolve';
-import { articleViewSlot, hoverCardSlot, profileHeader, profileSlot, tweetSlot, userCellSlot, type BadgeSlot } from '../../identity/x-handle';
+import { articleViewSlot, hoverCardSlot, pinnedPost, profileClaimScope, profileHeader, profileSlot, tweetSlot, userCellSlot, type BadgeSlot } from '../../identity/x-handle';
+import { emptyClaim, parseClaim, type ClaimPlace } from '../../identity/xclaims';
 import { sendToBackground, type XapTotals } from '../../messaging';
-import { directoryStatusItem, xmrSettingsItem } from '../../settings';
+import { directoryStatusItem, xClaimsChangedItem, xClaimsOn, xmrSettingsItem } from '../../settings';
 import { openTip } from './tip';
 import { XAP_SELECTOR, actionBars, insertXap, ownXaps, setXapCount, xapSummary } from './x-xap';
 import { parsePostKey, postKey } from '../../xap/post';
@@ -19,6 +20,11 @@ const MAX_PER_CALL = 200;
 const BADGE_TTL_MS = 6 * 3600_000;
 const NO_BADGE_TTL_MS = 3600_000;
 const SCROLL_RESCAN_MS = 500;
+// a profile is read once it has settled; a pinned post must stay this long before it counts (X2)
+const CLAIMS_DELAY_MS = 1000;
+const PINNED_STAY_MS = 1000;
+// a complete profile header with no post under it for this long has no pinned post (no posts, or protected)
+const NO_POSTS_MS = 5000;
 
 export function startBadges(ctx: ContentScriptContext) {
   const results = new Map<string, { badge: Badge; at: number }>();
@@ -39,6 +45,58 @@ export function startBadges(ctx: ContentScriptContext) {
   const removeAll = () => {
     for (const host of document.querySelectorAll(`${HOST_TAG}, ${XAP_SELECTOR}`)) host.remove();
   };
+  /** one handle's badges and Xap buttons; slot keys end in `:<handle>` */
+  const removeFor = (handle: string) => {
+    for (const el of document.querySelectorAll<HTMLElement>(`${HOST_TAG}, ${XAP_SELECTOR}`)) if (el.dataset.key?.endsWith(`:${handle}`)) el.remove();
+  };
+
+  // X self-claims (PLAN-XCLAIMS): what the profile you're on shows in its bio, Website field and pinned
+  // post, read from the page and handed to the background; only a change is sent again
+  let claimsOn = false;
+  const claimsSent = new Map<string, string>();
+  let claimsTimer: ReturnType<typeof setTimeout> | undefined;
+  let pinnedSeen: { el: Element; sig: string; at: number } | null = null;
+  function scheduleClaims(ms = CLAIMS_DELAY_MS) {
+    // at most one read a second, and only on what could be a profile
+    if (!claimsOn || !enabled || claimsTimer || !/^\/[A-Za-z0-9_]{1,15}(?:\/|$)/.test(location.pathname)) return;
+    claimsTimer = setTimeout(() => {
+      claimsTimer = undefined;
+      readClaims();
+    }, ms);
+  }
+  function report(handle: string, place: ClaimPlace, text: string | null, tweetId?: string) {
+    const parsed = text == null ? null : parseClaim(text, place);
+    const claim = emptyClaim(parsed) ? null : parsed;
+    const key = `${handle.toLowerCase()}:${place}`;
+    const sig = JSON.stringify([claim, tweetId ?? null]);
+    if (claimsSent.get(key) === sig) return;
+    claimsSent.set(key, sig);
+    // a lost message is sent again on the next look
+    sendToBackground({ type: 'x-claims-seen', handle, place, claim, ...(tweetId ? { tweetId } : {}) }).catch(() => claimsSent.delete(key));
+  }
+  function readClaims() {
+    if (!enabled || !claimsOn || document.hidden) return;
+    const scope = profileClaimScope(document, location);
+    if (!scope) return;
+    // only a header rendered in full can say a bio or Website is gone
+    if (scope.bio) report(scope.handle, 'bio', scope.bio.text);
+    if (scope.url) report(scope.handle, 'url', scope.url.text);
+    const pin = pinnedPost(document, location, scope.handle);
+    if (!pin) {
+      if (!scope.bio || !/^\/[A-Za-z0-9_]{1,15}\/?$/.test(location.pathname)) return;
+      const none = `${scope.handle}:none`;
+      if (pinnedSeen?.sig !== none) {
+        pinnedSeen = { el: document.body, sig: none, at: Date.now() };
+        scheduleClaims(NO_POSTS_MS + 100);
+      } else if (Date.now() - pinnedSeen.at >= NO_POSTS_MS) report(scope.handle, 'pinned', null);
+      return;
+    }
+    const sig = `${scope.handle}:${pin.tweetId ?? ''}:${pin.text ?? ''}`;
+    if (pinnedSeen?.el !== pin.article || pinnedSeen.sig !== sig) {
+      pinnedSeen = { el: pin.article, sig, at: Date.now() };
+      scheduleClaims(PINNED_STAY_MS + 100);
+    } else if (Date.now() - pinnedSeen.at >= PINNED_STAY_MS) report(scope.handle, 'pinned', pin.text, pin.tweetId);
+  }
 
   const isOurs = (n: Node) => n instanceof Element && (n.localName === HOST_TAG || n.matches(XAP_SELECTOR));
 
@@ -219,6 +277,7 @@ export function startBadges(ctx: ContentScriptContext) {
     }
     // the profile header only needs a document-wide lookup when it could have changed
     if (root === document || (root instanceof Element && (root.querySelector('[data-testid="UserName"]') || root.closest('[data-testid="UserName"]')))) scanProfile();
+    scheduleClaims();
   }
 
   /** The profile header's badge, or none while the header shows another profile than the page's. */
@@ -272,6 +331,8 @@ export function startBadges(ctx: ContentScriptContext) {
         if (!header && el && !isOurs(el) && el.closest('[data-testid="UserName"]')) header = true;
       }
       if (header) scanProfile();
+      // a bio or pinned post can change in place, with no new element
+      scheduleClaims();
     });
     // body survives X's client-side navigation, so one observer covers every page
     observer.observe(document.body, { childList: true, subtree: true, characterData: true });
@@ -292,6 +353,8 @@ export function startBadges(ctx: ContentScriptContext) {
     timer = undefined;
     clearTimeout(totalsTimer);
     totalsTimer = undefined;
+    clearTimeout(claimsTimer);
+    claimsTimer = undefined;
     removeAll();
   }
 
@@ -311,14 +374,27 @@ export function startBadges(ctx: ContentScriptContext) {
   );
   ctx.addEventListener(document, 'visibilitychange', () => (document.hidden ? disconnect() : connect()));
   // profile headers change on client-side navigation without new tweet nodes
-  ctx.addEventListener(window, 'wxt:locationchange', () => scan(document));
+  ctx.addEventListener(window, 'wxt:locationchange', () => {
+    // each visit to a profile confirms what it shows again
+    claimsSent.clear();
+    pinnedSeen = null;
+    scan(document);
+  });
 
   void xmrSettingsItem.getValue().then((s) => {
     look = badgeLook(s);
     discovery = s.nostrDiscovery;
+    claimsOn = xClaimsOn(s);
     setEnabled(s.badgesX);
   });
   const unwatch = xmrSettingsItem.watch((s, old) => {
+    if (xClaimsOn(s) !== xClaimsOn(old)) {
+      claimsOn = xClaimsOn(s);
+      claimsSent.clear();
+      // badges merged from claims come and go with the switch
+      results.clear();
+      removeAll();
+    }
     if (s.nostrDiscovery !== old?.nostrDiscovery) {
       // answers depend on the sources in use
       results.clear();
@@ -342,9 +418,17 @@ export function startBadges(ctx: ContentScriptContext) {
     removeAll();
     if (enabled) scan(document);
   });
+  // a profile's claims changed (here or in another tab): its badge is looked up again
+  const unwatchClaims = xClaimsChangedItem.watch((c) => {
+    if (!c || typeof c.handle !== 'string') return;
+    results.delete(c.handle);
+    removeFor(c.handle);
+    if (enabled) scan(document);
+  });
   ctx.onInvalidated(() => {
     unwatch();
     unwatchDirectory();
+    unwatchClaims();
     setEnabled(false);
   });
 }

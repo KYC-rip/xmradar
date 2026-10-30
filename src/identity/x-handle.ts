@@ -89,8 +89,12 @@ export function profileSlot(doc: Document, loc: { hostname: string; pathname: st
   const handle = fromPath(loc.pathname);
   const anchor = profileHeader(doc);
   if (!handle || !anchor) return null;
-  // the @handle row comes after the name, so the last @handle in the header is the one
-  const shown = [...(anchor.textContent ?? '').matchAll(/@([A-Za-z0-9_]{1,15})(?![A-Za-z0-9_])/g)].pop()?.[1];
+  // the @handle row comes after the name, so the last @handle in the header is the one; read per text
+  // node, as the header's text runs together ("@foo" + "Follows you" = "@fooFollows you")
+  const texts: string[] = [];
+  const walker = doc.createTreeWalker(anchor, 4 /* NodeFilter.SHOW_TEXT */);
+  for (let n = walker.nextNode(); n; n = walker.nextNode()) texts.push(n.textContent ?? '');
+  const shown = texts.flatMap((t) => [...t.matchAll(/@([A-Za-z0-9_]{1,15})(?![A-Za-z0-9_])/g)].map((m) => m[1])).pop();
   return shown?.toLowerCase() === handle.toLowerCase() ? { handle, key: `profile:${handle.toLowerCase()}`, anchor } : null;
 }
 
@@ -117,4 +121,71 @@ export function userCellSlot(cell: Element): BadgeSlot | null {
   const handle = fromPath(avatar);
   const row = link?.firstElementChild;
   return handle && row ? { handle, key: `cell:${handle.toLowerCase()}`, anchor: row } : null;
+}
+
+/** The pin icon of X's "Pinned" row; its label is localised, the icon isn't (PLAN-XCLAIMS §8). */
+const PIN_PATH = 'M13 21l-1 2-1-2v-5H4.5v-2.287';
+
+/** One place on a profile, read in full: `text` null means the place isn't there (no bio, no Website). */
+export interface ClaimRead {
+  text: string | null;
+}
+
+export interface ProfileClaimScope {
+  handle: string;
+  /** null while the header hasn't rendered in full, so nothing can be removed */
+  bio: ClaimRead | null;
+  url: ClaimRead | null;
+}
+
+const CLAIM_TABS = /^\/([A-Za-z0-9_]{1,15})(?:\/(?:with_replies|media|likes|highlights|articles))?\/?$/;
+
+/**
+ * A profile page's bio and Website field, bound to the page's handle (X5): the path is the profile or
+ * one of its tabs, the main column's header shows that @handle, and the header has rendered as far as
+ * its items row (location, Website, join date), so a missing bio or Website is really missing.
+ */
+export function profileClaimScope(doc: Document, loc: { hostname: string; pathname: string }): ProfileClaimScope | null {
+  if (!isXHost(loc.hostname)) return null;
+  const m = CLAIM_TABS.exec(loc.pathname);
+  const handle = m ? fromPath(`/${m[1]}`) : null;
+  const column = doc.querySelector('[data-testid="primaryColumn"]');
+  if (!handle || !column) return null;
+  const slot = profileSlot(doc, loc);
+  if (!slot || !column.contains(slot.anchor)) return null;
+  const items = column.querySelector('[data-testid="UserProfileHeader_Items"]');
+  if (!items) return { handle, bio: null, url: null };
+  const desc = column.querySelector('[data-testid="UserDescription"]');
+  const url = items.querySelector('[data-testid="UserUrl"]');
+  return { handle, bio: { text: desc ? (desc.textContent ?? '') : null }, url: { text: url ? (url.textContent ?? '') : null } };
+}
+
+export interface PinnedRead {
+  /** the first post, its text without a quoted post; null when it isn't the account's pinned post */
+  text: string | null;
+  tweetId?: string;
+  /** the element read, so a caller can wait for it to stay */
+  article: Element;
+}
+
+/**
+ * The profile's pinned post (§8): the main column's first post, marked by a social-context row with the
+ * pin icon that isn't a link (a repost's context links to the reposter), written by the profile itself.
+ * Only on the profile's main tab, where X shows the pinned post first.
+ */
+export function pinnedPost(doc: Document, loc: { hostname: string; pathname: string }, handle: string): PinnedRead | null {
+  if (!isXHost(loc.hostname) || !/^\/[A-Za-z0-9_]{1,15}\/?$/.test(loc.pathname) || fromPath(loc.pathname)?.toLowerCase() !== handle.toLowerCase()) return null;
+  const article = doc.querySelector('[data-testid="primaryColumn"] article[data-testid="tweet"]');
+  if (!article) return null;
+  const ctx = article.querySelector('[data-testid="socialContext"]');
+  // the row's icon: the nearest block around the label that holds an svg, short of the author's name row
+  let row: Element | null = ctx;
+  while (row && row !== article && !row.querySelector('svg')) row = row.parentElement;
+  const icon = row && row !== article && !row.querySelector('[data-testid="User-Name"]') ? row.querySelector('svg path') : null;
+  const pinned = !!ctx && !ctx.closest('a') && !!icon?.getAttribute('d')?.startsWith(PIN_PATH);
+  const slot = tweetSlot(article);
+  if (!pinned || slot?.handle.toLowerCase() !== handle.toLowerCase()) return { text: null, article };
+  // the post's own text: a quoted post sits in a role=link block with its own tweetText
+  const own = [...article.querySelectorAll('[data-testid="tweetText"]')].filter((t) => !t.closest('div[role="link"]'));
+  return { text: own.map((t) => t.textContent ?? '').join('\n'), ...(slot.statusId ? { tweetId: slot.statusId } : {}), article };
 }

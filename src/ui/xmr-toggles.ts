@@ -29,12 +29,18 @@ export async function mountXmrToggles(root: HTMLElement) {
   const receipts = part<HTMLInputElement>(root, 'xmr', 'receipts');
   // only on the options page; the popup's switches have no status line
   const dirLine = optionalPart<HTMLElement>(root, 'xmr', 'directory');
+  const claims = optionalPart<HTMLInputElement>(root, 'xmr', 'claims');
   const showDirectory = async () => {
     if (dirLine) dirLine.textContent = directoryText(await directoryStatusItem.getValue(), (await xmrSettingsItem.getValue()).badgesX);
   };
   const show = (x: XmrSettings) => {
     void showDirectory();
     badges.checked = x.badgesX;
+    if (claims) {
+      // read only while badges are on; its own choice is kept for when they come back
+      claims.checked = x.xClaims !== false;
+      claims.disabled = !x.badgesX;
+    }
     discovery.checked = x.nostrDiscovery;
     receipts.checked = x.tipReceipts;
   };
@@ -45,6 +51,7 @@ export async function mountXmrToggles(root: HTMLElement) {
       show(await xmrSettingsItem.getValue());
     });
   badges.addEventListener('change', () => void save({ badgesX: badges.checked }));
+  claims?.addEventListener('change', () => void save({ xClaims: claims.checked }));
   discovery.addEventListener('change', () => void save({ nostrDiscovery: discovery.checked }));
   receipts.addEventListener('change', () => void save({ tipReceipts: receipts.checked }));
   xmrSettingsItem.watch((x) => show(x));

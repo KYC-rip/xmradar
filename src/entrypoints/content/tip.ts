@@ -188,7 +188,9 @@ export function renderIdentity(id: ResolvedIdentity, check: AddressCheck): HTMLE
 
 export function renderBadge(badge: Badge): HTMLElement {
   const p = badge.primary!;
-  const el = renderPayment(p.address, p.check, p.source === 'xmrbio' ? 'xmr.bio' : 'Nostr', badgePanel(badge));
+  const label = p.source === 'xmrbio' ? 'xmr.bio' : p.source === 'nostr' ? 'Nostr' : 'This X account';
+  const el = renderPayment(p.address, p.check, label, badgePanel(badge));
+  if (p.source === 'xself') el.prepend(h('div', { class: 'small' }, `Self-claim on X (not verified): ${selfWhere(badge.handle, p)}. Only @${badge.handle} could have written it, but XMRadar can't tell if it's still there or meant as a tip address.`));
   if (badge.differ) el.prepend(h('div', { class: 'warn' }, 'This account has published more than one address. Check the sources below before sending.'));
   return el;
 }
@@ -251,6 +253,18 @@ function renderPayment(address: string, check: AddressCheck, sourceLabel: string
 
 const shortAddr = (a: string) => `${a.slice(0, 8)}…${a.slice(-8)}`;
 
+const PLACE_NAMES: Record<string, string> = { bio: 'X bio', url: 'Website field', pinned: 'pinned post' };
+
+/** Where an X self-claim came from (PLAN-XCLAIMS A4, §9): "from @foo's X bio, seen 3 Nov". */
+function selfWhere(handle: string, e: BadgeEntry): string {
+  const [, place = '', via] = /^x-(bio|url|pinned)(?:-(xmrbio|npub))?$/.exec(e.method) ?? [];
+  const where = `from @${handle}'s ${PLACE_NAMES[place] ?? 'profile'}`;
+  const how = via === 'xmrbio' && e.xmrbio ? `: links xmr.bio/${e.xmrbio} (address signed by xmr.bio)` : via === 'npub' ? ': a Nostr key, its address read from relays' : '';
+  const seen = e.seenAt ? `, seen ${new Date(e.seenAt).toLocaleDateString()}` : '';
+  const again = e.confirmedAt && e.seenAt && e.confirmedAt - e.seenAt > 86_400_000 ? `, last ${new Date(e.confirmedAt).toLocaleDateString()}` : '';
+  return `${where}${how}${seen}${again}`;
+}
+
 function entryLine(handle: string, e: BadgeEntry, primary: boolean): HTMLElement {
   const li = h('li', {});
   if (e.source === 'nostr' && e.pubkey) {
@@ -263,7 +277,7 @@ function entryLine(handle: string, e: BadgeEntry, primary: boolean): HTMLElement
     const url = npub ? links.njump(npub) : null;
     li.append('Nostr ', url ? h('a', { href: url, target: '_blank', rel: 'noopener noreferrer', textContent: `${npub.slice(0, 12)}…${npub.slice(-6)}` }) : h('span', { textContent: e.pubkey }));
   } else {
-    li.append(e.source === 'xmrbio' ? 'xmr.bio' : e.source);
+    li.append(e.source === 'xmrbio' ? 'xmr.bio' : e.source === 'xself' ? 'Self-claim on X (not verified)' : e.source);
   }
   li.append(`: ${shortAddr(e.address)}`);
   if (primary) li.append(h('strong', { textContent: ' (shown above)' }));
@@ -272,10 +286,12 @@ function entryLine(handle: string, e: BadgeEntry, primary: boolean): HTMLElement
     ? `invalid address (${e.check.reason})`
     : e.source === 'xmrbio'
       ? `X account @${handle} verified by xmr.bio; from its signed directory`
+      : e.source === 'xself'
+        ? selfWhere(handle, e).replace(/^f/, 'F')
       : e.verified
         ? `linked to @${handle} by a proof tweet, checked by XMRadar (${e.method})`
         : `unverified: ${e.note ?? 'no proof'}`;
-  li.append(h('div', { class: 'small' }, status, tweet ? ' · ' : '', tweet ? h('a', { href: tweet, target: '_blank', rel: 'noopener noreferrer', textContent: 'proof tweet' }) : ''));
+  li.append(h('div', { class: 'small' }, status, tweet ? ' · ' : '', tweet ? h('a', { href: tweet, target: '_blank', rel: 'noopener noreferrer', textContent: e.source === 'xself' ? 'pinned post' : 'proof tweet' }) : ''));
   if (e.createdAt) li.append(h('div', { class: 'small' }, `claim published ${new Date(e.createdAt * 1000).toLocaleString()}`));
   return li;
 }

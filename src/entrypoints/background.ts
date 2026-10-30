@@ -8,8 +8,9 @@ import { KIND_IDENTITIES, KIND_PAYTO, moneroPayto, parseTweetProof, twitterClaim
 import { buildMerged, kindFor, newestOwn, setupTargets, tweetUrl, type SetupAction } from '../identity/setup';
 import { validateMoneroAddress } from '../xmr/address';
 import { directoryKeeper, type StoredDirectory } from '../identity/directory';
-import { mergeBadge, resolveHandles, withoutNostr, type Badge } from '../identity/resolve';
+import { mergeBadge, resolveHandles, withoutNostr, withoutSelf, type Badge } from '../identity/resolve';
 import { resolveXmrbio, type SeenEntries } from '../identity/xmrbio';
+import { claimKeeper, selfEntries, type XClaimStore } from '../identity/xclaims';
 import { BURNER_CREATE_PORT, type BurnerCreateEvent } from '../messaging';
 import type { BgRequest, BgResponse, ImageInfo, OpenComposerMsg, OpenTipMsg, PreparedSetup, ResolveHandlesResult, SetupRequest, SetupStatus, Wrapped, XmrbioResult, XmrbioStatus } from '../messaging';
 import { setupStatusLast, xmrbioLinked } from '../identity/status';
@@ -19,7 +20,7 @@ import { KIND_ARTICLE, checkBlossomAuth, checkPublishable, checkSigned, dedupeKe
 import { allRelaysFrom, fetchWriteRelays, publishToRelays, readEach, readRelay } from '../nostr/relays';
 import { assertFetchableImageUrl } from '../nostr/url-guard';
 import { checkSessionSender, checkShareMenuSender, isExtensionPageSender, isXUrl, shareMenuRateLimit, withoutTab } from '../sender';
-import { DEFAULT_RELAYS, directoryStatusItem, INDEX_RELAYS, withoutIndex, myHandleItem, postedItem, pubkeyItem, receiptsOn, settingsItem, siteInfoOn, xapMarksItem, xmrSettingsItem } from '../settings';
+import { DEFAULT_RELAYS, directoryStatusItem, INDEX_RELAYS, withoutIndex, myHandleItem, postedItem, pubkeyItem, receiptsOn, settingsItem, siteInfoOn, xapMarksItem, xClaimsChangedItem, xClaimsOn, xmrSettingsItem } from '../settings';
 import { storage } from 'wxt/utils/storage';
 import { activeInbox, burnerCreatingItem, burnerInboxItem, burnerLastErrorItem, burnFreeInbox, createFreeInbox, forgetImportedInbox, importInbox, type BurnerDeps } from '../burner/service';
 import { idbTokenStore } from '../burner/token-store';
@@ -146,10 +147,13 @@ export default defineBackground(() => {
     void directory.onAlarm(a.name);
   });
   void xmrSettingsItem.getValue().then((s) => directory.apply(s.badgesX));
+  // switched off while the worker wasn't running: nothing may stay kept
+  void xmrSettingsItem.getValue().then((s) => (xClaimsOn(s) ? undefined : claims.clear()));
   void xmrSettingsItem.getValue().then((s) => applySiteInfoSetting(siteInfoOn(s)));
   xmrSettingsItem.watch((s, old) => {
     if (siteInfoOn(s) !== siteInfoOn(old)) void applySiteInfoSetting(siteInfoOn(s));
     if (s.badgesX !== old?.badgesX) void directory.apply(s.badgesX);
+    if (xClaimsOn(old) && !xClaimsOn(s)) void claims.clear();
   });
   // a tab that moves to another page starts with no receipt or site state (the browser resets its badge)
   browser.tabs.onUpdated.addListener((tabId, change) => {
@@ -459,6 +463,10 @@ async function handle(msg: BgRequest, sender: Browser.runtime.MessageSender): Pr
     case 'resolve-handles': {
       if (!isXContentScript(sender) || sender.tab?.id == null) throw new Error('Not allowed');
       return resolveBadges(msg.handles, sender.tab.id);
+    }
+    case 'x-claims-seen': {
+      if (!isXContentScript(sender)) throw new Error('Not allowed');
+      return claims.seen(msg);
     }
     case 'setup-status': {
       if (!isExtensionPage(sender)) throw new Error('Not allowed');
@@ -773,8 +781,10 @@ async function cachedVerify(handle: string, tweetId: string, pubkey: string): Pr
 }
 
 async function resolveBadges(handles: string[], tabId: number): Promise<ResolveHandlesResult> {
-  const { badgesX: enabled, nostrDiscovery } = await xmrSettingsItem.getValue();
+  const settings = await xmrSettingsItem.getValue();
+  const { badgesX: enabled, nostrDiscovery } = settings;
   if (!enabled) return { badges: [], pending: [] };
+  const claimsOn = xClaimsOn(settings);
   const valid = [...new Set(handles.filter((h) => typeof h === 'string' && HANDLE_RE.test(h)))].slice(0, MAX_HANDLES_PER_CALL);
   const { badges: cache } = await loadCaches();
   const now = Date.now();
@@ -783,15 +793,22 @@ async function resolveBadges(handles: string[], tabId: number): Promise<ResolveH
   for (const h of valid) {
     const hit = cache.get(normalizeHandle(h), now, (b) => (b.primary ? BADGE_TTL_MS : NO_BADGE_TTL_MS));
     if (!hit) misses.push(h);
-    // with discovery off, Nostr entries cached earlier must not come back
-    else out.push([hit.handle, nostrDiscovery ? hit : withoutNostr(hit)]);
+    // with discovery or claims off, entries cached earlier from them must not come back
+    else {
+      const b = nostrDiscovery ? hit : withoutNostr(hit);
+      out.push([hit.handle, claimsOn ? b : withoutSelf(b)]);
+    }
   }
   if (!misses.length) return { badges: out, pending: [] };
   // the local directory costs nothing and tells no one anything, so it is never throttled (RATE-2)
   const lookup = await directory.lookup();
+  const selfClaims = await claims.lookup();
   if (!nostrDiscovery) {
-    // not cached: the directory is already local, and a new build applies at once
-    for (const h of misses) out.push([normalizeHandle(h), mergeBadge(h, lookup(normalizeHandle(h)))]);
+    // not cached: the directory and claims are already local, and a change applies at once
+    for (const h of misses) {
+      const key = normalizeHandle(h);
+      out.push([key, mergeBadge(key, [...lookup(key), ...selfEntries(selfClaims(key), lookup)])]);
+    }
     return { badges: out, pending: [] };
   }
   let bucket = buckets.get(tabId);
@@ -800,7 +817,7 @@ async function resolveBadges(handles: string[], tabId: number): Promise<ResolveH
   const batch = misses.slice(0, granted);
   if (batch.length) {
     const { relays } = await settingsItem.getValue();
-    const found = await resolveHandles(batch, { discovery: true, relays: [...new Set([...DEFAULT_RELAYS, ...INDEX_RELAYS, ...relays])], verify: cachedVerify, directory: lookup });
+    const found = await resolveHandles(batch, { discovery: true, relays: [...new Set([...DEFAULT_RELAYS, ...INDEX_RELAYS, ...relays])], verify: cachedVerify, directory: lookup, selfClaims });
     for (const [key, badge] of found) {
       cache.set(key, badge, Date.now());
       out.push([key, badge]);
@@ -809,6 +826,22 @@ async function resolveBadges(handles: string[], tabId: number): Promise<ResolveH
   }
   return { badges: out, pending: misses.slice(granted) };
 }
+
+// X self-claims (PLAN-XCLAIMS): what profiles you opened show about themselves, kept on this device only
+const xClaimsItem = storage.defineItem<XClaimStore | null>('local:xClaims', { fallback: null });
+const claims = claimKeeper({
+  store: xClaimsItem,
+  changedItem: xClaimsChangedItem,
+  enabled: async () => xClaimsOn(await xmrSettingsItem.getValue()),
+  dropBadge: async (handle) => {
+    (await loadCaches()).badges.delete(handle);
+    persistCaches();
+  },
+  dropAllBadges: async () => {
+    (await loadCaches()).badges.clear();
+    persistCaches();
+  },
+});
 
 function loadXapCache() {
   xapCache ??= xapCacheItem.getValue().then((e) => new EntryCache(e, 1000));

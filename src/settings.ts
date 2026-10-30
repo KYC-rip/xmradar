@@ -89,9 +89,13 @@ export interface XmrSettings extends XmrSettingsV2 {
   siteInfo?: boolean;
   /** "In-page warnings" for an incident or a D–F grade; read with `siteWarningsOn` */
   siteWarnings?: boolean;
+  /** read addresses, npubs and xmr.bio links from X profiles (PLAN-XCLAIMS); read with `xClaimsOn` */
+  xClaims?: boolean;
 }
 
 export const siteInfoOn = (s: Partial<XmrSettings> | null | undefined) => s?.siteInfo !== false;
+/** X self-claims are read only while X badges are on, and unless switched off */
+export const xClaimsOn = (s: Partial<XmrSettings> | null | undefined) => !!s?.badgesX && s?.xClaims !== false;
 export const siteWarningsOn = (s: Partial<XmrSettings> | null | undefined) => siteInfoOn(s) && s?.siteWarnings !== false;
 
 /** v1, before the redesign: one switch for X badges. */
@@ -129,3 +133,6 @@ export const myHandleItem = storage.defineItem<{ handle: string; proven: boolean
 
 /** The xmr.bio directory (2d) as the options page shows it; the directory itself is kept by the background. */
 export const directoryStatusItem = storage.defineItem<DirectoryStatus | null>('local:xmrbioDirectoryStatus', { fallback: null });
+
+/** A handle whose X self-claims changed: x.com tabs drop its badge and look it up again. */
+export const xClaimsChangedItem = storage.defineItem<{ handle: string; at: number } | null>('local:xClaimsChanged', { fallback: null });
