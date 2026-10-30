@@ -30,7 +30,8 @@ export function findTweet(doc: Document, id: string, near?: Element | null): Ele
   return [...doc.querySelectorAll(TWEET)].find((a) => ownStatusId(a) === id) ?? null;
 }
 
-function icon(doc: Document, like: Element | null): SVGSVGElement {
+/** The radar mark: a dot and two arcs. `like` lends X's size and colour classes. */
+export function radarIcon(doc: Document, like: Element | null): SVGSVGElement {
   const svg = doc.createElementNS(SVG_NS, 'svg');
   svg.setAttribute('viewBox', '0 0 24 24');
   svg.setAttribute('aria-hidden', 'true');
@@ -104,7 +105,7 @@ export function shareMenu(doc: Document, request: () => Promise<unknown>, now = 
     item.setAttribute(ITEM_ATTR, 'copy-to-nostr');
     item.setAttribute('tabindex', '0');
     const oldSvg = item.querySelector('svg');
-    oldSvg?.replaceWith(icon(doc, oldSvg));
+    oldSvg?.replaceWith(radarIcon(doc, oldSvg));
     const span = item.querySelector('span');
     if (span) span.textContent = 'Copy to Nostr';
     // X's own items get their hover from React handlers a copy doesn't have: tint like X does, on the

@@ -10,9 +10,11 @@ import { articleTemplate, articleTooLarge, blossomAuthTemplate, buildNote, check
 import { retryable } from '../../nostr/retry';
 import { settingsItem } from '../../settings';
 import { h, trapFocus } from './dom';
+import { composerSlot, createPill, pillView, type ComposerInstance, type PillState } from './publish-pill';
 import { MAX_PASTED_IMAGES, MAX_PASTED_TOTAL, onPasteOrDrop } from './paste';
 
-let open = false;
+// one composer per page, expanded or as its pill
+const slot = composerSlot();
 
 const short = (npub: string) => `${npub.slice(0, 12)}…${npub.slice(-6)}`;
 
@@ -30,18 +32,21 @@ async function backgroundFetchableUrl(url: string): Promise<string> {
 }
 
 export async function openComposer(ctx: ContentScriptContext, msg: OpenComposerMsg, target: Element | null) {
-  if (open) return;
-  open = true;
+  if (slot.claim() === 'refuse') {
+    // the background opened a session for this request; nothing will use it
+    void sendToBackground({ type: 'close-session', sessionId: msg.sessionId }).catch(() => {});
+    return;
+  }
   try {
-    await mountComposer(ctx, msg, target);
+    slot.mounted(await mountComposer(ctx, msg, target));
   } catch (e) {
-    open = false;
+    slot.mounted(null);
     void sendToBackground({ type: 'close-session', sessionId: msg.sessionId }).catch(() => {});
     window.alert(`XMRadar: ${(e as Error).message}`);
   }
 }
 
-async function mountComposer(ctx: ContentScriptContext, msg: OpenComposerMsg, target: Element | null) {
+async function mountComposer(ctx: ContentScriptContext, msg: OpenComposerMsg, target: Element | null): Promise<ComposerInstance> {
   // a timeline tweet may be cut behind "Show more"; a selection is taken as it is
   if (!msg.selection?.trim() && xExtractor.matches(document)) target = (await expandTweet(target, document).catch(() => null)) ?? target;
   const { post, fallback } = extractPost(target, document, { selection: msg.selection, srcUrl: msg.srcUrl });
@@ -50,11 +55,12 @@ async function mountComposer(ctx: ContentScriptContext, msg: OpenComposerMsg, ta
   let closed = false;
   // pictures pasted or dropped in: page-local blob: URLs, released when the composer goes
   const pasted = new Map<ExtractedImage, number>();
+  let instance!: ComposerInstance;
 
   const ui = await createShadowRootUi(ctx, {
     name: 'xmradar-ui',
-    position: 'modal',
-    zIndex: 2147483647,
+    // no full-page wrapper: the backdrop covers the page only while the composer is expanded
+    position: 'inline',
     isolateEvents: true,
     onMount(container) {
       const close = () => {
@@ -62,11 +68,21 @@ async function mountComposer(ctx: ContentScriptContext, msg: OpenComposerMsg, ta
         closed = true;
         ui.remove();
       };
+      // dismissed while busy: hidden for good, closed once the work ends
+      let hidden = false;
 
       const status = h('div', { class: 'status', attrs: { role: 'status', 'aria-live': 'polite' } });
       const setStatus = (text: string, kind: 'info' | 'error' | 'ok' = 'info') => {
         status.className = `status ${kind}`;
         status.textContent = text;
+      };
+      let pillState: PillState = { kind: 'draft' };
+      // the pill and, for the steps on the way, the composer's status line say the same
+      const step = (state: PillState) => {
+        pillState = state;
+        const view = pillView(state, art ? 'article' : 'note');
+        pill.update(view);
+        if (state.kind !== 'published' && state.kind !== 'rejected' && state.kind !== 'draft') setStatus(view.text, view.tone);
       };
 
       const art = post.article;
@@ -124,11 +140,51 @@ async function mountComposer(ctx: ContentScriptContext, msg: OpenComposerMsg, ta
         results,
         h('footer', {}, cancelBtn, publishBtn),
       );
-      container.append(h('div', { class: 'backdrop' }, dialog));
+      const backdrop = h('div', { class: 'backdrop' }, dialog);
+      const minimiseBtn = h('button', { class: 'icon', textContent: '–', attrs: { 'aria-label': 'Minimise', title: 'Minimise' } });
+      dialog.querySelector('header')!.append(minimiseBtn);
+      container.append(backdrop);
 
-      cancelBtn.addEventListener('click', close);
-      dialog.parentElement!.addEventListener('click', (e) => e.target === e.currentTarget && close());
-      trapFocus(dialog, close);
+      const pill = createPill({ retry: () => void retry(), open: () => expand(), dismiss: () => dismiss() });
+      const expanded = () => backdrop.isConnected;
+      const minimise = () => {
+        if (!expanded()) return;
+        backdrop.remove();
+        pill.update(pillView(pillState, art ? 'article' : 'note'));
+        container.append(pill.el);
+        previousFocus?.focus?.();
+      };
+      const expand = () => {
+        if (expanded() || hidden) return;
+        pill.el.remove();
+        container.append(backdrop);
+        textarea.focus();
+      };
+      // a publish or a retry under way
+      const working = () => busy || retrying;
+      const dismiss = () => {
+        if (!working()) return close();
+        hidden = true;
+        pill.el.remove();
+        slot.release(instance);
+      };
+      // while it publishes, leaving the composer only minimises it: the publish goes on
+      const leave = () => (working() ? minimise() : close());
+      instance = {
+        busy: working,
+        // published, with no failed relay left worth retrying
+        finished: () => done && !shown.some(retryable),
+        expanded,
+        expand,
+        close,
+        notice: (text) => (expanded() ? setStatus(text) : pill.notice(text)),
+      };
+
+      cancelBtn.addEventListener('click', leave);
+      minimiseBtn.addEventListener('click', minimise);
+      // a click beside the composer keeps the draft
+      backdrop.addEventListener('click', (e) => e.target === e.currentTarget && minimise());
+      trapFocus(dialog, leave);
       dialog.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) publishBtn.click();
       });
@@ -228,29 +284,59 @@ async function mountComposer(ctx: ContentScriptContext, msg: OpenComposerMsg, ta
           results.append(h('li', {}, retryBtn));
         }
       };
-      retryBtn.addEventListener('click', async () => {
+      let outcome: Extract<PillState, { kind: 'published' }> | null = null;
+      const showOutcome = () => {
+        if (outcome && shown.some((r) => r.ok)) step({ ...outcome, results: shown });
+        else step({ kind: 'rejected', results: shown });
+      };
+      let retrying = false;
+      // the composer's link and the pill's Retry share this
+      const retry = async () => {
         const again = shown.filter(retryable).map((r) => r.relay);
-        if (!published || !again.length || retryBtn.disabled) return;
-        retryBtn.disabled = true;
+        if (!published || !again.length || retrying) return;
+        retrying = retryBtn.disabled = true;
         retryBtn.textContent = 'Retrying…';
+        step({ kind: 'retrying', count: again.length });
         try {
           renderResults((await sendToBackground({ type: 'republish', sessionId: msg.sessionId, event: published, relays: again })).results);
+          // the status line said "Retrying…"
+          if (shown.some((r) => r.ok)) showPublished();
+          else setStatus(`No relay accepted the ${art ? 'article' : 'note'}.`, 'error');
+          showOutcome();
         } catch (e) {
           setStatus((e as Error).message, 'error');
           renderResults([]);
+          step({ kind: 'error', message: (e as Error).message });
         } finally {
-          retryBtn.disabled = false;
+          retrying = retryBtn.disabled = false;
+          if (hidden) close();
         }
-      });
+      };
+      retryBtn.addEventListener('click', () => void retry());
+
+      const showPublished = () => {
+        if (!outcome) return;
+        done = true;
+        status.className = 'status ok';
+        status.replaceChildren(
+          'Published! ',
+          h('a', { href: outcome.link.href, target: '_blank', rel: 'noopener', textContent: outcome.link.label }),
+          ' ',
+          h('button', { class: 'link', textContent: outcome.copyLabel, onclick: () => void navigator.clipboard.writeText(outcome!.ref) }),
+        );
+        publishBtn.textContent = 'Done';
+        textarea.readOnly = titleInput.readOnly = summaryInput.readOnly = true;
+      };
 
       let busy = false;
       let done = false;
       publishBtn.addEventListener('click', async () => {
+        if (working()) return;
         if (done) return close();
-        if (busy) return;
         if (art && (!titleInput.value.trim() || !textarea.value.trim())) return setStatus('The article needs a title and text', 'error');
         if (!textarea.value.trim() && !selected.size) return setStatus('Nothing to post', 'error');
         busy = true;
+        minimise();
         textarea.readOnly = titleInput.readOnly = summaryInput.readOnly = true;
         publishBtn.disabled = true;
         publishBtn.classList.add('busy');
@@ -262,7 +348,7 @@ async function mountComposer(ctx: ContentScriptContext, msg: OpenComposerMsg, ta
           }
           const prepared = new Map<ExtractedImage, PostImage>();
           for (const img of images.filter((i) => selected.has(i))) {
-            setStatus(`Uploading image ${prepared.size + 1}…`);
+            step({ kind: 'uploading', index: prepared.size + 1, count: selected.size });
             prepared.set(img, await prepareImage(img));
             if (closed) return;
           }
@@ -283,47 +369,45 @@ async function mountComposer(ctx: ContentScriptContext, msg: OpenComposerMsg, ta
             template = buildNote({ text, images: [...prepared.values()], sourceUrl: post.sourceUrl, appendSource: appendSource.checked });
           }
           if (settings.debug) debugPre.textContent = JSON.stringify(template, null, 2);
-          setStatus('Waiting for signer…');
+          step({ kind: 'signing' });
           const event = await sign(template);
           if (closed) return;
-          setStatus('Publishing…');
+          step({ kind: 'publishing' });
           const res = await sendToBackground({ type: 'publish', sessionId: msg.sessionId, event, sourceUrl: post.sourceUrl, text });
           shown = [];
           published = event;
+          const ref = res.naddr ?? res.nevent;
+          // notes open in RipleyOS's Nostr app; it has no article (naddr) route yet, so articles stay on njump
+          outcome = {
+            kind: 'published',
+            results: [],
+            link: res.naddr ? { href: `https://njump.me/${ref}`, label: 'View on njump' } : { href: `https://app.ros.rip/nostr/note/${ref}`, label: 'View on ros.rip' },
+            ref,
+            copyLabel: res.naddr ? 'Copy naddr' : 'Copy nevent',
+          };
           renderResults(res.results);
-          if (res.results.some((r) => r.ok)) {
-            done = true;
-            const ref = res.naddr ?? res.nevent;
-            // notes open in RipleyOS's Nostr app; it has no article (naddr) route yet, so articles stay on njump
-            const link = res.naddr ? `https://njump.me/${ref}` : `https://app.ros.rip/nostr/note/${ref}`;
-            status.className = 'status ok';
-            status.replaceChildren(
-              'Published! ',
-              h('a', { href: link, target: '_blank', rel: 'noopener', textContent: res.naddr ? 'View on njump' : 'View on ros.rip' }),
-              ' ',
-              h('button', { class: 'link', textContent: res.naddr ? 'Copy naddr' : 'Copy nevent', onclick: () => void navigator.clipboard.writeText(ref) }),
-            );
-            publishBtn.textContent = 'Done';
-            textarea.readOnly = true;
-          } else {
-            setStatus(`No relay accepted the ${art ? 'article' : 'note'}.`, 'error');
-          }
+          if (res.results.some((r) => r.ok)) showPublished();
+          else setStatus(`No relay accepted the ${art ? 'article' : 'note'}.`, 'error');
+          showOutcome();
         } catch (e) {
           setStatus((e as Error).message, 'error');
+          step({ kind: 'error', message: (e as Error).message });
         } finally {
           if (!done) textarea.readOnly = titleInput.readOnly = summaryInput.readOnly = false;
           busy = false;
           publishBtn.classList.remove('busy');
           publishBtn.disabled = false;
+          if (hidden) close();
         }
       });
     },
     onRemove() {
-      open = false;
+      slot.release(instance);
       closed = true;
       for (const img of pasted.keys()) URL.revokeObjectURL(img.url);
       pasted.clear();
       void sendToBackground({ type: 'close-session', sessionId: msg.sessionId }).catch(() => {});
+      // a composer replacing this one takes the focus after this
       previousFocus?.focus?.();
     },
   });
@@ -333,4 +417,5 @@ async function mountComposer(ctx: ContentScriptContext, msg: OpenComposerMsg, ta
     ui.remove();
     throw e;
   }
+  return instance;
 }
