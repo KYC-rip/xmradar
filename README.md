@@ -10,6 +10,8 @@ A browser extension for Chrome and Firefox that brings Monero to the pages you a
 
 Free software under the GNU GPL v3 or later (see `LICENSE`). Releases: https://github.com/KYC-rip/xmradar/releases
 
+Website: https://xmradar.app (source in `site/`; `python3 -I site/build.py` fills in the latest release, then `npx wrangler pages deploy site-dist --project-name xmradar-app --branch main`).
+
 ### Copy posts to Nostr
 
 Right-click a post → **Copy post to Nostr** → edit in the preview → **Publish**. You can also hover a post and press `Alt+Shift+N`, or on X pick **Copy to Nostr** in a tweet's share menu (turn it off under Options → Posting to Nostr → Behaviour).
