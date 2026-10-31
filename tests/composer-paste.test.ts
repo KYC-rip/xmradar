@@ -27,6 +27,9 @@ describe('pasting pictures into the composer', () => {
     const shot = file('image.png', 'image/png');
     expect(imageFiles(data([], { items: [shot] }), 'paste', room).images).toEqual([shot]);
     expect(imageFiles(data([shot], { items: [{ ...shot } as File] }), 'paste', room).images).toHaveLength(1);
+    // Chrome's getAsFile() hands out a new File with a new timestamp: still one picture
+    const again = new File([new Uint8Array(shot.size)], shot.name, { type: shot.type, lastModified: shot.lastModified + 5 });
+    expect(imageFiles(data([shot], { items: [again] }), 'paste', room).images).toEqual([shot]);
   });
   it('a paste with text stays a text paste, even if a picture comes along', () => {
     expect(imageFiles(data([file('image.png', 'image/png')], { text: 'hello' }), 'paste', room)).toEqual({ images: [], refused: [] });

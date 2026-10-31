@@ -18,15 +18,18 @@ export interface PastedFiles {
   refused: string[];
 }
 
-/** Files from both lists: some clipboards fill only `items`, some only `files`. */
+/**
+ * The files of a paste or drop: `files` when it has any, else the file `items` (some clipboards fill only one).
+ * Never both: when both are filled they hold the same pictures, and each `getAsFile()` copy carries a new
+ * timestamp, so a pasted screenshot would be added twice.
+ */
 function filesOf(data: DataTransfer): File[] {
-  const out = new Set<File>(Array.from(data.files ?? []));
-  for (const item of Array.from(data.items ?? [])) {
-    if (item.kind !== 'file') continue;
-    const f = item.getAsFile();
-    if (f && ![...out].some((o) => o.name === f.name && o.size === f.size && o.type === f.type && o.lastModified === f.lastModified)) out.add(f);
-  }
-  return [...out];
+  const files = Array.from(data.files ?? []);
+  if (files.length) return files;
+  return Array.from(data.items ?? [])
+    .filter((item) => item.kind === 'file')
+    .map((item) => item.getAsFile())
+    .filter((f): f is File => !!f);
 }
 
 /**
