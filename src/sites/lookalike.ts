@@ -48,6 +48,12 @@ const FILLER = new Set(
 /** Suffixes a copy puts after a brand inside a longer host (`trocador.com.evil.net`), besides the brand's own. */
 const COPY_SUFFIXES = new Set('com net org io xyz app co me info biz cc to ru su'.split(' '));
 
+/**
+ * Well-known sites that share a listed name and are not copies (foundation.app, the NFT market, vs
+ * Foundation Passport's foundation.xyz): reviewed by hand from the popular-domains scan, never flagged.
+ */
+export const KNOWN_UNRELATED: ReadonlySet<string> = new Set(['foundation.app']);
+
 const PARSE = { allowPrivateDomains: true } as const;
 
 /** A platform or shared-hosting host, or one of their subdomains, or a private (PSL) suffix. */
@@ -108,16 +114,17 @@ export function skeleton(label: string): string {
   return s.replace(/rn/g, 'm').replace(/vv/g, 'w').replace(/0/g, 'o').replace(/1/g, 'l');
 }
 
-/** Whether a and b differ by exactly one insertion, deletion or substitution. */
-function oneEdit(a: string, b: string): boolean {
+/** Whether a and b differ by exactly one insertion, deletion, substitution or swap of two neighbouring letters. */
+export function oneTypo(a: string, b: string): boolean {
   if (a === b || Math.abs(a.length - b.length) > 1) return false;
   const [s, l] = a.length <= b.length ? [a, b] : [b, a];
   let i = 0;
   while (i < s.length && s[i] === l[i]) i++;
-  return s.length === l.length ? s.slice(i + 1) === l.slice(i + 1) : s.slice(i) === l.slice(i + 1);
+  if (s.length !== l.length) return s.slice(i) === l.slice(i + 1);
+  return s.slice(i + 1) === l.slice(i + 1) || (s[i] === l[i + 1] && s[i + 1] === l[i] && s.slice(i + 2) === l.slice(i + 2));
 }
 
-interface Brand {
+export interface Brand {
   /** the skeleton of the listed registrable label */
   brand: string;
   /** the listed registrable label as written (`trocador`) */
@@ -134,6 +141,8 @@ export interface LookalikeIndex {
   brands: Brand[];
   listed: Set<string>;
   phishing: Map<string, Lookalike>;
+  /** xmr.club's confirmed copies that passed the safety filter, for the before-load rules */
+  impersonators: string[];
 }
 
 /** The host a link to `domain` opens: the domain itself when listed, else the listing's first host on it. */
@@ -163,32 +172,58 @@ export function lookalikeIndex(feed: SiteFeed): LookalikeIndex {
       if (brand.length >= 5 && !/^\d+$/.test(brand) && !GENERIC.has(brand)) brands.push(b);
     }
   });
-  for (const site of feed.sites) {
-    // a listing only on a platform or an onion still has its phishing list: link its first web host
+  // a listing only on a platform or an onion still has its phishing list: link its first web host
+  const copyOf = (site: SiteEntry): Lookalike | null => {
     const seed = seeds.get(site);
     const host = seed?.target ?? site.hosts.find((h) => !h.endsWith('.onion') && validFeedHost(h));
-    if (!host) continue;
-    const imitates = seed?.domain ?? parse(host, PARSE).domain ?? host;
-    for (const h of site.phishingHosts ?? []) {
-      if (!phishing.has(h)) phishing.set(h, { kind: 'listed-phishing', imitates, target: host, name: site.name });
-    }
+    if (!host) return null;
+    return { kind: 'listed-phishing', imitates: seed?.domain ?? parse(host, PARSE).domain ?? host, target: host, name: site.name, category: site.category };
+  };
+  // xmr.club's copies, the confirmed top-level list first, then the older per-listing field; every entry passes
+  // the same safety filter, so no entry can ever cover a real site (PLAN-IMPERSONATORS §2)
+  const listedHosts = feed.sites.flatMap((s) => s.hosts.map(normalizeHost));
+  const touches = (h: string, d: string) => h === d || h.endsWith(`.${d}`) || d.endsWith(`.${h}`);
+  const safeCopy = (h: string) => {
+    const p = parse(h, PARSE);
+    if (!p.domain || p.isIp || isPlatformHost(h)) return false;
+    if ([...KNOWN_UNRELATED].some((d) => touches(h, d))) return false;
+    return !listedHosts.some((d) => touches(h, d)) && ![...listed].some((d) => h === d || h.endsWith(`.${d}`));
+  };
+  const byId = new Map(feed.sites.map((s) => [s.id, s]));
+  const impersonators: string[] = [];
+  for (const imp of feed.impersonators ?? []) {
+    const site = byId.get(imp.siteId);
+    const l = site && copyOf(site);
+    if (!l || phishing.has(imp.host) || !safeCopy(imp.host)) continue;
+    phishing.set(imp.host, l);
+    impersonators.push(imp.host);
   }
-  return { brands, listed, phishing };
+  for (const site of feed.sites) {
+    const l = copyOf(site);
+    if (!l) continue;
+    for (const h of site.phishingHosts ?? []) if (!phishing.has(h) && safeCopy(h)) phishing.set(h, l);
+  }
+  return { brands, listed, phishing, impersonators };
 }
 
 /** Longest brand, then graded before ungraded and the better grade, then feed order. */
-const best = (list: Brand[]) => list.sort((a, b) => b.brand.length - a.brand.length || a.rank - b.rank)[0];
-const result = (kind: LookalikeKind, b: Brand | undefined): Lookalike | null => (b ? { kind, imitates: b.domain, target: b.target, name: b.site.name } : null);
+export const best = (list: Brand[]) => list.sort((a, b) => b.brand.length - a.brand.length || a.rank - b.rank)[0];
+export const result = (kind: LookalikeKind, b: Brand | undefined): Lookalike | null =>
+  b ? { kind, imitates: b.domain, target: b.target, name: b.site.name, category: b.site.category } : null;
 
 /** Whether `host` poses as a listed service, and how (strongest kind first); null for anything else. */
 export function lookalikeOf(index: LookalikeIndex, host: string): Lookalike | null {
   const h = normalizeHost(host);
-  // the signed feed's own phishing list overrides every exit below, platforms included
-  const known = index.phishing.get(h);
-  if (known) return known;
+  // xmr.club's listed copies come first; an entry is the exact host as listed (`www.` kept) and its
+  // subdomains (`www.pegasussawp.com` under `pegasussawp.com`)
+  const parts = host.toLowerCase().replace(/\.$/, '').split('.');
+  for (let i = 0; i < parts.length - 1; i++) {
+    const known = index.phishing.get(parts.slice(i).join('.'));
+    if (known) return known;
+  }
   if (!h || h.endsWith('.onion') || isPlatformHost(h)) return null;
   const p = parse(h, PARSE);
-  if (!p.domain || !p.domainWithoutSuffix || p.isIp || index.listed.has(p.domain)) return null;
+  if (!p.domain || !p.domainWithoutSuffix || p.isIp || index.listed.has(p.domain) || KNOWN_UNRELATED.has(p.domain)) return null;
   const reg = unicodeLabel(p.domainWithoutSuffix);
   const L = skeleton(reg);
 
@@ -220,7 +255,7 @@ export function lookalikeOf(index: LookalikeIndex, host: string): Lookalike | nu
   });
   if (segment.length) return result('segment', best(segment));
 
-  const typo = index.brands.filter((b) => b.brand.length >= 7 && b.suffix === p.publicSuffix && oneEdit(L, b.brand));
+  const typo = index.brands.filter((b) => b.brand.length >= 7 && b.suffix === p.publicSuffix && oneTypo(L, b.brand));
   if (typo.length) return result('typo', best(typo));
 
   // the same plain name on another suffix: weak, an unrelated site of that name is plausible

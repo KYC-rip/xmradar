@@ -1,0 +1,14 @@
+/* The guard page (PLAN-PRELOAD §4): one card, red for a copy, amber for a same-name or name match. */
+body { min-height: 100vh; display: grid; place-items: center; padding: 24px; box-sizing: border-box; }
+#guard { max-width: 560px; width: 100%; padding: 28px 30px; display: flex; flex-direction: column; gap: 12px; border-top: 6px solid var(--warn); }
+#guard.red { border-top-color: var(--danger); }
+#guard.red h1 { color: var(--danger); }
+#guard.amber h1 { color: var(--warn); }
+.brand { display: flex; align-items: center; gap: 8px; font-weight: 700; color: var(--muted); }
+.brand svg { width: 20px; height: 20px; }
+h1 { font-size: 22px; line-height: 1.25; }
+#text { font-size: 15px; }
+#address { word-break: break-all; }
+.actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 6px; }
+a.btn { text-decoration: none; display: inline-flex; align-items: center; }
+a.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }

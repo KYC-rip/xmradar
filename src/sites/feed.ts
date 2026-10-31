@@ -109,7 +109,7 @@ export interface Intern {
 }
 
 /** bumped when XMRadar reads more of the feed, so a copy kept by an older version is fetched again */
-export const FEED_READER_V = 6;
+export const FEED_READER_V = 7;
 
 export interface SiteFeed {
   /** the FEED_READER_V that parsed it */
@@ -117,6 +117,34 @@ export interface SiteFeed {
   issuedAt: number;
   expiresAt: number;
   sites: SiteEntry[];
+  /** hosts xmr.club confirmed as copies of a listing (PLAN-IMPERSONATORS); checked again before use */
+  impersonators?: Impersonator[];
+}
+
+export interface Impersonator {
+  host: string;
+  /** the listing it copies */
+  siteId: string;
+  /** YYYY-MM-DD, when xmr.club listed it */
+  added: string | null;
+}
+
+const MAX_IMPERSONATORS = 10_000;
+
+/** The feed's `impersonators`: valid hosts copying a listing in the same feed, deduped, capped. */
+function parseImpersonators(v: unknown, sites: SiteEntry[]): Impersonator[] {
+  if (!Array.isArray(v)) return [];
+  const ids = new Set(sites.map((s) => s.id));
+  const out = new Map<string, Impersonator>();
+  for (const e of v) {
+    if (out.size >= MAX_IMPERSONATORS) break;
+    if (!isObj(e) || !validFeedHost(e.host) || e.host.endsWith('.onion') || typeof e.imitates !== 'string' || !ids.has(e.imitates)) continue;
+    // kept exactly as listed: `www.example.com` must not widen to `example.com`
+    const host = e.host;
+    if (out.has(host)) continue;
+    out.set(host, { host, siteId: e.imitates, added: typeof e.added === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(e.added) ? e.added : null });
+  }
+  return [...out.values()];
 }
 
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
@@ -166,7 +194,8 @@ function parseSite(v: unknown): SiteEntry | null {
   if (!site.grade && isObj(i) && days(i.day) && days(i.days_required) && typeof i.track === 'string' && /^[a-z_]{1,20}$/.test(i.track)) {
     site.intern = { day: i.day as number, daysRequired: i.days_required as number, track: i.track };
   }
-  const ph = Array.isArray(v.phishing_hosts) ? [...new Set(v.phishing_hosts.filter(validFeedHost).map(normalizeHost))].slice(0, 50) : [];
+  // kept exactly as listed: `www.copy.example` must not widen to `copy.example`
+  const ph = Array.isArray(v.phishing_hosts) ? [...new Set(v.phishing_hosts.filter(validFeedHost))].slice(0, 50) : [];
   if (ph.length) site.phishingHosts = ph;
   return site;
 }
@@ -245,7 +274,9 @@ export function readFeed(envelope: unknown, nowSecs: number, keptIssuedAt = 0, k
   if (nowSecs >= expiresAt) throw new Error('Feed expired');
   if (issuedAt > nowSecs + MAX_SKEW_SECS) throw new Error('Feed issued in the future');
   if (issuedAt <= keptIssuedAt) throw new Error('Feed is not newer than the one kept');
-  return { reader: FEED_READER_V, issuedAt, expiresAt, sites: data.sites.map(parseSite).filter((s): s is SiteEntry => !!s) };
+  const sites = data.sites.map(parseSite).filter((s): s is SiteEntry => !!s);
+  const impersonators = parseImpersonators(data.impersonators, sites);
+  return { reader: FEED_READER_V, issuedAt, expiresAt, sites, ...(impersonators.length ? { impersonators } : {}) };
 }
 
 /** A page host as the feed writes hosts: lowercase, no trailing dot, no leading `www.`. */

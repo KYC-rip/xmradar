@@ -12,7 +12,13 @@ export interface Lookalike {
   target: string;
   /** the listing's name */
   name: string;
+  /** the listing's xmr.club category (`exchanges`), for how loud a same-name warning is */
+  category?: string;
 }
+
+/** Listings where a copy takes coins or ships a wallet: same-name gets a banner, and pages are guarded before they load (PLAN-PRELOAD §2). */
+export const COIN_CATEGORIES: ReadonlySet<string> = new Set(['exchanges', 'mixers', 'wagering', 'marketplaces', 'cards', 'merchants', 'wallets']);
+export const isCoinListing = (l: { category?: string }) => COIN_CATEGORIES.has(l.category ?? '');
 
 /** The banner and popup wording for a lookalike. */
 export function lookalikeText(l: Lookalike): string {

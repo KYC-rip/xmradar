@@ -28,8 +28,11 @@ export default defineConfig({
     // 4-part version so about:addons and chrome://extensions show the CI build: 0.1.0.142
     version: env.WXT_BUILD_NUMBER ? `${pkg.version}.${env.WXT_BUILD_NUMBER}` : pkg.version,
     description: 'Monero on the pages you use: tip badges on X, burner email, and copying posts to Nostr. Holds no keys and no funds.',
-    permissions: ['contextMenus', 'storage', 'activeTab', 'scripting', 'notifications', 'alarms'],
+    // declarativeNetRequestWithHostAccess: no extra prompt given <all_urls>; sends a copy of a listed site to the guard page before it loads (PLAN-PRELOAD)
+    permissions: ['contextMenus', 'storage', 'activeTab', 'scripting', 'notifications', 'alarms', 'declarativeNetRequestWithHostAccess'],
     host_permissions: ['<all_urls>'],
+    // the guard page is reached by a redirect; use_dynamic_url so sites can't probe for it at a fixed address
+    web_accessible_resources: [{ resources: ['guard.html'], matches: ['<all_urls>'], use_dynamic_url: true }],
     commands: {
       'open-composer': {
         suggested_key: { default: 'Alt+Shift+N' },

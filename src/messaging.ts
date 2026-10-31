@@ -10,6 +10,7 @@ import type { PageCheck } from './receipts/check';
 import type { ReceiptExport } from './receipts/export';
 import type { PublicRecord, SavedReceipt } from './receipts/store';
 import type { SiteEntry } from './sites/feed';
+import type { GuardAnswer } from './sites/guard-rules';
 import type { Lookalike } from './sites/lookalike-text';
 import type { AddressCheck } from './xmr/address';
 
@@ -162,6 +163,8 @@ export type BgRequest =
   | { type: 'receipt-badge'; level: 'ok' | 'caution' | 'warn' | 'none' }
   | { type: 'site-info'; host: string }
   | { type: 'site-tab'; tabId: number }
+  | { type: 'guard-check'; hash: string }
+  | { type: 'guard-continue'; hash: string }
   | { type: 'receipts-list' }
   | { type: 'receipt-delete'; commitment: string }
   | { type: 'receipt-export'; commitment: string }
@@ -228,6 +231,10 @@ export type BgResponse<T extends BgRequest['type']> = T extends 'fetch-image'
                                           ? null
                                           : T extends 'site-info' | 'site-tab'
                                             ? SiteInfo
+                                        : T extends 'guard-check'
+                                          ? GuardAnswer
+                                        : T extends 'guard-continue'
+                                          ? { url: string }
                                         : T extends 'receipts-list'
                                           ? SavedReceipt[]
                                           : T extends 'receipt-delete'

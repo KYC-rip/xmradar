@@ -11,7 +11,7 @@ import { lookalikeHref, lookalikeText, type Lookalike } from '../src/sites/looka
 import { renderSiteCard } from '../src/ui/site-card';
 import live from './fixtures/xmrclub-feed-hosts.json';
 
-const entry = (s: { id: string; name: string; grade: string; hosts: string[]; phishingHosts?: string[] }): SiteEntry => ({ category: 'exchanges', incident: false, url: `https://xmr.club/x/${s.id}`, ...s });
+const entry = (s: { id: string; name: string; grade: string; hosts: string[]; phishingHosts?: string[]; category?: string }): SiteEntry => ({ category: 'exchanges', incident: false, url: `https://xmr.club/x/${s.id}`, ...s });
 const feedOf = (sites: SiteEntry[]): SiteFeed => ({ issuedAt: 1, expiresAt: 2, sites });
 const LIVE = lookalikeIndex(feedOf(live.sites.map(entry)));
 // the form a browser hands over in `location.hostname`
@@ -20,7 +20,7 @@ const kind = (h: string) => lookalikeOf(LIVE, h)?.kind ?? null;
 
 describe('red: a host posing as a listed service', () => {
   it.each(['www-trocador.app', 'trocador-app.com', 'trocador.app.evil.com', 'secure-trocador.app.login.xyz', 'login-trocador.app', 'trocador.app.com', 'trocador.com.evil.net', 'trocador.io.evil.com', 'www.trocador.xyz.evil.com'])('%s → segment', (h) => {
-    expect(lookalikeOf(LIVE, h)).toEqual({ kind: 'segment', imitates: 'trocador.app', target: 'trocador.app', name: 'Trocador' });
+    expect(lookalikeOf(LIVE, h)).toEqual({ kind: 'segment', imitates: 'trocador.app', target: 'trocador.app', name: 'Trocador', category: 'exchanges' });
   });
   it.each([
     ['Cyrillic о', browserHost('trоcador.app')],
@@ -49,7 +49,7 @@ describe('red: a host posing as a listed service', () => {
 
 describe('same-name: the plain name on another suffix', () => {
   it.each(['trocador.io', 'trocador.xyz'])('%s', (h) => {
-    expect(lookalikeOf(LIVE, h)).toEqual({ kind: 'same-name', imitates: 'trocador.app', target: 'trocador.app', name: 'Trocador' });
+    expect(lookalikeOf(LIVE, h)).toEqual({ kind: 'same-name', imitates: 'trocador.app', target: 'trocador.app', name: 'Trocador', category: 'exchanges' });
   });
 });
 
@@ -114,7 +114,8 @@ describe('popular legitimate domains', () => {
   it('none comes out red; the same-name ones are exactly these', () => {
     expect(domains.length).toBeGreaterThan(500);
     const found = domains.map((d) => [d, kind(d)] as const).filter(([, k]) => k);
-    expect(found).toEqual([['foundation.app', 'same-name']]);
+    // foundation.app (the NFT market) was the one same-name hit; it is in KNOWN_UNRELATED
+    expect(found).toEqual([]);
   });
 });
 
@@ -162,15 +163,16 @@ describe('phishing_hosts from the signed feed', () => {
         entry({ id: 'o', name: 'Onionly', grade: '', hosts: ['abcdefghijklmnop.onion'], phishingHosts: ['onionly.example.com'] }),
       ]),
     );
-    expect(lookalikeOf(idx, 'gitonly-github.io.example.com')).toEqual({ kind: 'listed-phishing', imitates: 'gitonly.github.io', target: 'gitonly.github.io', name: 'Gitonly' });
+    expect(lookalikeOf(idx, 'gitonly-github.io.example.com')).toEqual({ kind: 'listed-phishing', imitates: 'gitonly.github.io', target: 'gitonly.github.io', name: 'Gitonly', category: 'exchanges' });
     // nothing on the web to send people to: no link, so no entry
     expect(lookalikeOf(idx, 'onionly.example.com')).toBeNull();
   });
-  it('an exact entry is red, even on shared hosting or a listed host', () => {
-    const idx = lookalikeIndex(feedOf([entry({ id: 't', name: 'Trocador', grade: 'A', hosts: ['trocador.app', 'mirror.example.org'], phishingHosts: ['trocad0r.github.io', 'mirror.example.org', 'tr.example.net'] })]));
-    for (const h of ['trocad0r.github.io', 'www.trocad0r.github.io', 'mirror.example.org', 'tr.example.net']) {
-      expect(lookalikeOf(idx, h)).toEqual({ kind: 'listed-phishing', imitates: 'trocador.app', target: 'trocador.app', name: 'Trocador' });
+  it('an entry is red with its subdomains; one on shared hosting or a listed host is ignored (PLAN-IMPERSONATORS §2)', () => {
+    const idx = lookalikeIndex(feedOf([entry({ id: 't', name: 'Trocador', grade: 'A', hosts: ['trocador.app', 'mirror.example.org'], phishingHosts: ['trocad0r.github.io', 'mirror.example.org', 'tr.example.net', 'github.com'] })]));
+    for (const h of ['tr.example.net', 'www.tr.example.net']) {
+      expect(lookalikeOf(idx, h)).toEqual({ kind: 'listed-phishing', imitates: 'trocador.app', target: 'trocador.app', name: 'Trocador', category: 'exchanges' });
     }
+    for (const h of ['trocad0r.github.io', 'mirror.example.org', 'github.com']) expect(lookalikeOf(idx, h)?.kind ?? null).not.toBe('listed-phishing');
   });
 });
 

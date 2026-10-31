@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>XMRadar warning</title>
+  </head>
+  <body>
+    <main id="guard" class="card" hidden aria-live="polite">
+      <div class="brand"><svg viewBox="0 0 64 64" aria-hidden="true" focusable="false"><circle cx="32" cy="32" r="32" fill="#7b3fe4"/><path d="M32 32 L32 6 A26 26 0 0 1 58 32 Z" fill="#fff" fill-opacity=".35"/><line x1="32" y1="32" x2="32" y2="6" stroke="#fff" stroke-width="6" stroke-linecap="round"/><circle cx="46" cy="18" r="7" fill="#ff7a1a"/></svg><span>XMRadar</span></div>
+      <h1 id="title"></h1>
+      <p id="text"></p>
+      <p id="address" class="hint"></p>
+      <div class="actions">
+        <a id="go" class="btn primary" hidden></a>
+        <button id="details" type="button" class="link" hidden>Details</button>
+        <button id="continue" type="button" hidden></button>
+        <a id="plain" hidden></a>
+      </div>
+    </main>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

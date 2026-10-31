@@ -20,7 +20,7 @@ import { KIND_ARTICLE, checkBlossomAuth, checkPublishable, checkSigned, dedupeKe
 import { allRelaysFrom, fetchWriteRelays, publishToRelays, readEach, readRelay } from '../nostr/relays';
 import { assertFetchableImageUrl } from '../nostr/url-guard';
 import { checkSessionSender, checkShareMenuSender, isExtensionPageSender, isSignerPage, isXUrl, SIGNER_PAGE, shareMenuRateLimit, withoutTab } from '../sender';
-import { DEFAULT_RELAYS, directoryStatusItem, INDEX_RELAYS, withoutIndex, myHandleItem, postedItem, pubkeyItem, receiptsOn, settingsItem, siteInfoOn, swapRecordDaysItem, swapRecordsCleanedItem, xapMarksItem, xClaimsChangedItem, xClaimsOn, xmrSettingsItem } from '../settings';
+import { DEFAULT_RELAYS, directoryStatusItem, INDEX_RELAYS, withoutIndex, myHandleItem, postedItem, pubkeyItem, receiptsOn, settingsItem, siteInfoOn, siteWarningsOn, swapRecordDaysItem, swapRecordsCleanedItem, xapMarksItem, xClaimsChangedItem, xClaimsOn, xmrSettingsItem } from '../settings';
 import { storage } from 'wxt/utils/storage';
 import { activeInbox, burnerCreatingItem, burnerInboxItem, burnerLastErrorItem, burnFreeInbox, createFreeInbox, forgetImportedInbox, importInbox, type BurnerDeps } from '../burner/service';
 import { idbTokenStore } from '../burner/token-store';
@@ -44,6 +44,8 @@ import { swapRecordsKeeper } from '../receipts/cleanup';
 import { checkPublicRecord } from '../receipts/witness';
 import { fetchXmrUsd, PRICE_RETRY_MS, PRICE_TTL_MS } from '../xap/price';
 import { markFor, withMark } from '../xap/marks';
+import { GUARD_PATH } from '../sites/guard-rules';
+import { guardKeeper, type DnrApi, type GuardTokens } from '../sites/guard-keeper';
 
 const MENU_ID = 'xmradar';
 const TIP_MENU_ID = 'xmradar-tip';
@@ -163,14 +165,21 @@ export default defineBackground(() => {
   // switched off while the worker wasn't running: nothing may stay kept
   void xmrSettingsItem.getValue().then((s) => (xClaimsOn(s) ? undefined : claims.clear()));
   void xmrSettingsItem.getValue().then((s) => applySiteInfoSetting(siteInfoOn(s)));
+  void applyGuard();
+  // the guard page's address is new each browser session (use_dynamic_url): this listener starts the worker
+  // at browser start, so the rules are rewritten to the new address before the first navigations
+  browser.runtime.onStartup.addListener(() => void applyGuard());
+  siteFeedItem.watch(() => void applyGuard());
   xmrSettingsItem.watch((s, old) => {
     if (siteInfoOn(s) !== siteInfoOn(old)) void applySiteInfoSetting(siteInfoOn(s));
+    if (siteWarningsOn(s) !== siteWarningsOn(old)) void applyGuard();
     if (s.badgesX !== old?.badgesX) void directory.apply(s.badgesX);
     if (xClaimsOn(old) && !xClaimsOn(s)) void claims.clear();
   });
   // a tab that moves to another page starts with no receipt or site state (the browser resets its badge)
+  // the lookalike half of the badge comes from the address itself, so a copy that never loads still shows it
   browser.tabs.onUpdated.addListener((tabId, change) => {
-    if (change.url) void dropTabState(tabId);
+    if (change.url) void dropTabState(tabId).then(() => addressBadge(tabId, change.url!)).then(() => guardAfterLoad(tabId, change.url!));
   });
   browser.runtime.onInstalled.addListener(async () => {
     await browser.contextMenus.removeAll();
@@ -572,6 +581,12 @@ async function handle(msg: BgRequest, sender: Browser.runtime.MessageSender): Pr
       await applyBadge(tabId);
       return info;
     }
+    case 'guard-check':
+    case 'guard-continue': {
+      if (!isGuardPage(sender) || typeof msg.hash !== 'string') throw new Error('Not allowed');
+      const [on, feed] = await guardInputs();
+      return msg.type === 'guard-check' ? guard.check(msg.hash, on, feed) : guard.continue(msg.hash, on, feed);
+    }
     case 'site-tab': {
       // the popup asks by tab id, so it never needs the tab's URL
       if (!isExtensionPage(sender)) throw new Error('Not allowed');
@@ -674,6 +689,73 @@ function lookalikesFor(feed: SiteFeed): LookalikeIndex {
   if (lookalikeCache?.issuedAt !== feed.issuedAt) lookalikeCache = { issuedAt: feed.issuedAt, index: lookalikeIndex(feed) };
   return lookalikeCache.index;
 }
+
+// ---- warnings before a page loads (PLAN-PRELOAD) ----
+
+const dnr = (browser as unknown as { declarativeNetRequest?: DnrApi }).declarativeNetRequest;
+const guard = guardKeeper({
+  dnr,
+  guardUrl: () => browser.runtime.getURL(GUARD_PATH),
+  tokens: storage.defineItem<GuardTokens | null>('session:guardTokens', { fallback: null }),
+  continued: storage.defineItem<Record<string, number>>('local:guardContinued', { fallback: {} }),
+  continuedListed: storage.defineItem<Record<string, number>>('local:guardContinuedListed', { fallback: {} }),
+  dismissed: storage.defineItem<Record<string, number>>('local:siteBannerDismissed', { fallback: {} }),
+  now: Date.now,
+  randomHex: () => [...crypto.getRandomValues(new Uint8Array(16))].map((b) => b.toString(16).padStart(2, '0')).join(''),
+});
+async function guardInputs(): Promise<[boolean, { index: LookalikeIndex; issuedAt: number } | null]> {
+  const on = siteWarningsOn(await xmrSettingsItem.getValue());
+  const feed = await siteFeedItem.getValue();
+  return [on, feed ? { index: lookalikesFor(feed), issuedAt: feed.issuedAt } : null];
+}
+const applyGuard = () =>
+  guardInputs()
+    .then(([on, feed]) => guard.apply(on, feed))
+    .catch((e) => console.warn('[XMRadar] guard rules', (e as Error).message));
+/** Only XMRadar's guard page, open in a tab, may ask about a guarded address. */
+function isGuardPage(sender: Browser.runtime.MessageSender): boolean {
+  if (sender.id !== browser.runtime.id || sender.tab?.id == null || !sender.url) return false;
+  try {
+    const u = new URL(sender.url);
+    return u.pathname === GUARD_PATH && (u.origin === new URL(browser.runtime.getURL('/')).origin || u.host === browser.runtime.id);
+  } catch {
+    return false;
+  }
+}
+/** A copy no rule could list (look-alike letters, a listed copy) is replaced by the guard page once it starts loading. */
+async function guardAfterLoad(tabId: number, url: string) {
+  const [on, feed] = await guardInputs();
+  await guard
+    .afterLoad(url, on, feed, async (to) => {
+      // still on exactly that address: a tab that moved on keeps its new page
+      const tab = await browser.tabs.get(tabId).catch(() => null);
+      if (tab?.url !== new URL(url).href) return;
+      await browser.tabs.update(tabId, { url: to }).catch(() => {});
+    })
+    .catch(() => {});
+}
+/** The lookalike badge for a tab's new address, before (or without) its page loading. */
+async function addressBadge(tabId: number, url: string) {
+  let host: string;
+  try {
+    const u = new URL(url);
+    if (u.protocol !== 'http:' && u.protocol !== 'https:') return;
+    host = u.hostname;
+  } catch {
+    return;
+  }
+  if (!siteInfoOn(await xmrSettingsItem.getValue())) return;
+  const feed = await siteFeedItem.getValue();
+  const lookalike = feed && lookalikeOf(lookalikesFor(feed), host);
+  if (!lookalike) return;
+  await tabStateReady;
+  const state = tabStates.get(tabId) ?? {};
+  state.lookalike = lookalike.kind;
+  tabStates.set(tabId, state);
+  persistTabState();
+  await applyBadge(tabId);
+}
+
 // bumped when the setting goes off, so a download that finishes later is dropped
 let siteFeedGeneration = 0;
 

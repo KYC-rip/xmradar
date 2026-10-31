@@ -3,7 +3,7 @@ import { storage } from 'wxt/utils/storage';
 import { sendToBackground, type SiteInfo } from '../../messaging';
 import { isXHost } from '../../sender';
 import { firstSentence, incidentWhen, internCaution, leadSite, needsBanner, normalizeHost, type SiteEntry } from '../../sites/feed';
-import { lookalikeHref, lookalikeText, type Lookalike } from '../../sites/lookalike-text';
+import { isCoinListing, lookalikeHref, lookalikeText, type Lookalike } from '../../sites/lookalike-text';
 import { siteInfoOn, siteWarningsOn, xmrSettingsItem } from '../../settings';
 import { h } from './dom';
 
@@ -47,10 +47,15 @@ export function bannerText(sites: SiteEntry[]): { lead: string; rest: string; si
   return { lead, rest: more ? ` (+${more} more in XMRadar's menu)` : '', site };
 }
 
-/** A red lookalike (not the weak same-name kind) leads; else the listings, when they need a banner. */
+/**
+ * A red lookalike leads; then the listings, when they need a banner; then the same name as a service that
+ * takes coins (amber, PLAN-PRELOAD §5). Same-name of any other listing stays in the badge and popup.
+ */
 export function bannerFor(info: SiteInfo): { lookalike: Lookalike } | { sites: SiteEntry[] } | null {
-  if (info.lookalike && info.lookalike.kind !== 'same-name') return { lookalike: info.lookalike };
-  return info.sites.length && needsBanner(info.sites) ? { sites: info.sites } : null;
+  const l = info.lookalike;
+  if (l && l.kind !== 'same-name') return { lookalike: l };
+  if (info.sites.length && needsBanner(info.sites)) return { sites: info.sites };
+  return l && isCoinListing(l) ? { lookalike: l } : null;
 }
 
 export function mountBanner(doc: Document, what: { lookalike: Lookalike } | { sites: SiteEntry[] }, onDismiss: () => void): HTMLElement {
@@ -65,7 +70,8 @@ export function mountBanner(doc: Document, what: { lookalike: Lookalike } | { si
     // text and link come from the feed only, never from this page
     const l = what.lookalike;
     const link = h('a', { textContent: `Go to ${l.target}`, href: lookalikeHref(l), target: '_blank', rel: 'noopener noreferrer' });
-    bar = h('div', { class: 'bar', attrs: { role: 'alert' } }, h('span', { class: 'msg' }, h('b', { textContent: 'XMRadar · ' }), lookalikeText(l)), link, close);
+    const cls = l.kind === 'same-name' ? 'bar caution' : 'bar';
+    bar = h('div', { class: cls, attrs: { role: 'alert' } }, h('span', { class: 'msg' }, h('b', { textContent: 'XMRadar · ' }), lookalikeText(l)), link, close);
   } else {
     const { lead, rest, site } = bannerText(what.sites);
     const link = h('a', { textContent: 'Details', href: site.url, target: '_blank', rel: 'noopener noreferrer' });

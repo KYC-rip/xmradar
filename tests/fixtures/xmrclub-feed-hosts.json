@@ -4,6 +4,7 @@
 {
 "id": "tutanota",
 "name": "Tuta Mail",
+"category": "email",
 "grade": "A",
 "hosts": [
 "tuta.com",
@@ -13,6 +14,7 @@
 {
 "id": "libera-monero",
 "name": "Libera Chat #monero",
+"category": "forums",
 "grade": "A",
 "hosts": [
 "libera.chat",
@@ -22,6 +24,7 @@
 {
 "id": "rino-community",
 "name": "node.community.rino.io",
+"category": "nodes",
 "grade": "A",
 "hosts": [
 "community.rino.io"
@@ -30,6 +33,7 @@
 {
 "id": "monerodevs-node",
 "name": "node.monerodevs.org",
+"category": "nodes",
 "grade": "A",
 "hosts": [
 "monerodevs.org"
@@ -38,6 +42,7 @@
 {
 "id": "majesticbank-node",
 "name": "node.xmr.party",
+"category": "nodes",
 "grade": "B",
 "hosts": [
 "xmr.party"
@@ -46,6 +51,7 @@
 {
 "id": "richfowler-node",
 "name": "node.richfowler.net",
+"category": "nodes",
 "grade": "B",
 "hosts": [
 "richfowler.net"
@@ -54,6 +60,7 @@
 {
 "id": "plowsof-node",
 "name": "Plowsof public nodes",
+"category": "nodes",
 "grade": "A",
 "hosts": [
 "plowsof.com",
@@ -63,6 +70,7 @@
 {
 "id": "kyc-rip-cli",
 "name": "kyc-rip CLI / SSH",
+"category": "tools",
 "grade": "A",
 "hosts": [
 "swap.kyc.rip",
@@ -72,12 +80,14 @@
 {
 "id": "r-xmrtrader",
 "name": "r/xmrtrader",
+"category": "forums",
 "grade": "C",
 "hosts": []
 },
 {
 "id": "obscura",
 "name": "Obscura VPN",
+"category": "vpns",
 "grade": "B",
 "hosts": [
 "obscura.com",
@@ -87,6 +97,7 @@
 {
 "id": "xmrcompass",
 "name": "xmr-compass",
+"category": "educational",
 "grade": "A",
 "hosts": [
 "xmr-compass.net"
@@ -95,6 +106,7 @@
 {
 "id": "sparrow",
 "name": "Sparrow Wallet",
+"category": "wallets",
 "grade": "A",
 "hosts": [
 "sparrowwallet.com",
@@ -104,6 +116,7 @@
 {
 "id": "anonero",
 "name": "Anonero",
+"category": "wallets",
 "grade": "B",
 "hosts": [
 "anonero.io",
@@ -113,6 +126,7 @@
 {
 "id": "lumo",
 "name": "Lumo (Proton AI)",
+"category": "ai",
 "grade": "B",
 "hosts": [
 "lumo.proton.me",
@@ -122,6 +136,7 @@
 {
 "id": "xmr-pw",
 "name": "xmr.pw",
+"category": "nodes",
 "grade": "B",
 "hosts": [
 "xmr.pw",
@@ -131,6 +146,7 @@
 {
 "id": "coincards",
 "name": "CoinCards",
+"category": "merchants",
 "grade": "A",
 "hosts": [
 "coincards.com",
@@ -140,6 +156,7 @@
 {
 "id": "privatemode",
 "name": "Privatemode",
+"category": "ai",
 "grade": "A",
 "hosts": [
 "privatemode.ai"
@@ -148,6 +165,7 @@
 {
 "id": "monero-outreach",
 "name": "Monero Outreach",
+"category": "educational",
 "grade": "A",
 "hosts": [
 "monerooutreach.org"
@@ -156,6 +174,7 @@
 {
 "id": "kycnot-me",
 "name": "KYCnot.me",
+"category": "educational",
 "grade": "A",
 "hosts": [
 "kycnot.me",
@@ -165,6 +184,7 @@
 {
 "id": "flokinet",
 "name": "FlokiNET",
+"category": "hosting",
 "grade": "A",
 "hosts": [
 "flokinet.is",
@@ -174,6 +194,7 @@
 {
 "id": "sethforprivacy-node",
 "name": "node.sethforprivacy.com",
+"category": "nodes",
 "grade": "A",
 "hosts": [
 "sethforprivacy.com",
@@ -183,6 +204,7 @@
 {
 "id": "securedrop",
 "name": "SecureDrop",
+"category": "tools",
 "grade": "A",
 "hosts": [
 "securedrop.org",
@@ -192,6 +214,7 @@
 {
 "id": "boltz",
 "name": "Boltz",
+"category": "wallets",
 "grade": "A",
 "hosts": [
 "boltz.exchange",
@@ -201,6 +224,7 @@
 {
 "id": "continue-dev",
 "name": "Continue.dev",
+"category": "ai",
 "grade": "A",
 "hosts": [
 "continue.dev"
@@ -209,12 +233,14 @@
 {
 "id": "whoogle",
 "name": "Whoogle",
+"category": "search",
 "grade": "A",
 "hosts": []
 },
 {
 "id": "trezor-suite",
 "name": "Trezor Suite",
+"category": "wallets",
 "grade": "A",
 "hosts": [
 "trezor.io"
@@ -223,6 +249,7 @@
 {
 "id": "passport-bitcoin",
 "name": "Foundation Passport",
+"category": "wallets",
 "grade": "A",
 "hosts": [
 "foundation.xyz",
@@ -232,6 +259,7 @@
 {
 "id": "goxmr",
 "name": "GOXMR",
+"category": "tools",
 "grade": "B",
 "hosts": [
 "goxmr.click",
@@ -241,6 +269,7 @@
 {
 "id": "ko-net",
 "name": "Ko-Net",
+"category": "hosting",
 "grade": "B",
 "hosts": [
 "ko-net.ws"
@@ -249,6 +278,7 @@
 {
 "id": "btcvps",
 "name": "BTCVPS",
+"category": "hosting",
 "grade": "B",
 "hosts": [
 "btcvps.com",
@@ -258,6 +288,7 @@
 {
 "id": "1984-hosting",
 "name": "1984.is",
+"category": "hosting",
 "grade": "A-",
 "hosts": [
 "1984.hosting"
@@ -266,6 +297,7 @@
 {
 "id": "mynymbox",
 "name": "Mynymbox",
+"category": "hosting",
 "grade": "B",
 "hosts": [
 "mynymbox.io",
@@ -275,6 +307,7 @@
 {
 "id": "monero-forum",
 "name": "Monero Forum",
+"category": "forums",
 "grade": "B",
 "hosts": [
 "monero.forum",
@@ -284,6 +317,7 @@
 {
 "id": "stackxmr",
 "name": "StackXMR",
+"category": "tools",
 "grade": "C",
 "hosts": [
 "stackxmr.dev"
@@ -292,6 +326,7 @@
 {
 "id": "xmr98",
 "name": "XMR98",
+"category": "tools",
 "grade": "B-",
 "hosts": [
 "xmr98.com"
@@ -300,6 +335,7 @@
 {
 "id": "trustswap",
 "name": "TrustSwap",
+"category": "exchanges",
 "grade": "C",
 "hosts": [
 "trustswap.io"
@@ -308,6 +344,7 @@
 {
 "id": "xmr-pay",
 "name": "XMR-PAY",
+"category": "tools",
 "grade": "C",
 "hosts": [
 "xmrpay.shop"
@@ -316,6 +353,7 @@
 {
 "id": "xeovo-vpn",
 "name": "Xeovo VPN",
+"category": "vpns",
 "grade": "A",
 "hosts": [
 "xeovo.com",
@@ -325,6 +363,7 @@
 {
 "id": "xmr-irish",
 "name": "xmr.irish",
+"category": "tools",
 "grade": "A",
 "hosts": [
 "xmr.irish"
@@ -333,6 +372,7 @@
 {
 "id": "skhron",
 "name": "Skhron",
+"category": "hosting",
 "grade": "C",
 "hosts": [
 "skhron.eu",
@@ -342,6 +382,7 @@
 {
 "id": "anonymd",
 "name": "AnonyMD",
+"category": "hosting",
 "grade": "B",
 "hosts": [
 "anonymd.eu",
@@ -351,6 +392,7 @@
 {
 "id": "monero-academy",
 "name": "Monero Academy",
+"category": "educational",
 "grade": "B",
 "hosts": [
 "moneroacademy.com",
@@ -360,6 +402,7 @@
 {
 "id": "buyvm",
 "name": "BuyVM",
+"category": "hosting",
 "grade": "B",
 "hosts": [
 "buyvm.net"
@@ -368,6 +411,7 @@
 {
 "id": "unstoppable-wallet",
 "name": "Unstoppable Wallet",
+"category": "wallets",
 "grade": "A",
 "hosts": [
 "unstoppable.money"
@@ -376,6 +420,7 @@
 {
 "id": "anti-moonboy",
 "name": "Anti Moonboy",
+"category": "media",
 "grade": "B",
 "hosts": [
 "antimoonboy.com"
@@ -384,6 +429,7 @@
 {
 "id": "the-monero-moon",
 "name": "The Monero Moon",
+"category": "media",
 "grade": "B",
 "hosts": [
 "themoneromoon.com"
@@ -392,6 +438,7 @@
 {
 "id": "opsecosint",
 "name": "opsecosint.info",
+"category": "educational",
 "grade": "B",
 "hosts": [
 "opsecosint.info"
@@ -400,6 +447,7 @@
 {
 "id": "xmr-bio",
 "name": "xmr.bio",
+"category": "tools",
 "grade": "A",
 "hosts": [
 "xmr.bio"
@@ -408,6 +456,7 @@
 {
 "id": "smspool",
 "name": "SMSPool",
+"category": "sims",
 "grade": "C",
 "hosts": [
 "smspool.net"
@@ -416,6 +465,7 @@
 {
 "id": "xmr-support-node",
 "name": "xmr.support",
+"category": "nodes",
 "grade": "B",
 "hosts": [
 "xmr.support"
@@ -424,6 +474,7 @@
 {
 "id": "marginalia",
 "name": "Marginalia Search",
+"category": "search",
 "grade": "A",
 "hosts": [
 "marginalia-search.com",
@@ -433,6 +484,7 @@
 {
 "id": "ente-auth",
 "name": "Ente Auth",
+"category": "tools",
 "grade": "A",
 "hosts": [
 "ente.com",
@@ -442,6 +494,7 @@
 {
 "id": "proton-vpn",
 "name": "Proton VPN",
+"category": "vpns",
 "grade": "B",
 "hosts": [
 "protonvpn.com",
@@ -451,6 +504,7 @@
 {
 "id": "seedsigner",
 "name": "SeedSigner",
+"category": "wallets",
 "grade": "A",
 "hosts": [
 "seedsigner.com"
@@ -459,6 +513,7 @@
 {
 "id": "borsomonero",
 "name": "BorsoMonero",
+"category": "exchanges",
 "grade": "C",
 "hosts": [
 "borsomonero.com",
@@ -468,6 +523,7 @@
 {
 "id": "arcadex",
 "name": "Arcadex",
+"category": "wagering",
 "grade": "C",
 "hosts": [
 "arcadex.win"
@@ -476,6 +532,7 @@
 {
 "id": "vpso",
 "name": "VPSO",
+"category": "hosting",
 "grade": "B-",
 "hosts": [
 "vpso.cc",
@@ -485,6 +542,7 @@
 {
 "id": "coin-wallet",
 "name": "Coin Wallet",
+"category": "wallets",
 "grade": "C",
 "hosts": [
 "coin.space",
@@ -494,6 +552,7 @@
 {
 "id": "fixedfloat",
 "name": "FixedFloat",
+"category": "exchanges",
 "grade": "C",
 "hosts": [
 "ff.io",
@@ -503,6 +562,7 @@
 {
 "id": "zerotrace",
 "name": "Null Route — ZERO TRACE",
+"category": "exchanges",
 "grade": "C",
 "hosts": [
 "cetoc.org",
@@ -512,6 +572,7 @@
 {
 "id": "xmrescrow",
 "name": "XMR Escrow",
+"category": "tools",
 "grade": "F",
 "hosts": [
 "xmrescrow.app",
@@ -521,6 +582,7 @@
 {
 "id": "revuo-monero",
 "name": "Revuo Monero",
+"category": "media",
 "grade": "A",
 "hosts": [
 "revuo-xmr.com",
@@ -530,6 +592,7 @@
 {
 "id": "sageswap",
 "name": "SageSwap",
+"category": "exchanges",
 "grade": "A",
 "hosts": [
 "sageswap.io",
@@ -539,6 +602,7 @@
 {
 "id": "tokensfund",
 "name": "TokensFund",
+"category": "exchanges",
 "grade": "C",
 "hosts": [
 "tokensfund.xyz",
@@ -548,6 +612,7 @@
 {
 "id": "monero-marketcap",
 "name": "MoneroMarketCap",
+"category": "tools",
 "grade": "B",
 "hosts": [
 "moneromarketcap.com",
@@ -557,6 +622,7 @@
 {
 "id": "ghostdrip",
 "name": "GhostDrip",
+"category": "tools",
 "grade": "B-",
 "hosts": [
 "ghostdrip.xyz"
@@ -565,6 +631,7 @@
 {
 "id": "baltex",
 "name": "Baltex",
+"category": "exchanges",
 "grade": "C",
 "hosts": [
 "baltex.io"
@@ -573,6 +640,7 @@
 {
 "id": "onionswap",
 "name": "OnionSwap",
+"category": "exchanges",
 "grade": "C",
 "hosts": [
 "onionswap.io"
@@ -581,6 +649,7 @@
 {
 "id": "xmr2cex",
 "name": "xmr2cex",
+"category": "exchanges",
 "grade": "B-",
 "hosts": [
 "xmr2cex.com",
@@ -590,6 +659,7 @@
 {
 "id": "proxypagos",
 "name": "ProxyPagos",
+"category": "tools",
 "grade": "B",
 "hosts": [
 "proxypagos.com"
@@ -598,6 +668,7 @@
 {
 "id": "meile-dvpn",
 "name": "Meile dVPN",
+"category": "vpns",
 "grade": "B",
 "hosts": [
 "dvpn.app",
@@ -607,6 +678,7 @@
 {
 "id": "swapgate",
 "name": "Swapgate",
+"category": "exchanges",
 "grade": "C",
 "hosts": [
 "swapgate.io"
@@ -615,6 +687,7 @@
 {
 "id": "secureshift",
 "name": "SecureShift",
+"category": "exchanges",
 "grade": "C",
 "hosts": [
 "secureshift.io"
@@ -623,6 +696,7 @@
 {
 "id": "omenswap",
 "name": "OmenSwap",
+"category": "exchanges",
 "grade": "C",
 "hosts": [
 "omenswap.com",
@@ -632,6 +706,7 @@
 {
 "id": "flashift",
 "name": "Flashift",
+"category": "exchanges",
 "grade": "B",
 "hosts": [
 "flashift.app"
@@ -640,6 +715,7 @@
 {
 "id": "sshwap",
 "name": "sshwap",
+"category": "exchanges",
 "grade": "C",
 "hosts": [
 "sshwap.com",
@@ -649,6 +725,7 @@
 {
 "id": "agora-logistic",
 "name": "Agora Logistic",
+"category": "tools",
 "grade": "C",
 "hosts": [
 "logistic.agora.supplies"
@@ -657,6 +734,7 @@
 {
 "id": "localp2p",
 "name": "Local P2P Exchange",
+"category": "exchanges",
 "grade": "C",
 "hosts": [
 "localp2p.su"
@@ -665,6 +743,7 @@
 {
 "id": "changelly",
 "name": "Changelly",
+"category": "exchanges",
 "grade": "C-",
 "hosts": [
 "changelly.com"
@@ -673,6 +752,7 @@
 {
 "id": "buyukesim",
 "name": "BuyUKeSIM",
+"category": "sims",
 "grade": "B+",
 "hosts": [
 "buyukesim.com",
@@ -682,6 +762,7 @@
 {
 "id": "priamex",
 "name": "Priamex",
+"category": "exchanges",
 "grade": "C",
 "hosts": [
 "priamex.com",
@@ -691,6 +772,7 @@
 {
 "id": "monerometrics",
 "name": "monerometrics",
+"category": "tools",
 "grade": "B",
 "hosts": [
 "monerometrics.net",
@@ -700,6 +782,7 @@
 {
 "id": "bitrefill-giftcards",
 "name": "Bitrefill Gift Cards",
+"category": "merchants",
 "grade": "B",
 "hosts": [
 "bitrefill.com"
@@ -708,6 +791,7 @@
 {
 "id": "travala",
 "name": "Travala",
+"category": "merchants",
 "grade": "B",
 "hosts": [
 "travala.com"
@@ -716,6 +800,7 @@
 {
 "id": "guarda",
 "name": "Guarda",
+"category": "wallets",
 "grade": "C",
 "hosts": [
 "guarda.com"
@@ -724,6 +809,7 @@
 {
 "id": "dexsport",
 "name": "Dexsport",
+"category": "wagering",
 "grade": "C",
 "hosts": [
 "dexsport.io"
@@ -732,6 +818,7 @@
 {
 "id": "anonexch",
 "name": "AnonExch",
+"category": "exchanges",
 "grade": "C",
 "hosts": [
 "anonexch.io",
@@ -741,6 +828,7 @@
 {
 "id": "monero-ceo",
 "name": "Monero.ceo",
+"category": "nodes",
 "grade": "B",
 "hosts": [
 "monero.ceo",
@@ -750,6 +838,7 @@
 {
 "id": "xmrbid",
 "name": "xmrbid.lol",
+"category": "tools",
 "grade": "B",
 "hosts": [
 "xmrbid.lol",
@@ -759,6 +848,7 @@
 {
 "id": "xmrclub-explorer",
 "name": "xmr.club Explorer",
+"category": "tools",
 "grade": "A",
 "hosts": [
 "explorer.xmr.club",
@@ -768,6 +858,7 @@
 {
 "id": "swap-bz",
 "name": "Swap.bz",
+"category": "exchanges",
 "grade": "C",
 "hosts": [
 "swap.bz"
@@ -776,6 +867,7 @@
 {
 "id": "yellowchanger",
 "name": "YellowChanger",
+"category": "exchanges",
 "grade": "C",
 "hosts": [
 "yellowchanger.com"
@@ -784,6 +876,7 @@
 {
 "id": "stealthledger",
 "name": "StealthLedger",
+"category": "tools",
 "grade": "C",
 "hosts": [
 "stealthledger.io"
@@ -792,6 +885,7 @@
 {
 "id": "dex-fo",
 "name": "DEX.fo",
+"category": "exchanges",
 "grade": "C",
 "hosts": [
 "dex.fo",
@@ -801,6 +895,7 @@
 {
 "id": "1gwei",
 "name": "1gwei.dev",
+"category": "tools",
 "grade": "B-",
 "hosts": [
 "1gwei.dev",
@@ -810,6 +905,7 @@
 {
 "id": "1pay",
 "name": "1pay.cx",
+"category": "cards",
 "grade": "C",
 "hosts": [
 "1pay.cx",
@@ -819,6 +915,7 @@
 {
 "id": "mnr-network",
 "name": "mnr.network",
+"category": "nodes",
 "grade": "B",
 "hosts": [
 "mnr.network",
@@ -828,6 +925,7 @@
 {
 "id": "67-tax",
 "name": "67.tax",
+"category": "exchanges",
 "grade": "C",
 "hosts": [
 "67.tax"
@@ -836,6 +934,7 @@
 {
 "id": "njalla-domains",
 "name": "Njalla Domains",
+"category": "email",
 "grade": "A",
 "hosts": [
 "njal.la",
@@ -845,6 +944,7 @@
 {
 "id": "njalla-vps",
 "name": "Njalla VPS",
+"category": "hosting",
 "grade": "A",
 "hosts": [
 "njal.la",
@@ -854,6 +954,7 @@
 {
 "id": "njalla-vpn",
 "name": "Njalla VPN",
+"category": "vpns",
 "grade": "B",
 "hosts": [
 "njal.la",
@@ -863,6 +964,7 @@
 {
 "id": "ephemere-chat",
 "name": "Ephemere Chat",
+"category": "email",
 "grade": "C",
 "hosts": [
 "ephemere.chat",
@@ -872,6 +974,7 @@
 {
 "id": "rdp-monster",
 "name": "rdp.monster",
+"category": "hosting",
 "grade": "C",
 "hosts": [
 "rdp.monster"
@@ -880,6 +983,7 @@
 {
 "id": "torswap",
 "name": "TORSwap",
+"category": "exchanges",
 "grade": "C",
 "hosts": [
 "torswap.pro"
@@ -888,6 +992,7 @@
 {
 "id": "moneroswap",
 "name": "MoneroSwap",
+"category": "exchanges",
 "grade": "C",
 "hosts": [
 "moneroswap.net",
@@ -897,6 +1002,7 @@
 {
 "id": "coldcard",
 "name": "Coldcard",
+"category": "wallets",
 "grade": "D",
 "hosts": [
 "coldcard.com"
@@ -905,6 +1011,7 @@
 {
 "id": "keynode-vpn",
 "name": "KeyNode VPN",
+"category": "vpns",
 "grade": "B-",
 "hosts": [
 "keynodevpn.com"
@@ -913,6 +1020,7 @@
 {
 "id": "community-onion-rpc",
 "name": "Community Monero Onion RPC",
+"category": "nodes",
 "grade": "B",
 "hosts": [
 "gbq2nxhyzt4xxtx5vfjzwervt4iserg7q37qciravfnln6px3w5tnrid.onion"
@@ -921,6 +1029,7 @@
 {
 "id": "anonkyc",
 "name": "AnonKyc",
+"category": "exchanges",
 "grade": "C",
 "hosts": [
 "anonkyc.com"
@@ -929,6 +1038,7 @@
 {
 "id": "monerogambler",
 "name": "Monerogambler",
+"category": "tools",
 "grade": "C",
 "hosts": [
 "monerogambler.com"
@@ -937,6 +1047,7 @@
 {
 "id": "ghostsims",
 "name": "GhostSims",
+"category": "sims",
 "grade": "C",
 "hosts": [
 "ghostsims.com"
@@ -945,6 +1056,7 @@
 {
 "id": "cryptoesim",
 "name": "CryptoeSIM",
+"category": "sims",
 "grade": "C",
 "hosts": [
 "cryptoesim.io"
@@ -953,6 +1065,7 @@
 {
 "id": "anon-esim",
 "name": "Anon eSIM",
+"category": "sims",
 "grade": "C",
 "hosts": [
 "anonesim.io"
@@ -961,6 +1074,7 @@
 {
 "id": "octoswap",
 "name": "OctoSwap",
+"category": "exchanges",
 "grade": "F",
 "hosts": [
 "octoswap.io"
@@ -969,6 +1083,7 @@
 {
 "id": "thorchain",
 "name": "THORChain",
+"category": "exchanges",
 "grade": "A",
 "hosts": [
 "thorchain.org"
@@ -977,6 +1092,7 @@
 {
 "id": "cambio",
 "name": "Cambio",
+"category": "exchanges",
 "grade": "C",
 "hosts": [
 "cambio.one"
@@ -985,6 +1101,7 @@
 {
 "id": "swapter",
 "name": "Swapter",
+"category": "exchanges",
 "grade": "F",
 "hosts": [
 "swapter.io"
@@ -993,6 +1110,7 @@
 {
 "id": "shadowswap",
 "name": "ShadowSwap",
+"category": "exchanges",
 "grade": "C",
 "hosts": [
 "shadowswap.pro",
@@ -1002,6 +1120,7 @@
 {
 "id": "ostbro",
 "name": "ostbro",
+"category": "exchanges",
 "grade": "C",
 "hosts": [
 "ostbro.com"
@@ -1010,6 +1129,7 @@
 {
 "id": "418-hosting",
 "name": "418 Hosting",
+"category": "hosting",
 "grade": "C",
 "hosts": [
 "crackpot418.com"
@@ -1018,6 +1138,7 @@
 {
 "id": "trezor-xmr",
 "name": "Trezor",
+"category": "wallets",
 "grade": "B",
 "hosts": [
 "trezor.io"
@@ -1026,12 +1147,14 @@
 {
 "id": "monero-magazine",
 "name": "Monero Magazine",
+"category": "media",
 "grade": "C",
 "hosts": []
 },
 {
 "id": "isabellas-coffee",
 "name": "Isabella's Coffee",
+"category": "merchants",
 "grade": "C",
 "hosts": [
 "isabellas.coffee"
@@ -1040,6 +1163,7 @@
 {
 "id": "wagyu",
 "name": "Wagyu",
+"category": "exchanges",
 "grade": "C",
 "hosts": [
 "wagyu.xyz"
@@ -1048,6 +1172,7 @@
 {
 "id": "bitcoinvn",
 "name": "BitcoinVN",
+"category": "exchanges",
 "grade": "B",
 "hosts": [
 "bitcoinvn.io"
@@ -1056,6 +1181,7 @@
 {
 "id": "bitania",
 "name": "Bitania",
+"category": "exchanges",
 "grade": "B",
 "hosts": [
 "bitania.com",
@@ -1065,6 +1191,7 @@
 {
 "id": "coinsbee",
 "name": "Coinsbee",
+"category": "merchants",
 "grade": "A",
 "hosts": [
 "coinsbee.com"
@@ -1073,6 +1200,7 @@
 {
 "id": "cardsrelay",
 "name": "CardsRelay",
+"category": "merchants",
 "grade": "C",
 "hosts": [
 "cardsrelay.com"
@@ -1081,6 +1209,7 @@
 {
 "id": "deluxhost",
 "name": "DeluxHost",
+"category": "hosting",
 "grade": "C",
 "hosts": [
 "deluxhost.net"
@@ -1089,6 +1218,7 @@
 {
 "id": "veyresim",
 "name": "VeyreSIM",
+"category": "sims",
 "grade": "C",
 "hosts": [
 "veyresim.com"
@@ -1097,6 +1227,7 @@
 {
 "id": "haveno",
 "name": "Haveno",
+"category": "exchanges",
 "grade": "B",
 "hosts": [
 "haveno.exchange"
@@ -1105,6 +1236,7 @@
 {
 "id": "retoswap",
 "name": "RetoSwap",
+"category": "exchanges",
 "grade": "B",
 "hosts": [
 "retoswap.com"
@@ -1113,6 +1245,7 @@
 {
 "id": "instantshippinglabels",
 "name": "InstantShippingLabels",
+"category": "tools",
 "grade": "C",
 "hosts": [
 "instantshippinglabels.com",
@@ -1122,6 +1255,7 @@
 {
 "id": "plataswap",
 "name": "PlataSwap",
+"category": "exchanges",
 "grade": "C",
 "hosts": [
 "plataswap.com"
@@ -1130,6 +1264,7 @@
 {
 "id": "01esim",
 "name": "01Esim",
+"category": "sims",
 "grade": "C",
 "hosts": [
 "01esim.com"
@@ -1138,6 +1273,7 @@
 {
 "id": "etz-swap",
 "name": "ETZ-Swap",
+"category": "exchanges",
 "grade": "C",
 "hosts": [
 "etz-swap.com",
@@ -1147,6 +1283,7 @@
 {
 "id": "goymail",
 "name": "GoyMail",
+"category": "email",
 "grade": "C",
 "hosts": [
 "intrude.rs",
@@ -1156,6 +1293,7 @@
 {
 "id": "should-have-used-monero",
 "name": "Should Have Used Monero",
+"category": "media",
 "grade": "B",
 "hosts": [
 "shouldhaveusedmonero.com"
@@ -1164,6 +1302,7 @@
 {
 "id": "stasher-news",
 "name": "Stasher News",
+"category": "forums",
 "grade": "C",
 "hosts": [
 "stasher.news"
@@ -1172,6 +1311,7 @@
 {
 "id": "cypher-vpn",
 "name": "Cypher VPN",
+"category": "vpns",
 "grade": "B-",
 "hosts": [
 "cyphervpn.net"
@@ -1180,6 +1320,7 @@
 {
 "id": "autopay24hr",
 "name": "AutoPay24hr",
+"category": "exchanges",
 "grade": "C",
 "hosts": [
 "autopay24hr.com"
@@ -1188,6 +1329,7 @@
 {
 "id": "comcash",
 "name": "Comcash",
+"category": "exchanges",
 "grade": "C",
 "hosts": [
 "comcash.exchange",
@@ -1197,6 +1339,7 @@
 {
 "id": "2fiat",
 "name": "2Fiat",
+"category": "cards",
 "grade": "C",
 "hosts": [
 "2fiat.com"
@@ -1205,6 +1348,7 @@
 {
 "id": "brave-search",
 "name": "Brave Search",
+"category": "search",
 "grade": "A",
 "hosts": [
 "search.brave.com",
@@ -1214,6 +1358,7 @@
 {
 "id": "threema",
 "name": "Threema",
+"category": "tools",
 "grade": "B",
 "hosts": [
 "threema.com",
@@ -1223,6 +1368,7 @@
 {
 "id": "cyphergoat",
 "name": "CypherGoat",
+"category": "exchanges",
 "grade": "B",
 "hosts": [
 "cyphergoat.com",
@@ -1232,6 +1378,7 @@
 {
 "id": "0trace",
 "name": "0trace",
+"category": "exchanges",
 "grade": "B",
 "hosts": [
 "0trace.io",
@@ -1241,6 +1388,7 @@
 {
 "id": "cypher-esim",
 "name": "Cypher eSIM",
+"category": "sims",
 "grade": "B-",
 "hosts": [
 "cypheresim.com"
@@ -1249,6 +1397,7 @@
 {
 "id": "uswap",
 "name": "uSwap",
+"category": "exchanges",
 "grade": "C",
 "hosts": [
 "uswap.net"
@@ -1257,6 +1406,7 @@
 {
 "id": "neir",
 "name": "Neir",
+"category": "email",
 "grade": "B",
 "hosts": [
 "neir.io",
@@ -1266,6 +1416,7 @@
 {
 "id": "eagleswap",
 "name": "EagleSwap",
+"category": "exchanges",
 "grade": "C",
 "hosts": [
 "eagleswap.net",
@@ -1275,6 +1426,7 @@
 {
 "id": "pablo-cash",
 "name": "Pablo.Cash",
+"category": "exchanges",
 "grade": "C",
 "hosts": [
 "pablo.cash",
@@ -1284,6 +1436,7 @@
 {
 "id": "lizex",
 "name": "Lizex",
+"category": "exchanges",
 "grade": "D",
 "hosts": [
 "lizex.io"
@@ -1292,6 +1445,7 @@
 {
 "id": "veilswap",
 "name": "VeilSwap",
+"category": "exchanges",
 "grade": "C",
 "hosts": [
 "veilswap.io"
@@ -1300,6 +1454,7 @@
 {
 "id": "anonchange",
 "name": "AnonChange",
+"category": "exchanges",
 "grade": "C",
 "hosts": [
 "anonchange.com",
@@ -1309,6 +1464,7 @@
 {
 "id": "kyc-rip-cards",
 "name": "kyc.rip Cards",
+"category": "cards",
 "grade": "B",
 "hosts": [
 "kyc.rip",
@@ -1318,6 +1474,7 @@
 {
 "id": "trocador-prepaid",
 "name": "Trocador Prepaid",
+"category": "cards",
 "grade": "B",
 "hosts": [
 "trocador.app"
@@ -1326,6 +1483,7 @@
 {
 "id": "moonpay-prepaid",
 "name": "MoonPay Prepaid",
+"category": "cards",
 "grade": "C",
 "hosts": [
 "moonpay.com"
@@ -1334,6 +1492,7 @@
 {
 "id": "kyc-rip-aggregator",
 "name": "kyc.rip",
+"category": "exchanges",
 "grade": "B",
 "hosts": [
 "kyc.rip",
@@ -1343,6 +1502,7 @@
 {
 "id": "sideshift",
 "name": "Sideshift",
+"category": "exchanges",
 "grade": "A",
 "hosts": [
 "sideshift.ai"
@@ -1351,6 +1511,7 @@
 {
 "id": "pegasusswap",
 "name": "PegasusSwap",
+"category": "exchanges",
 "grade": "A-",
 "hosts": [
 "pegasusswap.com"
@@ -1359,6 +1520,7 @@
 {
 "id": "bisq-easy",
 "name": "Bisq Easy",
+"category": "exchanges",
 "grade": "A",
 "hosts": [
 "bisq.network"
@@ -1367,6 +1529,7 @@
 {
 "id": "robosats",
 "name": "RoboSats",
+"category": "exchanges",
 "grade": "A",
 "hosts": [
 "learn.robosats.org",
@@ -1377,12 +1540,14 @@
 {
 "id": "monero-itself",
 "name": "Monero",
+"category": "mixers",
 "grade": "A",
 "hosts": []
 },
 {
 "id": "wasabi-coinjoin",
 "name": "Wasabi Wallet",
+"category": "mixers",
 "grade": "B",
 "hosts": [
 "wasabiwallet.io"
@@ -1391,24 +1556,28 @@
 {
 "id": "joinmarket",
 "name": "JoinMarket",
+"category": "mixers",
 "grade": "B",
 "hosts": []
 },
 {
 "id": "rotorswap",
 "name": "Whirlpool successors",
+"category": "mixers",
 "grade": "C",
 "hosts": []
 },
 {
 "id": "lightning-as-mixer",
 "name": "Lightning Network",
+"category": "mixers",
 "grade": "B",
 "hosts": []
 },
 {
 "id": "azirevpn",
 "name": "AzireVPN",
+"category": "vpns",
 "grade": "C",
 "hosts": [
 "azirevpn.com"
@@ -1417,6 +1586,7 @@
 {
 "id": "monero-one",
 "name": "Monero.one",
+"category": "wallets",
 "grade": "A",
 "hosts": [
 "monero.one"
@@ -1425,6 +1595,7 @@
 {
 "id": "nadanada",
 "name": "nadanada.me",
+"category": "sims",
 "grade": "B",
 "hosts": [
 "nadanada.me",
@@ -1434,6 +1605,7 @@
 {
 "id": "bybit-card",
 "name": "Bybit Card",
+"category": "cards",
 "grade": "B",
 "hosts": [
 "bybit.com"
@@ -1442,6 +1614,7 @@
 {
 "id": "crypto-com-visa",
 "name": "Crypto.com Visa",
+"category": "cards",
 "grade": "C",
 "hosts": [
 "crypto.com"
@@ -1450,6 +1623,7 @@
 {
 "id": "kyc-rip-ghost",
 "name": "kyc.rip / ghost",
+"category": "exchanges",
 "grade": "B",
 "hosts": [
 "kyc.rip",
@@ -1459,6 +1633,7 @@
 {
 "id": "swapuz",
 "name": "Swapuz",
+"category": "exchanges",
 "grade": "B",
 "hosts": [
 "swapuz.com"
@@ -1467,6 +1642,7 @@
 {
 "id": "nonkyc",
 "name": "NonKYC.io",
+"category": "exchanges",
 "grade": "B",
 "hosts": [
 "nonkyc.io"
@@ -1475,6 +1651,7 @@
 {
 "id": "rocketx",
 "name": "RocketX",
+"category": "exchanges",
 "grade": "B",
 "hosts": [
 "app.rocketx.exchange"
@@ -1483,6 +1660,7 @@
 {
 "id": "lifi",
 "name": "LI.FI",
+"category": "exchanges",
 "grade": "B",
 "hosts": [
 "li.fi"
@@ -1491,6 +1669,7 @@
 {
 "id": "debridge",
 "name": "deBridge",
+"category": "exchanges",
 "grade": "B",
 "hosts": [
 "debridge.com",
@@ -1500,6 +1679,7 @@
 {
 "id": "coinos",
 "name": "Coinos",
+"category": "exchanges",
 "grade": "B",
 "hosts": [
 "coinos.io",
@@ -1509,6 +1689,7 @@
 {
 "id": "privataswap",
 "name": "PrivataSwap",
+"category": "exchanges",
 "grade": "B",
 "hosts": [
 "privataswap.com",
@@ -1518,6 +1699,7 @@
 {
 "id": "swapzilla",
 "name": "SwapZilla",
+"category": "exchanges",
 "grade": "C",
 "hosts": [
 "swapzilla.io",
@@ -1527,12 +1709,14 @@
 {
 "id": "xmrtab",
 "name": "XMRtab (Monero Wallet · Standalone)",
+"category": "wallets",
 "grade": "F",
 "hosts": []
 },
 {
 "id": "ghostswap",
 "name": "GhostSwap",
+"category": "exchanges",
 "grade": "C",
 "hosts": [
 "ghostswap.io",
@@ -1542,6 +1726,7 @@
 {
 "id": "ghostvps",
 "name": "GhostVPS",
+"category": "hosting",
 "grade": "C",
 "hosts": [
 "ghostvps.shop",
@@ -1551,6 +1736,7 @@
 {
 "id": "goblin-physical",
 "name": "Goblin Physical MasterCard",
+"category": "cards",
 "grade": "B",
 "hosts": [
 "goblincards.com"
@@ -1559,6 +1745,7 @@
 {
 "id": "wirex",
 "name": "Wirex Visa",
+"category": "cards",
 "grade": "C",
 "hosts": [
 "wirexapp.com"
@@ -1567,6 +1754,7 @@
 {
 "id": "trocador",
 "name": "Trocador",
+"category": "exchanges",
 "grade": "A",
 "hosts": [
 "trocador.app",
@@ -1576,6 +1764,7 @@
 {
 "id": "exolix",
 "name": "Exolix",
+"category": "exchanges",
 "grade": "A-",
 "hosts": [
 "exolix.com"
@@ -1584,6 +1773,7 @@
 {
 "id": "simpleswap",
 "name": "SimpleSwap",
+"category": "exchanges",
 "grade": "B",
 "hosts": [
 "simpleswap.io"
@@ -1592,6 +1782,7 @@
 {
 "id": "splitnow",
 "name": "SplitNOW",
+"category": "exchanges",
 "grade": "C",
 "hosts": [
 "splitnow.io"
@@ -1600,6 +1791,7 @@
 {
 "id": "changenow-warning",
 "name": "ChangeNow",
+"category": "exchanges",
 "grade": "C",
 "hosts": [
 "changenow.io"
@@ -1608,6 +1800,7 @@
 {
 "id": "bisq",
 "name": "Bisq (classic)",
+"category": "exchanges",
 "grade": "A",
 "hosts": [
 "bisq.network"
@@ -1616,6 +1809,7 @@
 {
 "id": "xmrbazaar",
 "name": "XMRBazaar",
+"category": "marketplaces",
 "grade": "A",
 "hosts": [
 "xmrbazaar.com",
@@ -1625,6 +1819,7 @@
 {
 "id": "stereoswap",
 "name": "StereoSwap",
+"category": "exchanges",
 "grade": "B",
 "hosts": [
 "stereoswap.app",
@@ -1634,6 +1829,7 @@
 {
 "id": "cce-cash",
 "name": "CCE.Cash",
+"category": "exchanges",
 "grade": "B",
 "hosts": [
 "cce.cash"
@@ -1642,6 +1838,7 @@
 {
 "id": "stealths",
 "name": "Stealths",
+"category": "cards",
 "grade": "B",
 "hosts": [
 "stealths.net"
@@ -1650,6 +1847,7 @@
 {
 "id": "privacy-pools",
 "name": "Privacy Pools",
+"category": "mixers",
 "grade": "C",
 "hosts": [
 "privacypools.com"
@@ -1658,6 +1856,7 @@
 {
 "id": "xmr-win",
 "name": "xmr.win",
+"category": "wagering",
 "grade": "C",
 "hosts": [
 "xmr.win"
@@ -1666,6 +1865,7 @@
 {
 "id": "xmr-bar",
 "name": "xmr.bar",
+"category": "wagering",
 "grade": "B",
 "hosts": [
 "xmr.bar"
@@ -1674,6 +1874,7 @@
 {
 "id": "xmrvcc",
 "name": "XMRVCC",
+"category": "cards",
 "grade": "B",
 "hosts": [
 "xmrvcc.com"
@@ -1682,6 +1883,7 @@
 {
 "id": "xmrslots",
 "name": "Monero Slots",
+"category": "wagering",
 "grade": "B-",
 "hosts": [
 "xmrslots.net"
@@ -1690,6 +1892,7 @@
 {
 "id": "kashilo",
 "name": "kashilo",
+"category": "marketplaces",
 "grade": "B-",
 "hosts": [
 "kashilo.com",
@@ -1699,6 +1902,7 @@
 {
 "id": "mistex",
 "name": "Mistex",
+"category": "exchanges",
 "grade": "B-",
 "hosts": [
 "mistex.io",
@@ -1708,6 +1912,7 @@
 {
 "id": "agora-cards",
 "name": "Agora Cards",
+"category": "cards",
 "grade": "C",
 "hosts": [
 "agora.cards"
@@ -1716,6 +1921,7 @@
 {
 "id": "gorshok",
 "name": "Gorshok",
+"category": "exchanges",
 "grade": "C",
 "hosts": [
 "gorshok.io"
@@ -1724,6 +1930,7 @@
 {
 "id": "trocador-giftcards",
 "name": "Trocador Gift Cards",
+"category": "merchants",
 "grade": "B",
 "hosts": [
 "trocador.app"
@@ -1732,6 +1939,7 @@
 {
 "id": "cakepay",
 "name": "CakePay",
+"category": "merchants",
 "grade": "A",
 "hosts": [
 "cakepay.com"
@@ -1740,6 +1948,7 @@
 {
 "id": "getmonero-docs",
 "name": "getmonero.org / Library",
+"category": "educational",
 "grade": "A",
 "hosts": [
 "getmonero.org",
@@ -1749,6 +1958,7 @@
 {
 "id": "mastering-monero",
 "name": "Mastering Monero",
+"category": "educational",
 "grade": "A",
 "hosts": [
 "masteringmonero.com"
@@ -1757,24 +1967,28 @@
 {
 "id": "monero-topia",
 "name": "Monero Topia",
+"category": "media",
 "grade": "B",
 "hosts": []
 },
 {
 "id": "monero-talk",
 "name": "Monero Talk",
+"category": "media",
 "grade": "B",
 "hosts": []
 },
 {
 "id": "breaking-monero",
 "name": "Breaking Monero",
+"category": "educational",
 "grade": "A",
 "hosts": []
 },
 {
 "id": "monerokon",
 "name": "MoneroKon",
+"category": "educational",
 "grade": "A",
 "hosts": [
 "monerokon.org"
@@ -1783,6 +1997,7 @@
 {
 "id": "cypher-stack-research",
 "name": "Cypher Stack Research",
+"category": "educational",
 "grade": "A",
 "hosts": [
 "cypherstack.com"
@@ -1791,6 +2006,7 @@
 {
 "id": "privacy-guides",
 "name": "Privacy Guides",
+"category": "educational",
 "grade": "A",
 "hosts": [
 "privacyguides.org",
@@ -1800,6 +2016,7 @@
 {
 "id": "b2p-central",
 "name": "B2P Central",
+"category": "exchanges",
 "grade": "C",
 "hosts": [
 "b2p-central.com"
@@ -1808,6 +2025,7 @@
 {
 "id": "privacygateway",
 "name": "PrivacyGateway",
+"category": "cards",
 "grade": "C",
 "hosts": [
 "privacygateway.io"
@@ -1816,6 +2034,7 @@
 {
 "id": "ollieswap",
 "name": "Ollie Swap",
+"category": "exchanges",
 "grade": "C",
 "hosts": [
 "ollie.la",
@@ -1825,6 +2044,7 @@
 {
 "id": "venice-ai",
 "name": "Venice.ai",
+"category": "ai",
 "grade": "A",
 "hosts": [
 "venice.ai"
@@ -1833,6 +2053,7 @@
 {
 "id": "openrouter",
 "name": "OpenRouter",
+"category": "ai",
 "grade": "B",
 "hosts": [
 "openrouter.ai"
@@ -1841,6 +2062,7 @@
 {
 "id": "b-ai",
 "name": "B.ai",
+"category": "ai",
 "grade": "B",
 "hosts": [
 "b.ai"
@@ -1849,6 +2071,7 @@
 {
 "id": "eff-ssd",
 "name": "EFF Surveillance Self-Defense",
+"category": "educational",
 "grade": "A",
 "hosts": [
 "ssd.eff.org"
@@ -1857,6 +2080,7 @@
 {
 "id": "monero-research-lab",
 "name": "Monero Research Lab",
+"category": "educational",
 "grade": "A",
 "hosts": [
 "getmonero.org"
@@ -1865,6 +2089,7 @@
 {
 "id": "xmrprice-live",
 "name": "xmrprice.live",
+"category": "educational",
 "grade": "A",
 "hosts": [
 "xmrprice.live"
@@ -1873,6 +2098,7 @@
 {
 "id": "protonmail",
 "name": "Proton Mail",
+"category": "email",
 "grade": "A",
 "hosts": [
 "proton.me",
@@ -1882,6 +2108,7 @@
 {
 "id": "startmail",
 "name": "StartMail",
+"category": "email",
 "grade": "B",
 "hosts": [
 "startmail.com"
@@ -1890,6 +2117,7 @@
 {
 "id": "cockbox",
 "name": "Cockbox",
+"category": "hosting",
 "grade": "B",
 "hosts": [
 "cockbox.org",
@@ -1899,6 +2127,7 @@
 {
 "id": "abelohost",
 "name": "AbeloHost",
+"category": "hosting",
 "grade": "B",
 "hosts": [
 "abelohost.com"
@@ -1907,6 +2136,7 @@
 {
 "id": "bitlaunch",
 "name": "BitLaunch",
+"category": "hosting",
 "grade": "B",
 "hosts": [
 "bitlaunch.io"
@@ -1915,6 +2145,7 @@
 {
 "id": "blueangelhost",
 "name": "BlueAngelHost",
+"category": "hosting",
 "grade": "B",
 "hosts": [
 "blueangel.host",
@@ -1924,6 +2155,7 @@
 {
 "id": "mullvad",
 "name": "Mullvad VPN",
+"category": "vpns",
 "grade": "A",
 "hosts": [
 "mullvad.net",
@@ -1933,6 +2165,7 @@
 {
 "id": "ivpn",
 "name": "IVPN",
+"category": "vpns",
 "grade": "A",
 "hosts": [
 "ivpn.net"
@@ -1941,6 +2174,7 @@
 {
 "id": "ovpn",
 "name": "OVPN.com",
+"category": "vpns",
 "grade": "B",
 "hosts": [
 "ovpn.com"
@@ -1949,6 +2183,7 @@
 {
 "id": "windscribe",
 "name": "Windscribe",
+"category": "vpns",
 "grade": "C",
 "hosts": [
 "windscribe.com"
@@ -1957,6 +2192,7 @@
 {
 "id": "feather",
 "name": "Feather Wallet",
+"category": "wallets",
 "grade": "A",
 "hosts": [
 "featherwallet.org",
@@ -1966,6 +2202,7 @@
 {
 "id": "cake-wallet",
 "name": "Cake Wallet",
+"category": "wallets",
 "grade": "A",
 "hosts": [
 "cakewallet.com"
@@ -1974,6 +2211,7 @@
 {
 "id": "edge",
 "name": "Edge Wallet",
+"category": "wallets",
 "grade": "B",
 "hosts": [
 "edge.app"
@@ -1982,6 +2220,7 @@
 {
 "id": "stack-wallet",
 "name": "Stack Wallet",
+"category": "wallets",
 "grade": "B",
 "hosts": [
 "stackwallet.com"
@@ -1990,6 +2229,7 @@
 {
 "id": "ledger-xmr",
 "name": "Ledger Nano",
+"category": "wallets",
 "grade": "B",
 "hosts": [
 "ledger.com"
@@ -1998,6 +2238,7 @@
 {
 "id": "wasabi",
 "name": "Wasabi Wallet",
+"category": "wallets",
 "grade": "B",
 "hosts": [
 "wasabiwallet.io"
@@ -2006,6 +2247,7 @@
 {
 "id": "safepal",
 "name": "SafePal",
+"category": "wallets",
 "grade": "C",
 "hosts": [
 "safepal.com"
@@ -2014,6 +2256,7 @@
 {
 "id": "sovereign-rerouter",
 "name": "Sovereign Rerouter",
+"category": "tools",
 "grade": "C",
 "hosts": [
 "sovereignstack.tools"
@@ -2022,6 +2265,7 @@
 {
 "id": "pwa-cash",
 "name": "pwa.cash",
+"category": "tools",
 "grade": "B",
 "hosts": [
 "pwa.cash"
@@ -2030,6 +2274,7 @@
 {
 "id": "lm-studio",
 "name": "LM Studio",
+"category": "ai",
 "grade": "B",
 "hosts": [
 "lmstudio.ai"
@@ -2038,6 +2283,7 @@
 {
 "id": "disroot",
 "name": "Disroot",
+"category": "email",
 "grade": "B",
 "hosts": [
 "disroot.org",
@@ -2047,6 +2293,7 @@
 {
 "id": "riseup-mail",
 "name": "Riseup Mail",
+"category": "email",
 "grade": "B",
 "hosts": [
 "riseup.net",
@@ -2056,6 +2303,7 @@
 {
 "id": "mailfence",
 "name": "Mailfence",
+"category": "email",
 "grade": "B",
 "hosts": [
 "mailfence.com"
@@ -2064,6 +2312,7 @@
 {
 "id": "kagi",
 "name": "Kagi",
+"category": "search",
 "grade": "A",
 "hosts": [
 "kagi.com"
@@ -2072,6 +2321,7 @@
 {
 "id": "searxng",
 "name": "SearXNG",
+"category": "search",
 "grade": "A",
 "hosts": [
 "searxng.org"
@@ -2080,6 +2330,7 @@
 {
 "id": "mojeek",
 "name": "Mojeek",
+"category": "search",
 "grade": "A",
 "hosts": [
 "mojeek.com"
@@ -2088,6 +2339,7 @@
 {
 "id": "ddg",
 "name": "DuckDuckGo",
+"category": "search",
 "grade": "B",
 "hosts": [
 "duckduckgo.com",
@@ -2097,6 +2349,7 @@
 {
 "id": "startpage",
 "name": "Startpage",
+"category": "search",
 "grade": "B",
 "hosts": [
 "startpage.com"
@@ -2105,6 +2358,7 @@
 {
 "id": "5sim",
 "name": "5sim",
+"category": "sims",
 "grade": "B",
 "hosts": [
 "5sim.net"
@@ -2113,6 +2367,7 @@
 {
 "id": "herosms",
 "name": "HeroSMS",
+"category": "sims",
 "grade": "B",
 "hosts": [
 "walls.rip"
@@ -2121,12 +2376,14 @@
 {
 "id": "physical-sim-tricks",
 "name": "Physical pre-paid SIM",
+"category": "sims",
 "grade": "B",
 "hosts": []
 },
 {
 "id": "tails",
 "name": "Tails OS",
+"category": "tools",
 "grade": "A",
 "hosts": [
 "tails.net"
@@ -2135,6 +2392,7 @@
 {
 "id": "bitwarden",
 "name": "Bitwarden",
+"category": "tools",
 "grade": "A",
 "hosts": [
 "bitwarden.com"
@@ -2143,6 +2401,7 @@
 {
 "id": "veracrypt",
 "name": "VeraCrypt",
+"category": "tools",
 "grade": "A",
 "hosts": [
 "veracrypt.io"
@@ -2151,6 +2410,7 @@
 {
 "id": "session-messenger",
 "name": "Session",
+"category": "tools",
 "grade": "B",
 "hosts": [
 "getsession.org"
@@ -2159,6 +2419,7 @@
 {
 "id": "walls-rip",
 "name": "walls.rip",
+"category": "tools",
 "grade": "A",
 "hosts": [
 "walls.rip"
@@ -2167,6 +2428,7 @@
 {
 "id": "stables-rip",
 "name": "stables.rip",
+"category": "tools",
 "grade": "A",
 "hosts": [
 "stables.rip"
@@ -2175,6 +2437,7 @@
 {
 "id": "disperse-rip",
 "name": "disperse.rip",
+"category": "tools",
 "grade": "A",
 "hosts": [
 "disperse.rip"
@@ -2183,6 +2446,7 @@
 {
 "id": "404-cash",
 "name": "404.cash",
+"category": "tools",
 "grade": "A",
 "hosts": [
 "404.cash"
@@ -2191,6 +2455,7 @@
 {
 "id": "jiayou-rip",
 "name": "jiayou.rip",
+"category": "tools",
 "grade": "A",
 "hosts": [
 "jiayou.rip"
@@ -2199,6 +2464,7 @@
 {
 "id": "simplex-chat",
 "name": "SimpleX Chat",
+"category": "tools",
 "grade": "A",
 "hosts": [
 "simplex.chat"
@@ -2207,6 +2473,7 @@
 {
 "id": "briar",
 "name": "Briar",
+"category": "tools",
 "grade": "A",
 "hosts": [
 "briarproject.org"
@@ -2215,6 +2482,7 @@
 {
 "id": "standardnotes",
 "name": "Standard Notes",
+"category": "tools",
 "grade": "A",
 "hosts": [
 "standardnotes.com"
@@ -2223,6 +2491,7 @@
 {
 "id": "proton-pass",
 "name": "Proton Pass",
+"category": "tools",
 "grade": "A",
 "hosts": [
 "proton.me"
@@ -2231,6 +2500,7 @@
 {
 "id": "dread",
 "name": "Dread",
+"category": "forums",
 "grade": "A",
 "hosts": [
 "dreadohblesmagfagqup24vw7catlvmqhhce5itz7wxr4vffgemjzaad.onion"
@@ -2239,12 +2509,14 @@
 {
 "id": "monero-matrix",
 "name": "Monero Project Matrix Space",
+"category": "forums",
 "grade": "A",
 "hosts": []
 },
 {
 "id": "pitch",
 "name": "Pitch",
+"category": "forums",
 "grade": "B",
 "hosts": [
 "pitchprash4aqilfr7sbmuwve3pnkpylqwxjbj2q5o4szcfeea6d27yd.onion"
@@ -2253,6 +2525,7 @@
 {
 "id": "incognet",
 "name": "Incognet",
+"category": "hosting",
 "grade": "B",
 "hosts": [
 "incognet.io",
@@ -2262,6 +2535,7 @@
 {
 "id": "servarica",
 "name": "Servarica",
+"category": "hosting",
 "grade": "B",
 "hosts": [
 "servarica.com"
@@ -2270,6 +2544,7 @@
 {
 "id": "cake-node",
 "name": "xmr-node.cakewallet.com",
+"category": "nodes",
 "grade": "A",
 "hosts": [
 "cakewallet.com"
@@ -2278,6 +2553,7 @@
 {
 "id": "monerujo-node",
 "name": "nodex.monerujo.io",
+"category": "nodes",
 "grade": "A",
 "hosts": [
 "monerujo.app",
@@ -2287,6 +2563,7 @@
 {
 "id": "hashvault-node",
 "name": "nodes.hashvault.pro",
+"category": "nodes",
 "grade": "B",
 "hosts": [
 "hashvault.pro"
@@ -2295,6 +2572,7 @@
 {
 "id": "boldsuck-de-node",
 "name": "xmr-de-2.boldsuck.org",
+"category": "nodes",
 "grade": "B",
 "hosts": [
 "boldsuck.org"
@@ -2303,6 +2581,7 @@
 {
 "id": "xmr-tw-node",
 "name": "node1.xmr-tw.org",
+"category": "nodes",
 "grade": "B",
 "hosts": [
 "xmr-tw.org"
@@ -2311,6 +2590,7 @@
 {
 "id": "anstee-dev-node",
 "name": "anstee.dev",
+"category": "nodes",
 "grade": "B",
 "hosts": [
 "anstee.dev"
@@ -2319,6 +2599,7 @@
 {
 "id": "litepay-node",
 "name": "xmr.litepay.ch",
+"category": "nodes",
 "grade": "B",
 "hosts": [
 "litepay.ch"
@@ -2327,6 +2608,7 @@
 {
 "id": "monero-one-node",
 "name": "monero.one",
+"category": "nodes",
 "grade": "A",
 "hosts": [
 "node.monero.one",
@@ -2336,6 +2618,7 @@
 {
 "id": "xmr-rocks-node",
 "name": "xmr.rocks",
+"category": "nodes",
 "grade": "B",
 "hosts": [
 "xmr.rocks",
@@ -2345,6 +2628,7 @@
 {
 "id": "rucknium-node",
 "name": "Rucknium research node",
+"category": "nodes",
 "grade": "A",
 "hosts": [
 "rucknium.me",
@@ -2354,6 +2638,7 @@
 {
 "id": "stormycloud-node",
 "name": "StormyCloud (xmr.stormycloud.org)",
+"category": "nodes",
 "grade": "A",
 "hosts": [
 "stormycloud.org"
@@ -2362,6 +2647,7 @@
 {
 "id": "self-hosted-node",
 "name": "Self-hosted (run your own)",
+"category": "nodes",
 "grade": "A",
 "hosts": [
 "docs.getmonero.org",
@@ -2371,6 +2657,7 @@
 {
 "id": "stract",
 "name": "Stract",
+"category": "search",
 "grade": "B",
 "hosts": [
 "stract.com"
@@ -2379,6 +2666,7 @@
 {
 "id": "walls-esim",
 "name": "walls.rip eSIM",
+"category": "sims",
 "grade": "A",
 "hosts": [
 "walls.rip"
@@ -2387,6 +2675,7 @@
 {
 "id": "silent-link",
 "name": "Silent.link",
+"category": "sims",
 "grade": "A",
 "hosts": [
 "silent.link",
@@ -2396,6 +2685,7 @@
 {
 "id": "tor-browser",
 "name": "Tor Browser",
+"category": "tools",
 "grade": "A",
 "hosts": [
 "torproject.org",
@@ -2405,6 +2695,7 @@
 {
 "id": "mullvad-browser",
 "name": "Mullvad Browser",
+"category": "tools",
 "grade": "A",
 "hosts": [
 "mullvad.net",
@@ -2414,6 +2705,7 @@
 {
 "id": "whonix",
 "name": "Whonix",
+"category": "tools",
 "grade": "A",
 "hosts": [
 "whonix.org",
@@ -2423,6 +2715,7 @@
 {
 "id": "qubes-os",
 "name": "Qubes OS",
+"category": "tools",
 "grade": "A",
 "hosts": [
 "qubes-os.org"
@@ -2431,6 +2724,7 @@
 {
 "id": "keepassxc",
 "name": "KeePassXC",
+"category": "tools",
 "grade": "A",
 "hosts": [
 "keepassxc.org"
@@ -2439,6 +2733,7 @@
 {
 "id": "aegis-authenticator",
 "name": "Aegis Authenticator",
+"category": "tools",
 "grade": "A",
 "hosts": [
 "getaegis.app"
@@ -2447,6 +2742,7 @@
 {
 "id": "onionshare",
 "name": "OnionShare",
+"category": "tools",
 "grade": "A",
 "hosts": [
 "onionshare.org",
@@ -2456,6 +2752,7 @@
 {
 "id": "cryptomator",
 "name": "Cryptomator",
+"category": "tools",
 "grade": "A",
 "hosts": [
 "cryptomator.org"
@@ -2464,6 +2761,7 @@
 {
 "id": "matrix-element",
 "name": "Element",
+"category": "tools",
 "grade": "A",
 "hosts": [
 "element.io"
@@ -2472,6 +2770,7 @@
 {
 "id": "grapheneos",
 "name": "GrapheneOS",
+"category": "tools",
 "grade": "A",
 "hosts": [
 "grapheneos.org"
@@ -2480,6 +2779,7 @@
 {
 "id": "cryptosteel-capsule",
 "name": "Cryptosteel Capsule",
+"category": "tools",
 "grade": "A",
 "hosts": [
 "cryptosteel.com"
@@ -2488,6 +2788,7 @@
 {
 "id": "mempool-space",
 "name": "mempool.space",
+"category": "tools",
 "grade": "A",
 "hosts": [
 "mempool.space",
@@ -2497,6 +2798,7 @@
 {
 "id": "monero-fail",
 "name": "monero.fail",
+"category": "tools",
 "grade": "A",
 "hosts": [
 "monero.fail",
@@ -2506,6 +2808,7 @@
 {
 "id": "yubikey-5",
 "name": "YubiKey 5",
+"category": "tools",
 "grade": "A",
 "hosts": [
 "yubico.com"
@@ -2514,12 +2817,14 @@
 {
 "id": "vaultwarden",
 "name": "Vaultwarden",
+"category": "tools",
 "grade": "A",
 "hosts": []
 },
 {
 "id": "snowflake",
 "name": "Snowflake",
+"category": "tools",
 "grade": "A",
 "hosts": [
 "snowflake.torproject.org",
@@ -2529,6 +2834,7 @@
 {
 "id": "privatebin",
 "name": "PrivateBin",
+"category": "tools",
 "grade": "A",
 "hosts": [
 "privatebin.info"
@@ -2537,6 +2843,7 @@
 {
 "id": "fiatfaucet-node",
 "name": "kowalski.fiatfaucet.com",
+"category": "nodes",
 "grade": "B",
 "hosts": [
 "fiatfaucet.com"
@@ -2545,6 +2852,7 @@
 {
 "id": "cwtch",
 "name": "Cwtch",
+"category": "tools",
 "grade": "A",
 "hosts": [
 "cwtch.im"
@@ -2553,6 +2861,7 @@
 {
 "id": "cryptpad",
 "name": "CryptPad",
+"category": "tools",
 "grade": "A",
 "hosts": [
 "cryptpad.fr"
@@ -2561,6 +2870,7 @@
 {
 "id": "freetube",
 "name": "FreeTube",
+"category": "tools",
 "grade": "A",
 "hosts": [
 "freetubeapp.io"
@@ -2569,6 +2879,7 @@
 {
 "id": "newpipe",
 "name": "NewPipe",
+"category": "tools",
 "grade": "A",
 "hosts": [
 "newpipe.net"
@@ -2577,6 +2888,7 @@
 {
 "id": "calyx-os",
 "name": "CalyxOS",
+"category": "tools",
 "grade": "A",
 "hosts": [
 "calyxos.org"
@@ -2585,6 +2897,7 @@
 {
 "id": "ghost-chat",
 "name": "Ghost Chat",
+"category": "tools",
 "grade": "A",
 "hosts": [
 "walls.rip"
@@ -2593,6 +2906,7 @@
 {
 "id": "veilid",
 "name": "Veilid",
+"category": "tools",
 "grade": "B",
 "hosts": [
 "veilid.com"
@@ -2601,6 +2915,7 @@
 {
 "id": "airvpn",
 "name": "AirVPN",
+"category": "vpns",
 "grade": "B",
 "hosts": [
 "airvpn.org",
@@ -2610,6 +2925,7 @@
 {
 "id": "monero-gui",
 "name": "Monero GUI",
+"category": "wallets",
 "grade": "A",
 "hosts": [
 "getmonero.org",
@@ -2619,6 +2935,7 @@
 {
 "id": "specter-desktop",
 "name": "Specter Desktop",
+"category": "wallets",
 "grade": "A",
 "hosts": [
 "specter.solutions"
@@ -2627,6 +2944,7 @@
 {
 "id": "ripley-terminal",
 "name": "Ripley Terminal",
+"category": "wallets",
 "grade": "A",
 "hosts": [
 "ripley.run"
@@ -2635,6 +2953,7 @@
 {
 "id": "monerujo",
 "name": "Monerujo",
+"category": "wallets",
 "grade": "A",
 "hosts": [
 "monerujo.app",
@@ -2644,6 +2963,7 @@
 {
 "id": "fedimint",
 "name": "Fedimint",
+"category": "wallets",
 "grade": "A",
 "hosts": [
 "fedimint.org"
@@ -2652,6 +2972,7 @@
 {
 "id": "xmr402",
 "name": "XMR402",
+"category": "tools",
 "grade": "B",
 "hosts": [
 "xmr402.org"
@@ -2660,6 +2981,7 @@
 {
 "id": "stealthex",
 "name": "StealthEX",
+"category": "exchanges",
 "grade": "C",
 "hosts": [
 "stealthex.io"
@@ -2668,24 +2990,28 @@
 {
 "id": "r-monero",
 "name": "r/Monero",
+"category": "forums",
 "grade": "B",
 "hosts": []
 },
 {
 "id": "monero-mastodon",
 "name": "#Monero on Mastodon",
+"category": "forums",
 "grade": "A",
 "hosts": []
 },
 {
 "id": "monero-nostr",
 "name": "#monero on Nostr",
+"category": "forums",
 "grade": "A",
 "hosts": []
 },
 {
 "id": "basicswap",
 "name": "BasicSwap DEX",
+"category": "mixers",
 "grade": "A-",
 "hosts": [
 "basicswapdex.com"
@@ -2694,6 +3020,7 @@
 {
 "id": "riseup-vpn",
 "name": "Riseup VPN",
+"category": "vpns",
 "grade": "B",
 "hosts": [
 "riseup.net",
@@ -2703,6 +3030,7 @@
 {
 "id": "mysu-mobile",
 "name": "Mysu",
+"category": "wallets",
 "grade": "B",
 "hosts": [
 "mysu.app"
@@ -2711,6 +3039,7 @@
 {
 "id": "cashu",
 "name": "Cashu",
+"category": "wallets",
 "grade": "B",
 "hosts": [
 "cashu.space"
@@ -2719,6 +3048,7 @@
 {
 "id": "openmonero",
 "name": "OpenMonero",
+"category": "exchanges",
 "grade": "F",
 "hosts": [
 "openmonero.com",
@@ -2728,6 +3058,7 @@
 {
 "id": "changehero",
 "name": "ChangeHero",
+"category": "exchanges",
 "grade": "C-",
 "hosts": [
 "changehero.io"
@@ -2736,6 +3067,7 @@
 {
 "id": "el-capo",
 "name": "El Capo",
+"category": "exchanges",
 "grade": "F",
 "hosts": [
 "elcapo.io",
@@ -2745,6 +3077,7 @@
 {
 "id": "ironswaps",
 "name": "IronSwaps",
+"category": "exchanges",
 "grade": "C",
 "hosts": [
 "ironswaps.org"
@@ -2753,6 +3086,7 @@
 {
 "id": "ollama",
 "name": "Ollama",
+"category": "ai",
 "grade": "A",
 "hosts": [
 "ollama.com"
@@ -2761,6 +3095,7 @@
 {
 "id": "openwebui",
 "name": "Open WebUI",
+"category": "ai",
 "grade": "A",
 "hosts": [
 "openwebui.com"
@@ -2769,6 +3104,7 @@
 {
 "id": "nanogpt",
 "name": "NanoGPT",
+"category": "ai",
 "grade": "A",
 "hosts": [
 "nano-gpt.com"
@@ -2777,12 +3113,14 @@
 {
 "id": "llama-cpp",
 "name": "llama.cpp",
+"category": "ai",
 "grade": "A",
 "hosts": []
 },
 {
 "id": "atomic-swap-btc-xmr",
 "name": "COMIT — BTC ↔ XMR Atomic Swap",
+"category": "educational",
 "grade": "B",
 "hosts": [
 "comit.network"
@@ -2791,6 +3129,7 @@
 {
 "id": "phoenix",
 "name": "Phoenix",
+"category": "wallets",
 "grade": "A",
 "hosts": [
 "phoenix.acinq.co"
@@ -2799,6 +3138,7 @@
 {
 "id": "bitcoin-knots",
 "name": "Bitcoin Knots",
+"category": "wallets",
 "grade": "A",
 "hosts": [
 "bitcoinknots.org"
@@ -2807,6 +3147,7 @@
 {
 "id": "monero-superpay",
 "name": "Monero SuperPay",
+"category": "tools",
 "grade": "A",
 "hosts": [
 "monerosuperpay.com"
@@ -2815,6 +3156,7 @@
 {
 "id": "monero-superbrain",
 "name": "Monero Superbrain",
+"category": "tools",
 "grade": "A",
 "hosts": [
 "monerosuperpay.com"
@@ -2823,6 +3165,7 @@
 {
 "id": "eigenwallet",
 "name": "EigenWallet",
+"category": "wallets",
 "grade": "B",
 "hosts": [
 "eigenwallet.org"
@@ -2831,6 +3174,7 @@
 {
 "id": "monero-jobs",
 "name": "Monero.Jobs",
+"category": "tools",
 "grade": "B",
 "hosts": [
 "monero.jobs"
@@ -2839,12 +3183,14 @@
 {
 "id": "monfluo",
 "name": "Monfluo",
+"category": "wallets",
 "grade": "B",
 "hosts": []
 },
 {
 "id": "wtf-is-xmr",
 "name": "wtf is XMR?",
+"category": "educational",
 "grade": "B",
 "hosts": [
 "wtfisxmr.lol"
@@ -2853,6 +3199,7 @@
 {
 "id": "smmkings",
 "name": "SMMKings",
+"category": "tools",
 "grade": "B",
 "hosts": [
 "smmkings.com"
@@ -2861,6 +3208,7 @@
 {
 "id": "jan-ai",
 "name": "Jan",
+"category": "ai",
 "grade": "A",
 "hosts": [
 "jan.ai"
@@ -2869,6 +3217,7 @@
 {
 "id": "zero-to-monero",
 "name": "Zero to Monero",
+"category": "educational",
 "grade": "A",
 "hosts": [
 "getmonero.org"
@@ -2877,6 +3226,7 @@
 {
 "id": "monero-stackexchange",
 "name": "Monero StackExchange",
+"category": "educational",
 "grade": "A",
 "hosts": [
 "monero.stackexchange.com"
@@ -2885,6 +3235,7 @@
 {
 "id": "monerologs",
 "name": "MoneroLogs",
+"category": "educational",
 "grade": "A",
 "hosts": [
 "monerologs.net"
@@ -2893,6 +3244,7 @@
 {
 "id": "simplelogin",
 "name": "SimpleLogin",
+"category": "email",
 "grade": "A",
 "hosts": [
 "simplelogin.io"
@@ -2901,6 +3253,7 @@
 {
 "id": "addy-io",
 "name": "addy.io",
+"category": "email",
 "grade": "A",
 "hosts": [
 "addy.io"
@@ -2909,6 +3262,7 @@
 {
 "id": "jmp-chat",
 "name": "JMP.chat",
+"category": "sims",
 "grade": "A",
 "hosts": [
 "jmp.chat"
@@ -2917,6 +3271,7 @@
 {
 "id": "monero-com",
 "name": "Monero.com",
+"category": "wallets",
 "grade": "A",
 "hosts": [
 "monero.com"
@@ -2925,6 +3280,7 @@
 {
 "id": "zeus",
 "name": "Zeus",
+"category": "wallets",
 "grade": "A",
 "hosts": [
 "zeusln.com"
@@ -2933,6 +3289,7 @@
 {
 "id": "monerospace",
 "name": "MoneroSpace",
+"category": "tools",
 "grade": "B",
 "hosts": [
 "monerospace.org"
@@ -2941,6 +3298,7 @@
 {
 "id": "nymvpn",
 "name": "NymVPN",
+"category": "vpns",
 "grade": "A",
 "hosts": [
 "nym.com"
@@ -2949,6 +3307,7 @@
 {
 "id": "xmrchat",
 "name": "XMRChat",
+"category": "tools",
 "grade": "A-",
 "hosts": [
 "xmrchat.com"
@@ -2957,6 +3316,7 @@
 {
 "id": "torisim",
 "name": "Torisim",
+"category": "sims",
 "grade": "",
 "hosts": [
 "torisim.com",
@@ -2966,6 +3326,7 @@
 {
 "id": "noxswap",
 "name": "NoxSwap",
+"category": "exchanges",
 "grade": "",
 "hosts": [
 "noxswap.io",
