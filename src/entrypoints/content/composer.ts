@@ -11,11 +11,14 @@ import { articleTemplate, articleTooLarge, blossomAuthTemplate, buildNote, check
 import { retryable } from '../../nostr/retry';
 import { cleanXLinksOn, settingsItem } from '../../settings';
 import { h, trapFocus } from './dom';
-import { composerSlot, createPill, pillView, type ComposerInstance, type PillState } from './publish-pill';
+import { autoCloser, composerDock, createPill, pillView, type ComposerInstance, type PillState } from './publish-pill';
+import { composerKey } from './composer-key';
 import { MAX_PASTED_IMAGES, MAX_PASTED_TOTAL, onPasteOrDrop } from './paste';
 
-// one composer per page, expanded or as its pill
-const slot = composerSlot();
+// several copies at once: one expanded, the rest as stacked pills (PLAN-PARALLEL)
+const dock = composerDock();
+/** a published pill with nothing left to retry closes itself this long after */
+const AUTO_CLOSE_MS = 10_000;
 
 const short = (npub: string) => `${npub.slice(0, 12)}…${npub.slice(-6)}`;
 
@@ -33,15 +36,16 @@ async function backgroundFetchableUrl(url: string): Promise<string> {
 }
 
 export async function openComposer(ctx: ContentScriptContext, msg: OpenComposerMsg, target: Element | null) {
-  if (slot.claim() === 'refuse') {
+  const key = await composerKey(target, msg, document).catch(() => `page:${location.origin}${location.pathname}`);
+  if (dock.claim(key) === 'refuse') {
     // the background opened a session for this request; nothing will use it
     void sendToBackground({ type: 'close-session', sessionId: msg.sessionId }).catch(() => {});
     return;
   }
   try {
-    slot.mounted(await mountComposer(ctx, msg, target));
+    dock.mounted(key, await mountComposer(ctx, msg, target));
   } catch (e) {
-    slot.mounted(null);
+    dock.mounted(key, null);
     void sendToBackground({ type: 'close-session', sessionId: msg.sessionId }).catch(() => {});
     window.alert(`XMRadar: ${(e as Error).message}`);
   }
@@ -54,6 +58,8 @@ async function mountComposer(ctx: ContentScriptContext, msg: OpenComposerMsg, ta
   const settings = await settingsItem.getValue();
   const previousFocus = document.activeElement as HTMLElement | null;
   let closed = false;
+  // published with nothing left to retry, shown as a pill: it goes by itself (the user's request)
+  let autoClose: ReturnType<typeof autoCloser> | undefined;
   // pictures pasted or dropped in: page-local blob: URLs, released when the composer goes
   const pasted = new Map<ExtractedImage, number>();
   let instance!: ComposerInstance;
@@ -83,6 +89,7 @@ async function mountComposer(ctx: ContentScriptContext, msg: OpenComposerMsg, ta
         pillState = state;
         const view = pillView(state, art ? 'article' : 'note');
         pill.update(view);
+        armAutoClose();
         if (state.kind !== 'published' && state.kind !== 'rejected' && state.kind !== 'draft') setStatus(view.text, view.tone);
       };
 
@@ -150,17 +157,26 @@ async function mountComposer(ctx: ContentScriptContext, msg: OpenComposerMsg, ta
 
       const pill = createPill({ retry: () => void retry(), open: () => expand(), dismiss: () => dismiss() });
       const expanded = () => backdrop.isConnected;
+      autoClose = autoCloser(AUTO_CLOSE_MS, () => {
+        if (!expanded() && instance.finished()) close();
+      });
+      const armAutoClose = () => autoClose!.arm(pillState);
       const minimise = () => {
         if (!expanded()) return;
         backdrop.remove();
         pill.update(pillView(pillState, art ? 'article' : 'note'));
         container.append(pill.el);
+        armAutoClose();
+        dock.relayout();
         previousFocus?.focus?.();
       };
       const expand = () => {
         if (expanded() || hidden) return;
+        dock.focus(instance);
+        autoClose!.cancel();
         pill.el.remove();
         container.append(backdrop);
+        dock.relayout();
         textarea.focus();
       };
       // a publish or a retry under way
@@ -169,7 +185,7 @@ async function mountComposer(ctx: ContentScriptContext, msg: OpenComposerMsg, ta
         if (!working()) return close();
         hidden = true;
         pill.el.remove();
-        slot.release(instance);
+        dock.release(instance);
       };
       // while it publishes, leaving the composer only minimises it: the publish goes on
       const leave = () => (working() ? minimise() : close());
@@ -179,8 +195,10 @@ async function mountComposer(ctx: ContentScriptContext, msg: OpenComposerMsg, ta
         finished: () => done && !shown.some(retryable),
         expanded,
         expand,
+        minimise,
         close,
         notice: (text) => (expanded() ? setStatus(text) : pill.notice(text)),
+        stack: (i) => pill.el.style.setProperty('--stack', String(i)),
       };
 
       cancelBtn.addEventListener('click', leave);
@@ -407,7 +425,8 @@ async function mountComposer(ctx: ContentScriptContext, msg: OpenComposerMsg, ta
       });
     },
     onRemove() {
-      slot.release(instance);
+      autoClose?.cancel();
+      dock.release(instance);
       closed = true;
       for (const img of pasted.keys()) URL.revokeObjectURL(img.url);
       pasted.clear();

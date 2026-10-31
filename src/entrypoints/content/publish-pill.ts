@@ -5,7 +5,7 @@ import { radarIcon } from './x-share';
 
 /**
  * Copy to Nostr's minimised form (PLAN-MINIPILL): a small pill in the corner that shows the publish
- * steps, so the page stays usable. One composer per page, expanded or as its pill.
+ * steps, so the page stays usable. Several copies at once (PLAN-PARALLEL): one expanded, the rest as pills.
  */
 
 export type PillState =
@@ -59,6 +59,25 @@ export function pillView(state: PillState, what: 'note' | 'article'): PillView {
   }
 }
 
+/** Published with no failed relay worth retrying: the pill closes itself shortly after (PLAN-PARALLEL). */
+export const autoCloses = (state: PillState) => state.kind === 'published' && !state.results.some(retryable);
+
+/**
+ * The auto-close timer of one composer: `arm(state)` whenever its pill shows a state (re)starts it for an
+ * auto-closing state and stops it otherwise; when it fires, `closeIfIdle` decides (still a pill, finished).
+ */
+export function autoCloser(ms: number, closeIfIdle: () => void) {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const cancel = () => clearTimeout(timer);
+  return {
+    arm(state: PillState) {
+      cancel();
+      if (autoCloses(state)) timer = setTimeout(closeIfIdle, ms);
+    },
+    cancel,
+  };
+}
+
 export interface PillHandlers {
   retry(): void;
   open(): void;
@@ -109,7 +128,7 @@ export function createPill(handlers: PillHandlers): Pill {
   };
 }
 
-/** The page's one composer, as the slot sees it. */
+/** A composer, as the dock sees it. */
 export interface ComposerInstance {
   /** uploading, signing, publishing or retrying */
   busy(): boolean;
@@ -117,49 +136,94 @@ export interface ComposerInstance {
   finished(): boolean;
   expanded(): boolean;
   expand(): void;
+  /** back to its pill, the draft kept */
+  minimise(): void;
   /** closes it, as × does when not busy */
   close(): void;
   notice(text: string): void;
+  /** its place in the stack of pills, 0 at the bottom */
+  stack(index: number): void;
 }
 
 export type ClaimResult = 'open' | 'refuse';
 
+/** How many copies a page holds at once (mounting ones included). */
+export const MAX_COMPOSERS = 5;
+
 /**
- * Who gets the page's one composer when Copy to Nostr is asked for again. A finished one makes way;
- * a draft, a failed one or one with relays still to retry is brought back instead of being lost; a
- * busy one is left to finish.
+ * The page's composers (PLAN-PARALLEL): several copies at once, one expanded, the rest as stacked pills.
+ * Each claim is a reservation keyed by the post (`composerKey`), so a double click or the same post copied
+ * again never opens a second composer for it.
  */
-export function composerSlot() {
-  let current: ComposerInstance | null = null;
-  let mounting = false;
+export function composerDock() {
+  type Entry = { key: string; instance: ComposerInstance | null };
+  const entries: Entry[] = [];
+  const drop = (e: Entry) => {
+    const i = entries.indexOf(e);
+    if (i >= 0) entries.splice(i, 1);
+  };
+  // only pills take a place: an expanded composer leaves no gap below the others
+  const layout = () => entries.filter((e) => e.instance && !e.instance.expanded()).forEach((e, i) => e.instance!.stack(i));
+  /** before one comes up: any other expanded composer goes back to its pill */
+  const minimiseOthers = (keep: ComposerInstance | null) => {
+    for (const e of entries) if (e.instance && e.instance !== keep && e.instance.expanded()) e.instance.minimise();
+  };
+  const closeEntry = (e: Entry) => {
+    drop(e);
+    e.instance?.close();
+  };
   return {
-    claim(): ClaimResult {
-      if (mounting) return 'refuse';
-      if (current?.expanded()) return 'refuse';
-      if (current?.busy()) {
-        current.notice('Still publishing the last post');
+    claim(key: string): ClaimResult {
+      const same = entries.find((e) => e.key === key);
+      if (same && !same.instance) return 'refuse';
+      if (same?.instance) {
+        if (same.instance.finished()) closeEntry(same);
+        else {
+          minimiseOthers(same.instance);
+          same.instance.expand();
+          same.instance.notice('Already open');
+          return 'refuse';
+        }
+      }
+      // finished ones make room, oldest first
+      for (const e of [...entries]) {
+        if (entries.length < MAX_COMPOSERS) break;
+        if (e.instance?.finished()) closeEntry(e);
+      }
+      if (entries.length >= MAX_COMPOSERS) {
+        [...entries].reverse().find((e) => e.instance)?.instance!.notice('Up to 5 at a time: finish or close one');
         return 'refuse';
       }
-      if (current?.finished()) current.close();
-      else if (current) {
-        current.expand();
-        current.notice('Finish or close this one first');
-        return 'refuse';
-      }
-      mounting = true;
+      minimiseOthers(null);
+      entries.push({ key, instance: null });
+      layout();
       return 'open';
     },
-    /** the claimed composer is up (or failed to mount: null) */
-    mounted(instance: ComposerInstance | null) {
-      mounting = false;
-      current = instance;
+    /** the claimed composer is up, or failed to mount (null): its place is freed */
+    mounted(key: string, instance: ComposerInstance | null) {
+      const e = entries.find((x) => x.key === key && !x.instance);
+      if (!e) return;
+      if (instance) e.instance = instance;
+      else drop(e);
+      layout();
     },
-    /** the instance went (closed, or hidden for good while it finishes) */
+    /** the instance went (closed, or hidden for good while it finishes); a repeat changes nothing */
     release(instance: ComposerInstance) {
-      if (current === instance) current = null;
+      const e = entries.find((x) => x.instance === instance);
+      if (!e) return;
+      drop(e);
+      layout();
     },
-    get current() {
-      return current;
+    /** a pill's Open: the others minimise first */
+    focus(instance: ComposerInstance) {
+      minimiseOthers(instance);
+    },
+    /** a composer was expanded or minimised: the pills close up */
+    relayout() {
+      layout();
+    },
+    get size() {
+      return entries.length;
     },
   };
 }

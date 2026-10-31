@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { composerSlot, createPill, pillView, type ComposerInstance, type PillState } from '../src/entrypoints/content/publish-pill';
+import { composerDock, createPill, pillView, type ComposerInstance, type PillState } from '../src/entrypoints/content/publish-pill';
 
 const ok = (relay: string) => ({ relay, ok: true, message: '' });
 const timeout = (relay: string) => ({ relay, ok: false, message: 'timeout' });
@@ -79,65 +79,111 @@ describe('the pill', () => {
   });
 });
 
-describe('one composer per page', () => {
-  const instance = (s: Partial<{ busy: boolean; finished: boolean; expanded: boolean }> = {}) => {
-    const i = { busy: () => !!s.busy, finished: () => !!s.finished, expanded: () => !!s.expanded, expand: vi.fn(), close: vi.fn(), notice: vi.fn() } satisfies ComposerInstance;
+describe('several copies at once (PLAN-PARALLEL)', () => {
+  type State = { busy?: boolean; finished?: boolean; expanded?: boolean };
+  const instance = (st: State = {}) => {
+    const i = {
+      st,
+      busy: () => !!st.busy,
+      finished: () => !!st.finished,
+      expanded: () => !!st.expanded,
+      expand: vi.fn(() => void (st.expanded = true)),
+      minimise: vi.fn(() => void (st.expanded = false)),
+      close: vi.fn(),
+      notice: vi.fn(),
+      stack: vi.fn(),
+    } satisfies ComposerInstance & { st: State };
+    return i;
+  };
+  const open = (dock: ReturnType<typeof composerDock>, key: string, st: State = {}) => {
+    expect(dock.claim(key)).toBe('open');
+    const i = instance(st);
+    dock.mounted(key, i);
     return i;
   };
 
-  it('none yet: opens, and nothing else opens while it mounts', () => {
-    const slot = composerSlot();
-    expect(slot.claim()).toBe('open');
-    expect(slot.claim()).toBe('refuse');
-    slot.mounted(null);
-    expect(slot.claim()).toBe('open');
+  it('a copy publishing as a pill no longer blocks the next; pills stack oldest at the bottom', () => {
+    const dock = composerDock();
+    const a = open(dock, 'x:1', { busy: true });
+    const b = open(dock, 'x:2', { busy: true });
+    expect(a.close).not.toHaveBeenCalled();
+    expect(a.stack).toHaveBeenLastCalledWith(0);
+    expect(b.stack).toHaveBeenLastCalledWith(1);
   });
-  it('one expanded: a new copy is refused', () => {
-    const slot = composerSlot();
-    slot.claim();
-    const a = instance({ expanded: true });
-    slot.mounted(a);
-    expect(slot.claim()).toBe('refuse');
+  it('an expanded draft goes back to its pill (kept, not closed) when another copy opens', () => {
+    const dock = composerDock();
+    const a = open(dock, 'x:1', { expanded: true });
+    open(dock, 'x:2');
+    expect(a.minimise).toHaveBeenCalled();
     expect(a.close).not.toHaveBeenCalled();
   });
-  it('one publishing as a pill: refused, and the pill says why', () => {
-    const slot = composerSlot();
-    slot.claim();
-    const a = instance({ busy: true });
-    slot.mounted(a);
-    expect(slot.claim()).toBe('refuse');
-    expect(a.notice).toHaveBeenCalledWith('Still publishing the last post');
-    expect(a.close).not.toHaveBeenCalled();
-  });
-  it('a published one with nothing left to retry makes way', () => {
-    const slot = composerSlot();
-    slot.claim();
-    const a = instance({ finished: true });
-    slot.mounted(a);
-    expect(slot.claim()).toBe('open');
-    expect(a.close).toHaveBeenCalled();
-  });
-  it('a draft, a failed one or one with relays left to retry comes back instead of being lost', () => {
-    const slot = composerSlot();
-    slot.claim();
+  it('the same post: refused while mounting; brought back while open; reopened once published', () => {
+    const dock = composerDock();
+    expect(dock.claim('x:1')).toBe('open');
+    expect(dock.claim('x:1')).toBe('refuse'); // double click before mount
     const a = instance();
-    slot.mounted(a);
-    expect(slot.claim()).toBe('refuse');
+    dock.mounted('x:1', a);
+    const b = open(dock, 'x:2', { expanded: true });
+    expect(dock.claim('x:1')).toBe('refuse');
+    expect(b.minimise).toHaveBeenCalled();
     expect(a.expand).toHaveBeenCalled();
-    expect(a.notice).toHaveBeenCalledWith('Finish or close this one first');
-    expect(a.close).not.toHaveBeenCalled();
+    expect(a.notice).toHaveBeenCalledWith('Already open');
+    a.st.finished = true;
+    expect(dock.claim('x:1')).toBe('open');
+    expect(a.close).toHaveBeenCalled();
+    dock.mounted('x:1', instance());
+    expect(dock.size).toBe(2);
   });
-  it('dismissed while publishing: released at once, so a new copy opens; a late release of it changes nothing', () => {
-    const slot = composerSlot();
-    slot.claim();
-    const a = instance({ busy: true });
-    slot.mounted(a);
-    slot.release(a);
-    expect(slot.claim()).toBe('open');
-    const b = instance({ expanded: true });
-    slot.mounted(b);
-    // a finishes and removes itself
-    slot.release(a);
-    expect(slot.current).toBe(b);
+  it('at most 5, mounting ones counted; a failed mount frees its place', () => {
+    const dock = composerDock();
+    for (let i = 0; i < 5; i++) expect(dock.claim(`x:${i}`)).toBe('open');
+    expect(dock.claim('x:5')).toBe('refuse');
+    dock.mounted('x:0', null);
+    expect(dock.claim('x:5')).toBe('open');
+  });
+  it('at 5 with none finished: refused and the newest pill says so; a finished one makes room, oldest first', () => {
+    const dock = composerDock();
+    const all = [0, 1, 2, 3, 4].map((i) => open(dock, `x:${i}`, { busy: true }));
+    expect(dock.claim('x:9')).toBe('refuse');
+    expect(all[4]!.notice).toHaveBeenCalledWith('Up to 5 at a time: finish or close one');
+    all[3]!.st.finished = true;
+    all[1]!.st.finished = true;
+    expect(dock.claim('x:9')).toBe('open');
+    expect(all[1]!.close).toHaveBeenCalled();
+    expect(all[3]!.close).not.toHaveBeenCalled();
+  });
+  it('opening one pill minimises the other expanded composer', () => {
+    const dock = composerDock();
+    const a = open(dock, 'x:1');
+    const b = open(dock, 'x:2', { expanded: true });
+    dock.focus(a);
+    expect(b.minimise).toHaveBeenCalled();
+    expect(a.minimise).not.toHaveBeenCalled();
+  });
+  it('an expanded composer takes no place: the pills close up, and again when it is minimised', () => {
+    const dock = composerDock();
+    const a = open(dock, 'x:1');
+    const b = open(dock, 'x:2');
+    const c = open(dock, 'x:3');
+    a.st.expanded = true;
+    dock.relayout();
+    expect(b.stack).toHaveBeenLastCalledWith(0);
+    expect(c.stack).toHaveBeenLastCalledWith(1);
+    a.st.expanded = false;
+    dock.relayout();
+    expect(a.stack).toHaveBeenLastCalledWith(0);
+    expect(c.stack).toHaveBeenLastCalledWith(2);
+  });
+  it('closing the middle pill re-stacks the rest; a repeated release changes nothing', () => {
+    const dock = composerDock();
+    const a = open(dock, 'x:1');
+    const b = open(dock, 'x:2');
+    const c = open(dock, 'x:3');
+    dock.release(b);
+    dock.release(b);
+    expect(a.stack).toHaveBeenLastCalledWith(0);
+    expect(c.stack).toHaveBeenLastCalledWith(1);
+    expect(dock.size).toBe(2);
   });
 });
+

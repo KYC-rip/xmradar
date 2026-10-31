@@ -29,7 +29,8 @@ button.icon { padding: 0 9px; line-height: 26px; font-size: 16px; border-color: 
   position: fixed;
   /* beside X's round Grok and Chat buttons in the bottom-right corner */
   right: 96px;
-  bottom: 24px;
+  /* several copies stack upwards (PLAN-PARALLEL): --stack is the pill's place, 0 at the bottom */
+  bottom: calc(24px + var(--stack, 0) * 52px);
   z-index: 2147483646;
   max-width: min(420px, calc(100vw - 112px));
   display: flex;
@@ -45,7 +46,7 @@ button.icon { padding: 0 9px; line-height: 26px; font-size: 16px; border-color: 
 }
 @media (max-width: 600px) {
   /* X's phone layout has a tab bar along the bottom */
-  .pill { right: 16px; left: 16px; bottom: 72px; max-width: none; }
+  .pill { right: 16px; left: 16px; bottom: calc(72px + var(--stack, 0) * 52px); max-width: none; }
 }
 .pill > svg { width: 18px; height: 18px; flex: none; color: #7b3fe4; }
 .pill-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
