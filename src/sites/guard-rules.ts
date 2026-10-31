@@ -205,6 +205,12 @@ export type GuardAnswer =
       why?: LookalikeKind;
       target: string;
       name: string;
+      /** the listing's xmr.club id, from the feed */
+      siteId: string;
+      /** the background's word: the Report button shows (red, not already listed, setting on) */
+      report?: boolean;
+      /** this host was reported from this browser already */
+      reported?: boolean;
     };
 
 /** What the guard page shows for `hash`; never an allow or a navigation by itself (PLAN-PRELOAD §4). */
@@ -222,16 +228,16 @@ export function checkGuard(input: {
   if (!input.on || !input.index) return { kind: 'off', host: url.hostname, url: url.href };
   const base = { host: url.hostname, url: url.href };
   const l = lookalikeOf(input.index, url.hostname);
-  const red = l && l.kind !== 'same-name' ? ({ kind: 'red', ...base, why: l.kind, target: l.target, name: l.name } as const) : null;
+  const red = l && l.kind !== 'same-name' ? ({ kind: 'red', ...base, why: l.kind, target: l.target, name: l.name, siteId: l.siteId ?? '' } as const) : null;
   const brand = guardMatch(input.index, input.rules, url);
   if (brand) {
     if (red) return red;
-    if (l) return { kind: 'same-name', ...base, target: l.target, name: l.name };
-    return { kind: 'name', ...base, target: brand.target, name: brand.site.name };
+    if (l) return { kind: 'same-name', ...base, target: l.target, name: l.name, siteId: l.siteId ?? brand.site.id };
+    return { kind: 'name', ...base, target: brand.target, name: brand.site.name, siteId: brand.site.id };
   }
   // a typo copy sent by the typo rule: the set is the reason, the matcher's word is used when it agrees
   const typo = input.typos && typoMatch(input.typos, url.hostname);
-  if (typo) return red ?? { kind: 'red', ...base, why: 'typo', target: typo.target, name: typo.site.name };
+  if (typo) return red ?? { kind: 'red', ...base, why: 'typo', target: typo.target, name: typo.site.name, siteId: typo.site.id };
   // a page the background replaced after load (look-alike letters, listed copies): only a red coin match
   return red && shouldGuard(l) ? red : { kind: 'invalid' };
 }

@@ -5,7 +5,7 @@ import { EXPORT_WARNING } from '../receipts/export';
 import type { SavedReceipt } from '../receipts/store';
 import { lookupWaitMs } from '../receipts/witness';
 import { swapRecordDaysOf } from '../receipts/cleanup';
-import { logFetchOn, patchSettings, patchXmrSettings, receiptsOn, settingsItem, siteInfoOn, siteWarningsOn, swapRecordDaysItem, swapRecordsCleanedItem, xmrSettingsItem } from '../settings';
+import { copyReportsOn, logFetchOn, patchSettings, patchXmrSettings, receiptsOn, settingsItem, siteInfoOn, siteWarningsOn, swapRecordDaysItem, swapRecordsCleanedItem, xmrSettingsItem } from '../settings';
 import { part, setStatus } from './dom';
 
 /**
@@ -63,15 +63,20 @@ export async function mountReceiptsPanel(root: HTMLElement) {
   // site info from xmr.club; warnings need site info, so they follow it off
   const siteInfo = part<HTMLInputElement>(root, 'receipts', 'site-info');
   const siteWarnings = part<HTMLInputElement>(root, 'receipts', 'site-warnings');
+  // the warning page's Report button needs the warning page
+  const copyReports = part<HTMLInputElement>(root, 'receipts', 'copy-reports');
   const showSite = (s: Awaited<ReturnType<typeof xmrSettingsItem.getValue>>) => {
     siteInfo.checked = siteInfoOn(s);
     siteWarnings.checked = siteWarningsOn(s);
     siteWarnings.disabled = !siteInfoOn(s);
+    copyReports.checked = copyReportsOn(s);
+    copyReports.disabled = !siteWarningsOn(s);
   };
   showSite(await xmrSettingsItem.getValue());
   xmrSettingsItem.watch((s) => showSite(s));
   siteInfo.addEventListener('change', () => void patchXmrSettings({ siteInfo: siteInfo.checked }));
   siteWarnings.addEventListener('change', () => void patchXmrSettings({ siteWarnings: siteWarnings.checked }));
+  copyReports.addEventListener('change', () => void patchXmrSettings({ copyReports: copyReports.checked }));
 
   // automatic deletion: the background cleans when this changes and at least daily; the list follows
   const keepDays = part<HTMLSelectElement>(root, 'receipts', 'keep-days');

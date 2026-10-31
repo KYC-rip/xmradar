@@ -655,6 +655,9 @@ describe('external post tips (NKIP-0002, R14–R16)', () => {
     // an X Article's reading page: author and post from the URL
     const view = makeDoc('https://x.com/XBToshi/article/' + ID, '<article data-testid="twitterArticleReadView"></article>').querySelector('article')!;
     expect(articleViewSlot(view, { hostname: 'x.com', pathname: `/XBToshi/article/${ID}` })).toMatchObject({ handle: 'XBToshi', statusId: ID, article: view });
+    // the reading page has no name row: Xap only, never a pill (PLAN-NAMEPILL-REPORT)
+    expect(articleViewSlot(view, { hostname: 'x.com', pathname: `/XBToshi/article/${ID}` })?.pill).toBeUndefined();
+    expect(tweetSlot(focal.querySelector('article')!)?.pill).toBe(true);
     expect(articleViewSlot(view, { hostname: 'x.com', pathname: '/home' })).toBeNull();
     expect(articleViewSlot(view, { hostname: 'x.com', pathname: '/i/article/1' })).toBeNull();
     const bare = makeDoc('https://x.com/home', `<article data-testid="tweet"><div data-testid="User-Name"><div><a href="/XBToshi">CyberSatoshi</a></div></div></article>`);

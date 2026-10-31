@@ -1,7 +1,15 @@
 import type { GuardAnswer } from '../sites/guard-rules';
+import type { ReportStatus } from '../sites/report';
+
+export const REPORT_TEXT: Record<ReportStatus, string> = {
+  sent: 'Reported. xmr.club checks each report by hand.',
+  already: 'Already reported from this browser.',
+  limited: 'Too many reports from here right now; try again later.',
+  failed: "Couldn't send the report.",
+};
 
 /** The page as text and links for one answer. */
-export function renderGuard(doc: Document, a: GuardAnswer, onContinue: () => void): void {
+export function renderGuard(doc: Document, a: GuardAnswer, onContinue: () => void, onReport?: () => Promise<ReportStatus>): void {
   const el = <T extends HTMLElement = HTMLElement>(id: string) => doc.getElementById(id) as T;
   const card = el('guard');
   const show = (id: string, text?: string) => {
@@ -47,6 +55,20 @@ export function renderGuard(doc: Document, a: GuardAnswer, onContinue: () => voi
   cont.addEventListener('click', (e) => {
     if (e.isTrusted) onContinue();
   });
+  // a red copy not listed yet: one click sends it to xmr.club's review queue (PLAN-NAMEPILL-REPORT)
+  if (a.report && onReport) {
+    show('report-box');
+    const btn = el<HTMLButtonElement>('report');
+    const status = el('report-status');
+    const settle = (s: ReportStatus) => showReport(btn, status, s);
+    if (a.reported) settle('already');
+    btn.addEventListener('click', (e) => {
+      if (!e.isTrusted || btn.disabled) return;
+      btn.disabled = true;
+      status.textContent = 'Sending…';
+      void onReport().then(settle, () => settle('failed'));
+    });
+  }
   if (red) {
     const details = show('details');
     details.addEventListener('click', (e) => {
@@ -57,4 +79,10 @@ export function renderGuard(doc: Document, a: GuardAnswer, onContinue: () => voi
   } else {
     cont.hidden = false;
   }
+}
+
+/** A report's outcome on the page: sent or already → done; refused or failed → the button works again. */
+export function showReport(btn: HTMLButtonElement, status: HTMLElement, s: ReportStatus): void {
+  status.textContent = REPORT_TEXT[s];
+  btn.disabled = s === 'sent' || s === 'already';
 }

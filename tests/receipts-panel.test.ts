@@ -3,13 +3,13 @@ import { fakeBrowser } from 'wxt/testing/fake-browser';
 import { LETTER_EXPORT_WARNING } from '../src/log/export';
 import type { SavedLetter } from '../src/log/store';
 import type { SavedReceipt } from '../src/receipts/store';
-import { settingsItem, swapRecordDaysItem, swapRecordsCleanedItem } from '../src/settings';
+import { settingsItem, swapRecordDaysItem, swapRecordsCleanedItem, xmrSettingsItem } from '../src/settings';
 import { mountReceiptsPanel } from '../src/ui/receipts-panel';
 
 const send = vi.hoisted(() => vi.fn());
 vi.mock('../src/messaging', async (orig) => ({ ...(await orig<typeof import('../src/messaging')>()), sendToBackground: send }));
 
-const HTML = ['check', 'log-fetch', 'site-info', 'site-warnings'].map((n) => `<input data-receipts="${n}" type="checkbox" />`).join('') +
+const HTML = ['check', 'log-fetch', 'site-info', 'site-warnings', 'copy-reports'].map((n) => `<input data-receipts="${n}" type="checkbox" />`).join('') +
   '<select data-receipts="keep-days"><option value="0"></option><option value="1"></option><option value="7"></option><option value="30"></option><option value="90"></option></select><button data-receipts="export-all"></button><div data-receipts="list"></div><span data-receipts="status"></span>';
 
 const receipt = { commitment: 'c'.repeat(64), receipt: { order_id: 'EX-1', issuer: 'kyc.rip', deposit_asset: 'BTC', payout_asset: 'XMR', expires_at: 2_000_000_000, created_at: 1_793_000_000 }, page: 'https://kyc.rip/o', savedAt: 1000 } as unknown as SavedReceipt;
@@ -75,6 +75,18 @@ describe('Options → Swaps and sites: letters', () => {
     await vi.waitFor(async () => expect((await settingsItem.getValue()).logFetch).toBe(false));
     await fakeBrowser.storage.sync.set({ xmrSettings: { ...XMR, siteInfo: false } });
     await vi.waitFor(() => expect(fetchSwitch.disabled).toBe(true));
+  });
+
+  it('the report switch: on by default, saved when changed, unavailable without warnings', async () => {
+    const { q } = await mount();
+    const reports = q<HTMLInputElement>('copy-reports');
+    expect(reports.checked).toBe(true);
+    expect(reports.disabled).toBe(false);
+    reports.checked = false;
+    reports.dispatchEvent(new Event('change'));
+    await vi.waitFor(async () => expect((await xmrSettingsItem.getValue()).copyReports).toBe(false));
+    await fakeBrowser.storage.sync.set({ xmrSettings: { ...XMR, siteWarnings: false } });
+    await vi.waitFor(() => expect(reports.disabled).toBe(true));
   });
 
   it('automatic deletion: the choice is saved as a number; a clean-up reloads the open list', async () => {

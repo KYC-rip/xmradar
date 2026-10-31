@@ -138,7 +138,7 @@ describe('guard hash', () => {
 describe('guard answers', () => {
   const ask = (u: string, o: Partial<Parameters<typeof checkGuard>[0]> = {}) => checkGuard({ hash: hash(u), tokens: [TOKEN], on: true, index: LIVE, rules: RULES, ...o });
   it('red for a copy, with the feed target', () => {
-    expect(ask('https://www-trocador.app/swap?x=1')).toEqual({ kind: 'red', host: 'www-trocador.app', url: 'https://www-trocador.app/swap?x=1', why: 'segment', target: 'trocador.app', name: 'Trocador' });
+    expect(ask('https://www-trocador.app/swap?x=1')).toEqual({ kind: 'red', host: 'www-trocador.app', url: 'https://www-trocador.app/swap?x=1', why: 'segment', target: 'trocador.app', name: 'Trocador', siteId: 'trocador' });
     expect(ask('https://trocador-app.im/')).toMatchObject({ kind: 'red', target: 'trocador.app' });
   });
   it('same-name for the name on another domain', () => {
@@ -306,7 +306,7 @@ describe('guard page', () => {
     document.body.innerHTML = readFileSync(join(process.cwd(), 'src/entrypoints/guard/index.html'), 'utf8').replace(/^[\s\S]*<body>|<\/body>[\s\S]*$/g, '').replace(/<script[\s\S]*?<\/script>/g, '');
     return (id: string) => document.getElementById(id)!;
   };
-  const base = { host: 'www-trocador.app', url: 'https://www-trocador.app/', target: 'trocador.app', name: 'Trocador' };
+  const base = { host: 'www-trocador.app', url: 'https://www-trocador.app/', target: 'trocador.app', name: 'Trocador', siteId: 'trocador' };
   it('red: feed link, Continue only behind Details, untrusted clicks ignored', () => {
     const $ = page();
     let continued = 0;

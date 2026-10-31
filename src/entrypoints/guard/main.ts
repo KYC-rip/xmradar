@@ -27,7 +27,7 @@ async function main() {
     void sendToBackground({ type: 'guard-continue', hash })
       .then(({ url }) => location.replace(url))
       .catch(() => (cont.disabled = false));
-  });
+  }, () => sendToBackground({ type: 'guard-report', hash }).then((r) => r.status));
 }
 
 void main();

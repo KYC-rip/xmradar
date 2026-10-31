@@ -227,9 +227,19 @@ export function startBadges(ctx: ContentScriptContext) {
   function apply(slot: BadgeSlot) {
     const badge = lookup(slot.handle);
     if (slot.article) {
-      // a recycled tweet node may still hold another author's button
-      if (!badge?.primary) for (const e of ownXaps(slot.article)) e.remove();
-      else return applyXap(slot as BadgeSlot & { article: Element }, badge);
+      const pill = slot.pill ? slot.anchor.querySelector<HTMLElement>(`:scope > ${HOST_TAG}`) : null;
+      // a recycled tweet node may still hold another author's button and pill
+      if (!badge?.primary) {
+        for (const e of ownXaps(slot.article)) e.remove();
+        pill?.remove();
+      } else {
+        // the pill after the name, as X puts its check there; the Xap stays in the action bar
+        if (slot.pill && pill?.dataset.key !== slot.key) {
+          pill?.remove();
+          insert(slot, badge);
+        }
+        return applyXap(slot as BadgeSlot & { article: Element }, badge);
+      }
     } else {
       const existing = slot.anchor.querySelector<HTMLElement>(`:scope > ${HOST_TAG}`);
       if (existing?.dataset.key === slot.key) return;

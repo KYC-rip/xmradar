@@ -14,6 +14,8 @@ export interface Lookalike {
   name: string;
   /** the listing's xmr.club category (`exchanges`), for how loud a same-name warning is */
   category?: string;
+  /** the listing's xmr.club id, for a report of the copy (PLAN-NAMEPILL-REPORT) */
+  siteId?: string;
 }
 
 /** Listings where a copy takes coins or ships a wallet: same-name gets a banner, and pages are guarded before they load (PLAN-PRELOAD §2). */

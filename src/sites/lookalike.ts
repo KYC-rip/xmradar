@@ -177,7 +177,7 @@ export function lookalikeIndex(feed: SiteFeed): LookalikeIndex {
     const seed = seeds.get(site);
     const host = seed?.target ?? site.hosts.find((h) => !h.endsWith('.onion') && validFeedHost(h));
     if (!host) return null;
-    return { kind: 'listed-phishing', imitates: seed?.domain ?? parse(host, PARSE).domain ?? host, target: host, name: site.name, category: site.category };
+    return { kind: 'listed-phishing', imitates: seed?.domain ?? parse(host, PARSE).domain ?? host, target: host, name: site.name, category: site.category, siteId: site.id };
   };
   // xmr.club's copies, the confirmed top-level list first, then the older per-listing field; every entry passes
   // the same safety filter, so no entry can ever cover a real site (PLAN-IMPERSONATORS §2)
@@ -209,7 +209,7 @@ export function lookalikeIndex(feed: SiteFeed): LookalikeIndex {
 /** Longest brand, then graded before ungraded and the better grade, then feed order. */
 export const best = (list: Brand[]) => list.sort((a, b) => b.brand.length - a.brand.length || a.rank - b.rank)[0];
 export const result = (kind: LookalikeKind, b: Brand | undefined): Lookalike | null =>
-  b ? { kind, imitates: b.domain, target: b.target, name: b.site.name, category: b.site.category } : null;
+  b ? { kind, imitates: b.domain, target: b.target, name: b.site.name, category: b.site.category, siteId: b.site.id } : null;
 
 /** Whether `host` poses as a listed service, and how (strongest kind first); null for anything else. */
 export function lookalikeOf(index: LookalikeIndex, host: string): Lookalike | null {

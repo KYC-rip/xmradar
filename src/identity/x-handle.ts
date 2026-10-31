@@ -36,8 +36,11 @@ export interface BadgeSlot {
   key: string;
   /** where the badge goes */
   anchor: Element;
-  /** set for tweets, which get a Xap button in the action bar instead of a badge */
+  /** set for posts, which get a Xap button in the action bar */
   article?: Element;
+  /** a post's name row also gets the pill after the name, as X puts its check there (PLAN-NAMEPILL-REPORT);
+   *  never set for an X Article's reading page, whose anchor is the whole article */
+  pill?: boolean;
   /** the tweet's own X status id, when its link has one; a Xap from it tips that post */
   statusId?: string;
 }
@@ -63,7 +66,7 @@ export function tweetSlot(article: Element): BadgeSlot | null {
   const anchor = row && row.localName !== 'xmradar-badge' && row.querySelector('a[href^="/"]') ? row : name;
   // only a well-formed id names a post; otherwise the Xap is a profile tip
   const statusId = /^[1-9]\d{0,19}$/.test(tweetId) ? tweetId : undefined;
-  return { handle, key: `${tweetId}:${handle.toLowerCase()}`, anchor, article, ...(statusId ? { statusId } : {}) };
+  return { handle, key: `${tweetId}:${handle.toLowerCase()}`, anchor, article, pill: true, ...(statusId ? { statusId } : {}) };
 }
 
 /**

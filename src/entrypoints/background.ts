@@ -20,7 +20,7 @@ import { KIND_ARTICLE, checkBlossomAuth, checkPublishable, checkSigned, dedupeKe
 import { allRelaysFrom, fetchWriteRelays, publishToRelays, readEach, readRelay } from '../nostr/relays';
 import { assertFetchableImageUrl } from '../nostr/url-guard';
 import { checkSessionSender, checkShareMenuSender, isExtensionPageSender, isSignerPage, isXUrl, SIGNER_PAGE, shareMenuRateLimit, withoutTab } from '../sender';
-import { DEFAULT_RELAYS, directoryStatusItem, INDEX_RELAYS, withoutIndex, myHandleItem, postedItem, pubkeyItem, receiptsOn, settingsItem, siteInfoOn, siteWarningsOn, swapRecordDaysItem, swapRecordsCleanedItem, xapMarksItem, xClaimsChangedItem, xClaimsOn, xmrSettingsItem } from '../settings';
+import { DEFAULT_RELAYS, directoryStatusItem, INDEX_RELAYS, withoutIndex, myHandleItem, postedItem, pubkeyItem, receiptsOn, settingsItem, siteInfoOn, siteWarningsOn, copyReportsOn, swapRecordDaysItem, swapRecordsCleanedItem, xapMarksItem, xClaimsChangedItem, xClaimsOn, xmrSettingsItem } from '../settings';
 import { storage } from 'wxt/utils/storage';
 import { activeInbox, burnerCreatingItem, burnerInboxItem, burnerLastErrorItem, burnFreeInbox, createFreeInbox, forgetImportedInbox, importInbox, type BurnerDeps } from '../burner/service';
 import { idbTokenStore } from '../burner/token-store';
@@ -46,6 +46,7 @@ import { fetchXmrUsd, PRICE_RETRY_MS, PRICE_TTL_MS } from '../xap/price';
 import { markFor, withMark } from '../xap/marks';
 import { GUARD_PATH } from '../sites/guard-rules';
 import { guardKeeper, type DnrApi, type GuardTokens } from '../sites/guard-keeper';
+import { reportCopy, reportFlags } from '../sites/report';
 
 const MENU_ID = 'xmradar';
 const TIP_MENU_ID = 'xmradar-tip';
@@ -585,7 +586,17 @@ async function handle(msg: BgRequest, sender: Browser.runtime.MessageSender): Pr
     case 'guard-continue': {
       if (!isGuardPage(sender) || typeof msg.hash !== 'string') throw new Error('Not allowed');
       const [on, feed] = await guardInputs();
-      return msg.type === 'guard-check' ? guard.check(msg.hash, on, feed) : guard.continue(msg.hash, on, feed);
+      if (msg.type === 'guard-continue') return guard.continue(msg.hash, on, feed);
+      const a = await guard.check(msg.hash, on, feed);
+      // the Report button: red, not listed yet, and the setting on; and whether this browser sent it already
+      const flags = await reportFlags(a, copyReportsOn(await xmrSettingsItem.getValue()), guardReportedItem);
+      return a.kind === 'red' && flags.report ? { ...a, ...flags } : a;
+    }
+    case 'guard-report': {
+      if (!isGuardPage(sender) || typeof msg.hash !== 'string') throw new Error('Not allowed');
+      const [on, feed] = await guardInputs();
+      const a = await guard.check(msg.hash, on, feed);
+      return { status: await reportCopy(a, copyReportsOn(await xmrSettingsItem.getValue()), guardReportedItem, (...args) => fetch(...args)) };
     }
     case 'site-tab': {
       // the popup asks by tab id, so it never needs the tab's URL
@@ -708,6 +719,8 @@ async function guardInputs(): Promise<[boolean, { index: LookalikeIndex; issuedA
   const feed = await siteFeedItem.getValue();
   return [on, feed ? { index: lookalikesFor(feed), issuedAt: feed.issuedAt } : null];
 }
+/** hosts reported to xmr.club from this browser, this session */
+const guardReportedItem = storage.defineItem<string[]>('session:guardReported', { fallback: [] });
 const applyGuard = () =>
   guardInputs()
     .then(([on, feed]) => guard.apply(on, feed))

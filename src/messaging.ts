@@ -11,6 +11,7 @@ import type { ReceiptExport } from './receipts/export';
 import type { PublicRecord, SavedReceipt } from './receipts/store';
 import type { SiteEntry } from './sites/feed';
 import type { GuardAnswer } from './sites/guard-rules';
+import type { ReportStatus } from './sites/report';
 import type { Lookalike } from './sites/lookalike-text';
 import type { AddressCheck } from './xmr/address';
 
@@ -165,6 +166,7 @@ export type BgRequest =
   | { type: 'site-tab'; tabId: number }
   | { type: 'guard-check'; hash: string }
   | { type: 'guard-continue'; hash: string }
+  | { type: 'guard-report'; hash: string }
   | { type: 'receipts-list' }
   | { type: 'receipt-delete'; commitment: string }
   | { type: 'receipt-export'; commitment: string }
@@ -235,6 +237,8 @@ export type BgResponse<T extends BgRequest['type']> = T extends 'fetch-image'
                                           ? GuardAnswer
                                         : T extends 'guard-continue'
                                           ? { url: string }
+                                        : T extends 'guard-report'
+                                          ? { status: ReportStatus }
                                         : T extends 'receipts-list'
                                           ? SavedReceipt[]
                                           : T extends 'receipt-delete'

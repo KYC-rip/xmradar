@@ -56,13 +56,18 @@ describe('badges on X', () => {
   });
   const lookups = () => send.mock.calls.filter(([m]) => m.type === 'resolve-handles').length;
 
-  it('tweets get a Xap button in the action bar, not a pill in the name row', async () => {
+  it('posts get the pill after the name, as X puts its check there, and the Xap in the action bar', async () => {
     await myHandleItem.setValue({ handle: 'xbtoshi', proven: true });
     document.body.innerHTML = fixture;
     startBadges(ctx as never);
     await vi.waitFor(() => expect(xaps().length).toBe(1), { timeout: 3000 });
-    expect(badges()).toBe(0);
-    expect(document.querySelector('[data-testid="User-Name"] xmradar-badge')).toBeNull();
+    await vi.waitFor(() => expect(badges()).toBe(1), { timeout: 3000 });
+    const pill = document.querySelector<HTMLElement>('[data-testid="User-Name"] xmradar-badge')!;
+    // inside the display-name row, right after the name (not after the @handle row)
+    expect(pill.parentElement).toBe(document.querySelector('[data-testid="User-Name"]')!.firstElementChild);
+    expect(pill.dataset.key).toBe(`${STATUS}:xbtoshi`);
+    // its tooltip carries the account's Xap totals
+    expect(pill.dataset.pubkey).toBe(PK);
     // with discovery on, the tweet's own figure comes in batches: never the profile total
     await vi.waitFor(() => expect(document.querySelector('[data-xmradar="xap-count"]')!.textContent).toBe('~0.0016'), { timeout: 3000 });
     expect(xaps()[0]!.querySelector('button')!.getAttribute('aria-label')).toBe('Xap this post by @XBToshi (Monero tip), ~ɱ 0.0016 claimed by 1 tipper on this post, not confirmed');
@@ -92,6 +97,31 @@ describe('badges on X', () => {
     await vi.waitFor(() => expect(lookups()).toBe(1), { timeout: 3000 });
     await new Promise((r) => setTimeout(r, 50));
     expect(xaps().length).toBe(0);
+    expect(badges()).toBe(0);
+  });
+
+  it('a recycled post whose author has no primary address loses its pill and Xap', async () => {
+    document.body.innerHTML = fixture;
+    startBadges(ctx as never);
+    await vi.waitFor(() => expect(badges()).toBe(1), { timeout: 3000 });
+    // X reuses the node for another author, who has a badge record but no address
+    send.mockImplementation(async (m: { type: string }) => (m.type === 'resolve-handles' ? { badges: [['someoneelse', { handle: 'someoneelse', primary: null, entries: [], differ: false }]], pending: [] } : { totals: [], pending: [] }));
+    // as X does: the links are swapped for new nodes, which the page watcher sees
+    for (const a of document.querySelectorAll('article a[href^="/XBToshi"]')) {
+      const b = a.cloneNode(true) as Element;
+      b.setAttribute('href', a.getAttribute('href')!.replace('/XBToshi', '/someoneelse'));
+      a.replaceWith(b);
+    }
+    await vi.waitFor(() => expect(badges()).toBe(0), { timeout: 3000 });
+    expect(xaps().length).toBe(0);
+  });
+
+  it('two posts by one author: two pills', async () => {
+    document.body.innerHTML = fixture + fixture.replaceAll(STATUS, '42');
+    startBadges(ctx as never);
+    await vi.waitFor(() => expect(badges()).toBe(2), { timeout: 3000 });
+    const keys = [...document.querySelectorAll<HTMLElement>('xmradar-badge')].map((b) => b.dataset.key).sort();
+    expect(keys).toEqual([`${STATUS}:xbtoshi`, '42:xbtoshi'].sort());
   });
 
   it('removes Xap buttons when badges or discovery go off', async () => {

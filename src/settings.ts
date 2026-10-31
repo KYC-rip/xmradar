@@ -94,12 +94,15 @@ export interface XmrSettings extends XmrSettingsV2 {
   siteWarnings?: boolean;
   /** read addresses, npubs and xmr.bio links from X profiles (PLAN-XCLAIMS); read with `xClaimsOn` */
   xClaims?: boolean;
+  /** "Report button on the warning page" (PLAN-NAMEPILL-REPORT); read with `copyReportsOn`, on unless switched off */
+  copyReports?: boolean;
 }
 
 export const siteInfoOn = (s: Partial<XmrSettings> | null | undefined) => s?.siteInfo !== false;
 /** X self-claims are read only while X badges are on, and unless switched off */
 export const xClaimsOn = (s: Partial<XmrSettings> | null | undefined) => !!s?.badgesX && s?.xClaims !== false;
 export const siteWarningsOn = (s: Partial<XmrSettings> | null | undefined) => siteInfoOn(s) && s?.siteWarnings !== false;
+export const copyReportsOn = (s: Partial<XmrSettings> | null | undefined) => siteWarningsOn(s) && s?.copyReports !== false;
 
 /** v1, before the redesign: one switch for X badges. */
 export interface XmrSettingsV1 {
