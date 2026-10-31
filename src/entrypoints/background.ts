@@ -19,8 +19,8 @@ import { statusIdFromUrl } from '../extractors/x-article';
 import { KIND_ARTICLE, checkBlossomAuth, checkPublishable, checkSigned, dedupeKey, sha256Hex } from '../nostr/event';
 import { allRelaysFrom, fetchWriteRelays, publishToRelays, readEach, readRelay } from '../nostr/relays';
 import { assertFetchableImageUrl } from '../nostr/url-guard';
-import { checkSessionSender, checkShareMenuSender, isExtensionPageSender, isXUrl, shareMenuRateLimit, withoutTab } from '../sender';
-import { DEFAULT_RELAYS, directoryStatusItem, INDEX_RELAYS, withoutIndex, myHandleItem, postedItem, pubkeyItem, receiptsOn, settingsItem, siteInfoOn, xapMarksItem, xClaimsChangedItem, xClaimsOn, xmrSettingsItem } from '../settings';
+import { checkSessionSender, checkShareMenuSender, isExtensionPageSender, isSignerPage, isXUrl, SIGNER_PAGE, shareMenuRateLimit, withoutTab } from '../sender';
+import { DEFAULT_RELAYS, directoryStatusItem, INDEX_RELAYS, withoutIndex, myHandleItem, postedItem, pubkeyItem, receiptsOn, settingsItem, siteInfoOn, swapRecordDaysItem, swapRecordsCleanedItem, xapMarksItem, xClaimsChangedItem, xClaimsOn, xmrSettingsItem } from '../settings';
 import { storage } from 'wxt/utils/storage';
 import { activeInbox, burnerCreatingItem, burnerInboxItem, burnerLastErrorItem, burnFreeInbox, createFreeInbox, forgetImportedInbox, importInbox, type BurnerDeps } from '../burner/service';
 import { idbTokenStore } from '../burner/token-store';
@@ -31,7 +31,8 @@ import { xapTtl } from '../xap/ttl';
 import type { SiteInfo, XapPostTotalsResult, XapTotals, XapTotalsResult } from '../messaging';
 import { trackCreate } from '../burner/tracked';
 import { checkPageReceipt, type CheckDeps } from '../receipts/check';
-import { badgeFor, FEED_READER_V, FEED_URL, publicSite, readFeed, sitesFor, worstGrade, type SiteFeed, type TabState } from '../sites/feed';
+import { lookalikeIndex, lookalikeOf, type LookalikeIndex } from '../sites/lookalike';
+import { badgeFor, FEED_READER_V, FEED_URL, leadSite, publicSite, readFeed, sitesFor, worstGrade, type SiteFeed, type TabState } from '../sites/feed';
 import { fetchManifest } from '../receipts/fetch';
 import { buildExport } from '../receipts/export';
 import { idbReceiptStore } from '../receipts/store';
@@ -39,6 +40,7 @@ import { buildLetterExport } from '../log/export';
 import { verifyLetter } from '../log/pgp';
 import { letterRequests } from '../log/service';
 import { idbLetterStore } from '../log/store';
+import { swapRecordsKeeper } from '../receipts/cleanup';
 import { checkPublicRecord } from '../receipts/witness';
 import { fetchXmrUsd, PRICE_RETRY_MS, PRICE_TTL_MS } from '../xap/price';
 import { markFor, withMark } from '../xap/marks';
@@ -138,6 +140,14 @@ const freshPostTotals = new FreshTotals(async (key) => {
   return t;
 });
 
+// saved letters and receipts deleted after the chosen days (PLAN-AUTOCLEAN)
+const swapRecords = swapRecordsKeeper({
+  stores: { receipts: idbReceiptStore, letters: idbLetterStore },
+  days: () => swapRecordDaysItem.getValue(),
+  alarms: browser.alarms,
+  cleaned: (c) => swapRecordsCleanedItem.setValue(c),
+});
+
 const burner: BurnerDeps = { meta: { get: () => burnerInboxItem.getValue(), set: (v) => burnerInboxItem.setValue(v) }, tokens: idbTokenStore };
 
 export default defineBackground(() => {
@@ -145,7 +155,10 @@ export default defineBackground(() => {
   browser.alarms.onAlarm.addListener((a) => {
     if (a.name === SITE_FEED_ALARM) void refreshSiteFeed();
     void directory.onAlarm(a.name);
+    void swapRecords.onAlarm(a.name);
   });
+  void swapRecords.apply();
+  swapRecordDaysItem.watch(() => void swapRecords.apply());
   void xmrSettingsItem.getValue().then((s) => directory.apply(s.badgesX));
   // switched off while the worker wasn't running: nothing may stay kept
   void xmrSettingsItem.getValue().then((s) => (xClaimsOn(s) ? undefined : claims.clear()));
@@ -545,11 +558,14 @@ async function handle(msg: BgRequest, sender: Browser.runtime.MessageSender): Pr
       const feed = await siteFeedItem.getValue();
       if (!feed) return empty;
       const sites = sitesFor(feed, msg.host).map(publicSite);
-      const info = { sites, outOfDate: Date.now() / 1000 >= feed.expiresAt, issuedAt: feed.issuedAt };
+      const lookalike = lookalikeOf(lookalikesFor(feed), msg.host);
+      const info: SiteInfo = { sites, lookalike, outOfDate: Date.now() / 1000 >= feed.expiresAt, issuedAt: feed.issuedAt };
       await tabStateReady;
       const state = tabStates.get(tabId) ?? {};
-      if (sites.length) state.site = { grade: worstGrade(sites), incident: sites.some((s) => s.incident) };
+      if (sites.length) state.site = { grade: worstGrade(sites), incident: sites.some((s) => s.incident), ...(leadSite(sites)?.intern ? { intern: true } : {}) };
       else delete state.site;
+      if (lookalike) state.lookalike = lookalike.kind;
+      else delete state.lookalike;
       tabStates.set(tabId, state);
       siteInfoByTab.set(tabId, info);
       persistTabState();
@@ -652,6 +668,12 @@ async function dropTabState(tabId: number) {
   persistTabState();
   await browser.action.setBadgeText({ tabId, text: '' }).catch(() => {});
 }
+// the brands of the feed in hand, rebuilt only when a newer feed arrives
+let lookalikeCache: { issuedAt: number; index: LookalikeIndex } | null = null;
+function lookalikesFor(feed: SiteFeed): LookalikeIndex {
+  if (lookalikeCache?.issuedAt !== feed.issuedAt) lookalikeCache = { issuedAt: feed.issuedAt, index: lookalikeIndex(feed) };
+  return lookalikeCache.index;
+}
 // bumped when the setting goes off, so a download that finishes later is dropped
 let siteFeedGeneration = 0;
 
@@ -700,6 +722,7 @@ async function applySiteInfoSetting(on: boolean) {
   siteInfoByTab.clear();
   for (const [tabId, state] of tabStates) {
     delete state.site;
+    delete state.lookalike;
     await applyBadge(tabId);
   }
   persistTabState();
@@ -926,9 +949,9 @@ async function xapPostTotals(posts: unknown, fresh: boolean, tabId: number): Pro
   return { totals: out, pending: misses.slice(granted) };
 }
 
-/** Extension pages have no window.nostr, so signer calls run in a throwaway web page tab. */
+/** Extension pages have no window.nostr, so signer calls run in a throwaway tab on our own page (no script of its own). */
 async function withSignerTab<T>(run: (tabId: number) => Promise<T>): Promise<T> {
-  const tab = await browser.tabs.create({ url: 'https://example.com/', active: true });
+  const tab = await browser.tabs.create({ url: SIGNER_PAGE, active: true });
   const tabId = tab.id!;
   try {
     await new Promise<void>((resolve, reject) => {
@@ -938,7 +961,7 @@ async function withSignerTab<T>(run: (tabId: number) => Promise<T>): Promise<T> 
         if (err) reject(err);
         else resolve();
       };
-      const timer = setTimeout(() => done(new Error('Signer page did not load')), 15_000);
+      const timer = setTimeout(() => done(new Error('Signer page did not load (xmradar.app)')), 15_000);
       const listener = (id: number, info: Browser.tabs.OnUpdatedInfo) => {
         if (id === tabId && info.status === 'complete') done();
       };
@@ -948,7 +971,7 @@ async function withSignerTab<T>(run: (tabId: number) => Promise<T>): Promise<T> 
     });
     // the tab is visible, so make sure it's still the page we opened before running anything in it
     const now = await browser.tabs.get(tabId);
-    if (!now.url?.startsWith('https://example.com/')) throw new Error('The signer tab was navigated away; try again');
+    if (!isSignerPage(now.url)) throw new Error('The signer tab was navigated away; try again');
     return await run(tabId);
   } finally {
     await browser.tabs.remove(tabId).catch(() => {});

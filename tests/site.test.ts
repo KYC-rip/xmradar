@@ -54,3 +54,29 @@ describe('xmradar.app', () => {
     });
   });
 });
+
+describe('the signer page (xmradar.app/signer)', () => {
+  const signer = readFileSync(join(process.cwd(), 'site/signer.html'), 'utf8');
+  const build = readFileSync(join(process.cwd(), 'site/build.py'), 'utf8');
+  it('runs no code of its own and loads nothing from elsewhere', () => {
+    expect(signer).not.toMatch(/<script|<img|<iframe|<form|\bon[a-z]+=/i);
+    expect(signer).not.toMatch(/(src|href)="(https?:)?\/\//);
+  });
+  it('is built, with a CSP that allows no script', () => {
+    expect(build).toContain("'signer.html'");
+    const block = /\/signer\n {2}Content-Security-Policy: ([^\n]+)/.exec(build)?.[1] ?? '';
+    expect(block).toContain("default-src 'none'");
+    expect(block).not.toContain('script-src');
+  });
+});
+
+describe('isSignerPage', () => {
+  it('only our page, exactly', async () => {
+    const { isSignerPage, SIGNER_PAGE } = await import('../src/sender');
+    expect(SIGNER_PAGE).toBe('https://xmradar.app/signer');
+    expect(['https://xmradar.app/signer', 'https://xmradar.app/signer.html', 'https://xmradar.app/signer?x=1'].map(isSignerPage)).toEqual([true, true, true]);
+    expect(
+      ['https://xmradar.app/', 'https://xmradar.app/signer/x', 'https://xmradar.app.evil.com/signer', 'http://xmradar.app/signer', 'https://evil.com/?https://xmradar.app/signer', 'https://example.com/', 'https://user@xmradar.app/signer', undefined, 'nope'].map(isSignerPage),
+    ).toEqual([false, false, false, false, false, false, false, false, false]);
+  });
+});

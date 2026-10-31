@@ -159,3 +159,8 @@ footer a{color:var(--muted);}
 .foot-brand span:first-child{display:flex;align-items:center;gap:8px;}
 .foot-brand img{width:16px;height:16px;}
 .foot-links{margin-left:auto;display:flex;gap:18px;flex-wrap:wrap;}
+
+/* the signer check tab (signer.html): XMRadar asks the NIP-07 signer from here */
+.signer-page{max-width:640px;padding-top:14vh;padding-bottom:48px;}
+.signer-page h1{font-size:32px;margin-bottom:16px;}
+.signer-page p{margin:0 0 12px;}

@@ -1,7 +1,7 @@
 import { npubEncode } from 'nostr-tools/nip19';
 import { currentBuild } from '../../build-info';
 import { sendToBackground } from '../../messaging';
-import { patchSettings, pubkeyItem, settingsItem, shareMenuOn, type Settings } from '../../settings';
+import { cleanXLinksOn, patchSettings, pubkeyItem, settingsItem, shareMenuOn, type Settings } from '../../settings';
 import { mountBadgeLook } from '../../ui/badge-look-controls';
 import { mountBurnerPanel } from '../../ui/burner-panel';
 import { mountReceiptsPanel } from '../../ui/receipts-panel';
@@ -17,6 +17,7 @@ const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as 
 const appendEl = $<HTMLInputElement>('append-source');
 const debugEl = $<HTMLInputElement>('debug');
 const shareMenuEl = $<HTMLInputElement>('share-menu-x');
+const cleanLinksEl = $<HTMLInputElement>('clean-x-links');
 const signerStatus = $('signer-status');
 
 const ALL_SITES = { origins: ['<all_urls>'] };
@@ -39,12 +40,14 @@ const boxes: [HTMLInputElement, (on: boolean) => Partial<Settings>][] = [
   [appendEl, (on) => ({ appendSourceLink: on })],
   [debugEl, (on) => ({ debug: on })],
   [shareMenuEl, (on) => ({ shareMenuX: on })],
+  [cleanLinksEl, (on) => ({ cleanXLinks: on })],
 ];
 for (const [el] of boxes) el.disabled = true;
 void settingsItem.getValue().then((s) => {
   appendEl.checked = s.appendSourceLink;
   debugEl.checked = s.debug;
   shareMenuEl.checked = shareMenuOn(s);
+  cleanLinksEl.checked = cleanXLinksOn(s);
   for (const [el] of boxes) el.disabled = false;
 });
 for (const [el, patch] of boxes) {

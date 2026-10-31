@@ -1,0 +1,81 @@
+google.com youtube.com facebook.com instagram.com twitter.com x.com wikipedia.org amazon.com reddit.com yahoo.com
+baidu.com whatsapp.com tiktok.com linkedin.com netflix.com live.com office.com bing.com microsoft.com openai.com
+chatgpt.com zoom.us twitch.tv pinterest.com discord.com ebay.com apple.com icloud.com github.com stackoverflow.com
+spotify.com paypal.com adobe.com dropbox.com salesforce.com wordpress.org wordpress.com tumblr.com quora.com imdb.com
+cnn.com bbc.co.uk bbc.com nytimes.com theguardian.com washingtonpost.com forbes.com bloomberg.com reuters.com wsj.com
+espn.com weather.com booking.com airbnb.com tripadvisor.com expedia.com uber.com lyft.com doordash.com grubhub.com
+walmart.com target.com bestbuy.com homedepot.com lowes.com costco.com etsy.com aliexpress.com alibaba.com temu.com
+shein.com wish.com craigslist.org indeed.com glassdoor.com zillow.com realtor.com redfin.com yelp.com nextdoor.com
+medium.com substack.com notion.so slack.com atlassian.com trello.com asana.com figma.com canva.com miro.com
+gitlab.com bitbucket.org npmjs.com pypi.org rust-lang.org golang.org python.org nodejs.org mozilla.org firefox.com
+chrome.com android.com samsung.com huawei.com xiaomi.com sony.com lg.com dell.com hp.com lenovo.com intel.com amd.com
+nvidia.com ibm.com oracle.com sap.com cisco.com vmware.com redhat.com ubuntu.com debian.org archlinux.org kernel.org
+cloudflare.com akamai.com fastly.com digitalocean.com linode.com vultr.com hetzner.com ovh.com aws.amazon.com azure.com
+heroku.com vercel.com netlify.com godaddy.com namecheap.com porkbun.com gandi.net squarespace.com wix.com shopify.com
+stripe.com square.com venmo.com cash.app wise.com revolut.com n26.com chase.com bankofamerica.com wellsfargo.com citi.com
+capitalone.com americanexpress.com discover.com hsbc.com barclays.co.uk santander.com ing.com bnpparibas.com
+coinbase.com binance.com kraken.com bitstamp.net gemini.com crypto.com kucoin.com okx.com bitfinex.com huobi.com
+bitget.com gate.io mexc.com bitmart.com bingx.com htx.com upbit.com bithumb.com coinmarketcap.com coingecko.com
+blockchain.com blockchair.com etherscan.io bscscan.com solscan.io tronscan.org polygonscan.com arbiscan.io
+metamask.io phantom.app trustwallet.com exodus.com electrum.org bitcoin.org bitcoincore.org ethereum.org solana.com
+uniswap.org pancakeswap.finance sushi.com curve.fi aave.com compound.finance lido.fi makerdao.com 1inch.io
+opensea.io blur.io magiceden.io rarible.com foundation.app zora.co chainlink.com polkadot.network cardano.org
+ripple.com stellar.org tron.network avax.network near.org cosmos.network tezos.com algorand.com litecoin.org
+dogecoin.com zcash.io z.cash dash.org getmonero.org monero.how localmonero.co kraken.io bisq.network hodlhodl.com
+paxful.com localbitcoins.com bitpay.com btcpayserver.org lightning.network strike.me wallet.of.satoshi.com
+blockstream.com casa.io unchained.com river.com swanbitcoin.com cashapp.com muun.com phoenix.acinq.co breez.technology
+proton.me protonmail.com tutanota.com tuta.com fastmail.com gmail.com outlook.com hotmail.com aol.com yandex.ru
+mail.ru vk.com ok.ru telegram.org signal.org wire.com viber.com line.me kakao.com wechat.com qq.com weibo.com
+naver.com daum.net rakuten.co.jp yahoo.co.jp nicovideo.jp pixiv.net dmm.com mercari.com
+amazon.co.uk amazon.de amazon.fr amazon.it amazon.es amazon.co.jp amazon.in amazon.ca amazon.com.br amazon.com.mx
+google.co.uk google.de google.fr google.co.jp google.com.br google.co.in google.ca google.es google.it google.ru
+ebay.co.uk ebay.de mercadolibre.com mercadolivre.com.br olx.com.br globo.com uol.com.br
+lemonde.fr lefigaro.fr spiegel.de bild.de zeit.de elpais.com elmundo.es corriere.it repubblica.it
+nos.nl nu.nl tagesschau.de orf.at srf.ch svt.se nrk.no dr.dk yle.fi
+aljazeera.com france24.com dw.com euronews.com abc.net.au smh.com.au cbc.ca globalnews.ca
+nbcnews.com cbsnews.com abcnews.go.com foxnews.com usatoday.com latimes.com npr.org pbs.org politico.com axios.com
+theverge.com techcrunch.com wired.com arstechnica.com engadget.com gizmodo.com cnet.com zdnet.com mashable.com vice.com
+buzzfeed.com huffpost.com vox.com slate.com theatlantic.com newyorker.com economist.com ft.com
+coindesk.com cointelegraph.com decrypt.co theblock.co bitcoinmagazine.com
+nature.com science.org sciencedirect.com springer.com wiley.com arxiv.org researchgate.net jstor.org ncbi.nlm.nih.gov
+nih.gov cdc.gov who.int un.org europa.eu gov.uk usa.gov irs.gov ssa.gov nasa.gov
+harvard.edu mit.edu stanford.edu berkeley.edu ox.ac.uk cam.ac.uk coursera.org edx.org udemy.com khanacademy.org
+duolingo.com quizlet.com chegg.com grammarly.com deepl.com translate.google.com
+steampowered.com steamcommunity.com epicgames.com ea.com ubisoft.com blizzard.com battle.net roblox.com minecraft.net
+playstation.com xbox.com nintendo.com riotgames.com leagueoflegends.com valvesoftware.com itch.io gog.com humblebundle.com
+hulu.com disneyplus.com max.com hbomax.com primevideo.com paramountplus.com peacocktv.com crunchyroll.com
+soundcloud.com bandcamp.com deezer.com tidal.com pandora.com last.fm genius.com
+vimeo.com dailymotion.com rumble.com odysee.com bitchute.com kick.com
+imgur.com flickr.com unsplash.com pexels.com shutterstock.com gettyimages.com 500px.com deviantart.com artstation.com
+behance.net dribbble.com
+mastodon.social bsky.app threads.net snapchat.com telegram.me t.me matrix.org element.io
+duckduckgo.com startpage.com brave.com mullvad.net protonvpn.com nordvpn.com expressvpn.com surfshark.com
+privateinternetaccess.com ivpn.net windscribe.com torproject.org tails.net whonix.org qubes-os.org
+bitwarden.com 1password.com lastpass.com dashlane.com keepass.info keepassxc.org
+malwarebytes.com kaspersky.com norton.com mcafee.com avast.com eset.com bitdefender.com
+hackerone.com bugcrowd.com owasp.org exploit-db.com virustotal.com shodan.io haveibeenpwned.com
+archive.org web.archive.org archive.ph wikimedia.org wiktionary.org wikidata.org openstreetmap.org
+maps.google.com waze.com here.com
+weather.gov accuweather.com wunderground.com
+fedex.com ups.com usps.com dhl.com royalmail.com
+delta.com united.com aa.com southwest.com ryanair.com easyjet.com lufthansa.com emirates.com qatarairways.com
+marriott.com hilton.com hyatt.com ihg.com accor.com
+mcdonalds.com starbucks.com dominos.com pizzahut.com subway.com
+nike.com adidas.com zara.com hm.com uniqlo.com gap.com
+ikea.com wayfair.com
+tesla.com ford.com toyota.com bmw.com mercedes-benz.com volkswagen.com honda.com
+spacex.com
+patreon.com kofi.com ko-fi.com buymeacoffee.com gofundme.com kickstarter.com indiegogo.com
+fiverr.com upwork.com freelancer.com
+tinder.com bumble.com match.com okcupid.com hinge.co
+onlyfans.com
+change.org avaaz.org eff.org aclu.org fsf.org gnu.org opensource.org creativecommons.org
+letsencrypt.org ssllabs.com
+w3.org whatwg.org ietf.org icann.org iana.org
+jquery.com reactjs.org react.dev vuejs.org angular.io svelte.dev nextjs.org vitejs.dev tailwindcss.com getbootstrap.com
+docker.com kubernetes.io terraform.io hashicorp.com ansible.com jenkins.io circleci.com travis-ci.com
+sentry.io datadoghq.com newrelic.com grafana.com elastic.co mongodb.com postgresql.org mysql.com redis.io sqlite.org
+jetbrains.com visualstudio.com code.visualstudio.com sublimetext.com vim.org neovim.io emacs.org
+anthropic.com claude.ai huggingface.co kaggle.com perplexity.ai mistral.ai cohere.com midjourney.com stability.ai
+character.ai poe.com you.com phind.com
+gitbook.io readthedocs.io readthedocs.org docs.rs crates.io pkg.go.dev rubygems.org packagist.org nuget.org

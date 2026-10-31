@@ -5,10 +5,11 @@ import { createShadowRootUi } from 'wxt/utils/content-script-ui/shadow-root';
 import { callBridge } from '../../bridge';
 import { extractPost, type ExtractedImage } from '../../extractors';
 import { expandTweet, xExtractor } from '../../extractors/x';
+import { cleanXLinks } from '../../extractors/x-links';
 import { sendToBackground, type OpenComposerMsg, type RelayResult } from '../../messaging';
 import { articleTemplate, articleTooLarge, blossomAuthTemplate, buildNote, checkSigned, encodeAuthHeader, wordCount, type PostImage } from '../../nostr/event';
 import { retryable } from '../../nostr/retry';
-import { settingsItem } from '../../settings';
+import { cleanXLinksOn, settingsItem } from '../../settings';
 import { h, trapFocus } from './dom';
 import { composerSlot, createPill, pillView, type ComposerInstance, type PillState } from './publish-pill';
 import { MAX_PASTED_IMAGES, MAX_PASTED_TOTAL, onPasteOrDrop } from './paste';
@@ -86,9 +87,11 @@ async function mountComposer(ctx: ContentScriptContext, msg: OpenComposerMsg, ta
       };
 
       const art = post.article;
-      const textarea = h('textarea', { value: post.text, rows: art ? 16 : 8, attrs: { 'aria-label': art ? 'Article text (Markdown)' : 'Note text' } });
-      const titleInput = h('input', { type: 'text', value: art?.title ?? '', attrs: { 'aria-label': 'Article title', placeholder: 'Title' } });
-      const summaryInput = h('input', { type: 'text', value: art?.summary ?? '', attrs: { 'aria-label': 'Article summary', placeholder: 'Summary (optional)' } });
+      // X's share tracking out of links, shown so (PLAN-CLEANLINKS), and again at publish for edits
+      const clean = (t: string) => (cleanXLinksOn(settings) ? cleanXLinks(t) : t);
+      const textarea = h('textarea', { value: clean(post.text), rows: art ? 16 : 8, attrs: { 'aria-label': art ? 'Article text (Markdown)' : 'Note text' } });
+      const titleInput = h('input', { type: 'text', value: clean(art?.title ?? ''), attrs: { 'aria-label': 'Article title', placeholder: 'Title' } });
+      const summaryInput = h('input', { type: 'text', value: clean(art?.summary ?? ''), attrs: { 'aria-label': 'Article summary', placeholder: 'Summary (optional)' } });
       const sizeLine = h('div', { class: 'warn hidden' }, 'This article is over 60 KB. Some relays reject events this large.');
       const wordsLine = h('div', { class: 'signer' });
       const signerLine = h('div', { class: 'signer' }, 'Connecting to signer…');
@@ -352,15 +355,17 @@ async function mountComposer(ctx: ContentScriptContext, msg: OpenComposerMsg, ta
             prepared.set(img, await prepareImage(img));
             if (closed) return;
           }
-          const text = textarea.value;
+          // the setting as it is now; a link pasted after opening is cleaned too
+          const cleanNow = cleanXLinksOn(await settingsItem.getValue()) ? cleanXLinks : (t: string) => t;
+          const text = cleanNow(textarea.value);
           let template: EventTemplate;
           if (art) {
             template = articleTemplate({
               article: art,
               postImages: post.images,
               prepared,
-              title: titleInput.value,
-              summary: summaryInput.value,
+              title: cleanNow(titleInput.value),
+              summary: cleanNow(summaryInput.value),
               markdown: text,
               sourceUrl: post.sourceUrl,
               appendSource: appendSource.checked,

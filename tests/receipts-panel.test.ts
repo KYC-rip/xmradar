@@ -3,14 +3,14 @@ import { fakeBrowser } from 'wxt/testing/fake-browser';
 import { LETTER_EXPORT_WARNING } from '../src/log/export';
 import type { SavedLetter } from '../src/log/store';
 import type { SavedReceipt } from '../src/receipts/store';
-import { settingsItem } from '../src/settings';
+import { settingsItem, swapRecordDaysItem, swapRecordsCleanedItem } from '../src/settings';
 import { mountReceiptsPanel } from '../src/ui/receipts-panel';
 
 const send = vi.hoisted(() => vi.fn());
 vi.mock('../src/messaging', async (orig) => ({ ...(await orig<typeof import('../src/messaging')>()), sendToBackground: send }));
 
 const HTML = ['check', 'log-fetch', 'site-info', 'site-warnings'].map((n) => `<input data-receipts="${n}" type="checkbox" />`).join('') +
-  '<button data-receipts="export-all"></button><div data-receipts="list"></div><span data-receipts="status"></span>';
+  '<select data-receipts="keep-days"><option value="0"></option><option value="1"></option><option value="7"></option><option value="30"></option><option value="90"></option></select><button data-receipts="export-all"></button><div data-receipts="list"></div><span data-receipts="status"></span>';
 
 const receipt = { commitment: 'c'.repeat(64), receipt: { order_id: 'EX-1', issuer: 'kyc.rip', deposit_asset: 'BTC', payout_asset: 'XMR', expires_at: 2_000_000_000, created_at: 1_793_000_000 }, page: 'https://kyc.rip/o', savedAt: 1000 } as unknown as SavedReceipt;
 const letter: SavedLetter = { id: 'a'.repeat(64), siteId: 'stereoswap', siteName: 'StereoSwap', format: 'pgp', orderId: 'STRRSXUE', page: 'https://stereoswap.app/swap/STRRSXUE', text: 't', key: 'k', feedIssuedAt: 1, savedAt: 2000 };
@@ -75,5 +75,19 @@ describe('Options → Swaps and sites: letters', () => {
     await vi.waitFor(async () => expect((await settingsItem.getValue()).logFetch).toBe(false));
     await fakeBrowser.storage.sync.set({ xmrSettings: { ...XMR, siteInfo: false } });
     await vi.waitFor(() => expect(fetchSwitch.disabled).toBe(true));
+  });
+
+  it('automatic deletion: the choice is saved as a number; a clean-up reloads the open list', async () => {
+    const { q } = await mount();
+    const keep = q<HTMLSelectElement>('keep-days');
+    // 90 days unless chosen
+    expect(keep.value).toBe('90');
+    keep.value = '7';
+    keep.dispatchEvent(new Event('change'));
+    await vi.waitFor(async () => expect(await swapRecordDaysItem.getValue()).toBe(7));
+    send.mockImplementation(async (m: { type: string }) => (m.type === 'receipts-list' ? [] : m.type === 'letters-list' ? [] : null));
+    await swapRecordsCleanedItem.setValue({ at: 1, receipts: 1, letters: 1 });
+    await vi.waitFor(() => expect(q('list').querySelectorAll('.card')).toHaveLength(0));
+    expect(q('status').textContent).toBe('Deleted 2 old letters and receipts.');
   });
 });

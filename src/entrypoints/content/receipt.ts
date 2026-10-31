@@ -1,4 +1,5 @@
 import type { ContentScriptContext } from 'wxt/utils/content-script-context';
+import { MISTPROOF_MARK, PGP_BEGIN } from '../../log/fetch';
 import { sendToBackground } from '../../messaging';
 import type { Line, PageCheck } from '../../receipts/check';
 import { missingReceiptText } from '../../receipts/issuers';
@@ -18,10 +19,17 @@ import { mountReceiptCard, worstOf, type CardEntry, type ReceiptCard } from './r
 const RESCAN_MS = 2000;
 const MISSING_AFTER_MS = 15_000;
 
-/** The page's visible text with its line breaks, and form values, for a letter shown on it. */
-function pageLetterText(): string {
-  const values = [...document.querySelectorAll<HTMLTextAreaElement>('textarea')].map((t) => t.value);
-  return [document.body?.innerText ?? '', ...values].join('\n');
+/**
+ * The page's visible text with its line breaks, form values, and a letter kept in a collapsed block
+ * (NoxSwap puts it in a closed `<details>`, which `innerText` leaves out). Only text that holds a
+ * letter's marker is taken from a hidden block; the letter is still checked against the feed's key.
+ */
+export function pageLetterText(doc: Document = document): string {
+  const values = [...doc.querySelectorAll<HTMLTextAreaElement>('textarea')].map((t) => t.value);
+  const kept = [...doc.querySelectorAll('details pre, details code')]
+    .map((el) => el.textContent ?? '')
+    .filter((t) => t.includes(PGP_BEGIN) || t.includes(MISTPROOF_MARK));
+  return [doc.body?.innerText ?? '', ...values, ...kept].join('\n');
 }
 
 export function startReceipts(ctx: ContentScriptContext) {

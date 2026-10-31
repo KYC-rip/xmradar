@@ -9,9 +9,9 @@ export const FETCH_TIMEOUT_MS = 10_000;
 /** an HTML page around the letter (SageSwap) is larger than the letter itself */
 export const MAX_FETCH_BYTES = 256 * 1024;
 
-const PGP_BEGIN = '-----BEGIN PGP SIGNED MESSAGE-----';
+export const PGP_BEGIN = '-----BEGIN PGP SIGNED MESSAGE-----';
 const PGP_BLOCK_RE = /-----BEGIN PGP SIGNED MESSAGE-----[\s\S]*?-----END PGP SIGNATURE-----/g;
-const MISTPROOF_MARK = 'mistex-receipt/1';
+export const MISTPROOF_MARK = 'mistex-receipt/1';
 
 export type FetchResult = { ok: true; text: string } | { ok: false; why: string };
 

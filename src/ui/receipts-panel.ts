@@ -4,7 +4,8 @@ import type { SavedLetter } from '../log/store';
 import { EXPORT_WARNING } from '../receipts/export';
 import type { SavedReceipt } from '../receipts/store';
 import { lookupWaitMs } from '../receipts/witness';
-import { logFetchOn, patchSettings, patchXmrSettings, receiptsOn, settingsItem, siteInfoOn, siteWarningsOn, xmrSettingsItem } from '../settings';
+import { swapRecordDaysOf } from '../receipts/cleanup';
+import { logFetchOn, patchSettings, patchXmrSettings, receiptsOn, settingsItem, siteInfoOn, siteWarningsOn, swapRecordDaysItem, swapRecordsCleanedItem, xmrSettingsItem } from '../settings';
 import { part, setStatus } from './dom';
 
 /**
@@ -71,6 +72,18 @@ export async function mountReceiptsPanel(root: HTMLElement) {
   xmrSettingsItem.watch((s) => showSite(s));
   siteInfo.addEventListener('change', () => void patchXmrSettings({ siteInfo: siteInfo.checked }));
   siteWarnings.addEventListener('change', () => void patchXmrSettings({ siteWarnings: siteWarnings.checked }));
+
+  // automatic deletion: the background cleans when this changes and at least daily; the list follows
+  const keepDays = part<HTMLSelectElement>(root, 'receipts', 'keep-days');
+  keepDays.value = String(swapRecordDaysOf(await swapRecordDaysItem.getValue()));
+  swapRecordDaysItem.watch((d) => (keepDays.value = String(swapRecordDaysOf(d))));
+  keepDays.addEventListener('change', () => void swapRecordDaysItem.setValue(swapRecordDaysOf(Number(keepDays.value))));
+  swapRecordsCleanedItem.watch((c) => {
+    if (!c) return;
+    const n = c.receipts + c.letters;
+    setStatus(status, `Deleted ${n} old ${n === 1 ? 'record' : 'letters and receipts'}.`, 'ok');
+    void load();
+  });
 
   let saved: SavedReceipt[] = [];
   let letters: SavedLetter[] = [];

@@ -26,10 +26,13 @@ export interface Settings {
   receiptsCheck?: boolean;
   /** "Fetch letters of guarantee on order pages" (PLAN-LOG Round 2 item 9); read with `logFetchOn`, on unless switched off */
   logFetch?: boolean;
+  /** "Remove X's share tracking from links"; read with `cleanXLinksOn`, on unless switched off */
+  cleanXLinks?: boolean;
 }
 
 export const shareMenuOn = (s: Partial<Settings> | null | undefined) => s?.shareMenuX !== false;
 export const receiptsOn = (s: Partial<Settings> | null | undefined) => s?.receiptsCheck !== false;
+export const cleanXLinksOn = (s: Partial<Settings> | null | undefined) => s?.cleanXLinks !== false;
 export const logFetchOn = (s: Partial<Settings> | null | undefined) => receiptsOn(s) && s?.logFetch !== false;
 
 export const settingsItem = storage.defineItem<Settings>('sync:settings', {
@@ -135,4 +138,8 @@ export const myHandleItem = storage.defineItem<{ handle: string; proven: boolean
 export const directoryStatusItem = storage.defineItem<DirectoryStatus | null>('local:xmrbioDirectoryStatus', { fallback: null });
 
 /** A handle whose X self-claims changed: x.com tabs drop its badge and look it up again. */
+/** Days after which saved letters and receipts are deleted (0: keep; 90 unless chosen); per browser, like the records (PLAN-AUTOCLEAN) */
+export const swapRecordDaysItem = storage.defineItem<number>('local:swapRecordDays', { fallback: 90 });
+/** The last automatic clean-up that deleted something, for the options page to reload its list */
+export const swapRecordsCleanedItem = storage.defineItem<{ at: number; receipts: number; letters: number } | null>('local:swapRecordsCleaned', { fallback: null });
 export const xClaimsChangedItem = storage.defineItem<{ handle: string; at: number } | null>('local:xClaimsChanged', { fallback: null });

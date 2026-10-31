@@ -72,7 +72,7 @@ dl.state dd { margin: 0; }
 }
 
 /* Badges: look picker */
-#badge-look, #badge-switches, #receipts-switch, #site-switches { max-width: 460px; padding: 6px 16px; display: flex; flex-direction: column; }
+#badge-look, #badge-switches, #receipts-switch, #site-switches, #keep-switch { max-width: 460px; padding: 6px 16px; display: flex; flex-direction: column; }
 #badge-look { padding-top: 14px; gap: 4px; }
 .looks { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 6px 0 2px; }
 .look { position: relative; display: flex; align-items: center; justify-content: center; height: 44px; border: 1px solid var(--border); border-radius: 10px; cursor: pointer; }

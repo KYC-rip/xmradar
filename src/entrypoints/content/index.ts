@@ -1,12 +1,13 @@
 import { handleFromTarget } from '../../identity/x-handle';
 import { sendToBackground, type OpenComposerMsg, type OpenTipMsg } from '../../messaging';
-import { settingsItem, shareMenuOn } from '../../settings';
+import { cleanXLinksOn, settingsItem, shareMenuOn } from '../../settings';
 import { isXHost } from '../../sender';
 import { openComposer } from './composer';
 import { openTip } from './tip';
 import { startReceipts } from './receipt';
 import { startSiteInfo } from './site';
 import { startBadges } from './x-badges';
+import { startCopyLinks } from './x-copy-links';
 import { shareMenu, type ShareMenu } from './x-share';
 import './style.css';
 
@@ -41,13 +42,27 @@ export default defineContentScript({
         share = null;
       }
     };
+    // X's share tracking taken out of copied X links; switched live too
+    let stopCopyLinks: (() => void) | null = null;
+    const setCopyLinks = (on: boolean) => {
+      if (on && !stopCopyLinks && alive) stopCopyLinks = startCopyLinks(document);
+      else if (!on && stopCopyLinks) {
+        stopCopyLinks();
+        stopCopyLinks = null;
+      }
+    };
     if (onX) {
-      void settingsItem.getValue().then((s) => setShare(shareMenuOn(s)));
-      const unwatch = settingsItem.watch((s) => setShare(shareMenuOn(s)));
+      const apply = (s: Parameters<typeof shareMenuOn>[0]) => {
+        setShare(shareMenuOn(s));
+        setCopyLinks(cleanXLinksOn(s));
+      };
+      void settingsItem.getValue().then(apply);
+      const unwatch = settingsItem.watch(apply);
       ctx.onInvalidated(() => {
         alive = false;
         unwatch();
         setShare(false);
+        setCopyLinks(false);
       });
     }
 

@@ -10,6 +10,7 @@ import type { PageCheck } from './receipts/check';
 import type { ReceiptExport } from './receipts/export';
 import type { PublicRecord, SavedReceipt } from './receipts/store';
 import type { SiteEntry } from './sites/feed';
+import type { Lookalike } from './sites/lookalike-text';
 import type { AddressCheck } from './xmr/address';
 
 /** background → content */
@@ -69,6 +70,8 @@ export interface XapPostTotalsResult {
 /** The xmr.club listings for a tab's host (PLAN-SITEFEED); `outOfDate` once the kept feed has expired. */
 export interface SiteInfo {
   sites: SiteEntry[];
+  /** the host poses as a listed service (PLAN-LOOKALIKE), even with no listing of its own */
+  lookalike?: Lookalike | null;
   outOfDate: boolean;
   /** unix seconds */
   issuedAt: number | null;

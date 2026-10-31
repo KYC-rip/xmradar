@@ -55,3 +55,16 @@ export function shareMenuRateLimit(last: Record<number, number>, tabId: number, 
 /** The per-tab times without a closed tab. */
 export const withoutTab = (last: Record<number, number>, tabId: number): Record<number, number> =>
   Object.fromEntries(Object.entries(last).filter(([id]) => Number(id) !== tabId));
+
+/** Where XMRadar asks the NIP-07 signer from: our own page, with no script of its own (PLAN-SIGNERPAGE). */
+export const SIGNER_PAGE = 'https://xmradar.app/signer';
+
+/** The signer tab is still on that page: exactly this origin and path (Cloudflare may keep `.html`). */
+export function isSignerPage(url: string | undefined): boolean {
+  try {
+    const u = new URL(url ?? '');
+    return u.origin === 'https://xmradar.app' && !u.username && !u.password && (u.pathname === '/signer' || u.pathname === '/signer.html');
+  } catch {
+    return false;
+  }
+}

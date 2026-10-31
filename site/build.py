@@ -18,7 +18,7 @@ from pathlib import Path
 
 REPO = 'KYC-rip/xmradar'
 SITE = Path(__file__).resolve().parent
-ASSETS = ['style.css', 'app.js', 'logo', 'fonts', 'shots']
+ASSETS = ['style.css', 'app.js', 'logo', 'fonts', 'shots', 'signer.html']
 
 # no third-party requests: fonts and scripts are served from this site
 HEADERS = """/*
@@ -26,6 +26,10 @@ HEADERS = """/*
   Referrer-Policy: no-referrer
   X-Content-Type-Options: nosniff
   Permissions-Policy: interest-cohort=(), browsing-topics=()
+/signer
+  Content-Security-Policy: default-src 'none'; style-src 'self'; font-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'
+/signer.html
+  Content-Security-Policy: default-src 'none'; style-src 'self'; font-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'
 """
 
 
