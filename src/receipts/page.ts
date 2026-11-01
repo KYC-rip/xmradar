@@ -47,22 +47,32 @@ export function shown(el: Element): boolean {
 }
 
 const LEVEL_CHARS = 400;
+const LEVEL_NODES = 2_000;
 
-/** An element's text with a space between text nodes (textContent runs neighbouring blocks together), capped. */
+/**
+ * An element's shown text with a space between text nodes (textContent runs neighbouring blocks together),
+ * capped (characters and nodes walked). Hidden subtrees are skipped: text the user can't see neither labels a box nor stops the climb.
+ */
 function spacedText(el: Element): string {
-  const walker = el.ownerDocument.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+  const walker = el.ownerDocument.createTreeWalker(el, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT, {
+    acceptNode: (n) => (n.nodeType === 1 && !shown(n as Element) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT),
+  });
   let out = '';
-  for (let n = walker.nextNode(); n && out.length < LEVEL_CHARS; n = walker.nextNode()) out += ` ${n.textContent ?? ''}`;
+  let nodes = 0;
+  for (let n = walker.nextNode(); n && out.length < LEVEL_CHARS && nodes++ < LEVEL_NODES; n = walker.nextNode()) if (n.nodeType === 3) out += ` ${n.textContent ?? ''}`;
   return out.slice(0, LEVEL_CHARS);
 }
 
-/** The label text at each level around an element: itself, then up to 3 ancestors. */
-function* labelLevels(el: Element): Generator<string> {
+/**
+ * The label text at each level around an element: itself, then up to 3 ancestors, with the element. Never the
+ * page itself (`body`, `html`): a label anywhere on the page says nothing about this element's box.
+ */
+function* labelLevels(el: Element): Generator<{ at: Element; text: string }> {
   let at: Element | null = el;
-  for (let i = 0; i < 4 && at; i++, at = at.parentElement) yield `${at.getAttribute('aria-label') ?? ''} ${spacedText(at)}`;
+  for (let i = 0; i < 4 && at && at.localName !== 'body' && at.localName !== 'html'; i++, at = at.parentElement) yield { at, text: `${at.getAttribute('aria-label') ?? ''} ${spacedText(at)}` };
 }
 
-const labelOf = (el: Element) => [...labelLevels(el)].join(' ');
+const labelOf = (el: Element) => [...labelLevels(el)].map((l) => l.text).join(' ');
 
 const ALL_FAMILIES: ReadonlySet<Family> = new Set(['XMR', 'BTC']);
 
@@ -72,18 +82,30 @@ const ALL_FAMILIES: ReadonlySet<Family> = new Set(['XMR', 'BTC']);
  * (`holdsOther`, by default an XMR or BTC one): a label there may belong to that one.
  */
 export function roleOf(el: Element, address: string, holdsOther = (text: string) => findAddresses(text, ALL_FAMILIES).some((a) => !sameAddress(a.address, address))): Role {
-  const marked = el.closest('[data-nkip01]')?.getAttribute('data-nkip01');
-  if (marked === 'deposit_address') return 'deposit';
-  if (marked === 'payout_address') return 'payout';
-  for (const text of labelLevels(el)) {
-    if (holdsOther(text)) return null;
-    const d = DEPOSIT_LABEL.test(text);
-    const p = PAYOUT_LABEL.test(text);
-    if (d !== p) return d ? 'deposit' : 'payout';
-    if (d && p) return null;
-  }
-  return null;
+  return roleAt(el, holdsOther).role;
 }
+
+/**
+ * `roleOf`, and the element whose label decided it (`box`): two things in one labelled box share it. A page
+ * may add its own deposit wording (`depositLabel`), e.g. BitcoinVN's "Single-use address" on letter pages.
+ */
+export function roleAt(el: Element, holdsOther: (text: string) => boolean, depositLabel: RegExp = DEPOSIT_LABEL): { role: Role; box: Element | null } {
+  const marked = el.closest('[data-nkip01]');
+  const m = marked?.getAttribute('data-nkip01');
+  if (m === 'deposit_address') return { role: 'deposit', box: marked! };
+  if (m === 'payout_address') return { role: 'payout', box: marked! };
+  for (const { at, text } of labelLevels(el)) {
+    if (holdsOther(text)) return { role: null, box: null };
+    const d = depositLabel.test(text);
+    const p = PAYOUT_LABEL.test(text);
+    if (d !== p) return { role: d ? 'deposit' : 'payout', box: at };
+    if (d && p) return { role: null, box: null };
+  }
+  return { role: null, box: null };
+}
+
+/** The deposit wording `roleOf` reads, for pages that add their own. */
+export const DEPOSIT_WORDS = DEPOSIT_LABEL;
 
 /** Every visible text holder: text nodes' parents and input/textarea values. */
 export function* visibleTexts(doc: Document): Generator<{ el: Element; text: string }> {

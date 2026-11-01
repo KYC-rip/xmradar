@@ -1,5 +1,5 @@
 import type { Line } from '../receipts/check';
-import { roleOf, shown, visibleTexts, type Role } from '../receipts/page';
+import { DEPOSIT_WORDS, roleAt, shown, visibleTexts, type Role } from '../receipts/page';
 import type { LetterAddress, UnreadDeposit } from './check';
 import { findLetterAddresses, letterFamily, sameLetterAddress, tonForms, type LetterFamily } from './families';
 
@@ -61,6 +61,120 @@ export function visiblePageText(doc: Document): { text: string; cut: boolean } {
   return { text: text.slice(0, PAGE_CHARS), cut: text.length > PAGE_CHARS };
 }
 
+// ---- copy buttons and payment links (PLAN-COPYTARGET) ----
+
+/** BitcoinVN labels its deposit box "Single-use address": a deposit on a letter page. */
+const LETTER_DEPOSIT = new RegExp(`${DEPOSIT_WORDS.source}|\\bsingle[- ]use address\\b`, 'i');
+export const MAX_TARGETS = 200;
+const PAY_SCHEMES = new Set(['bitcoin', 'monero', 'solana', 'tron', 'ethereum', 'ton']);
+const RECIPIENT_PARAMS = new Set(['address', 'to', 'recipient']);
+
+/**
+ * The one recipient of a payment URI (`bitcoin:`, `monero:`, `solana:`, `tron:`, `ethereum:` per EIP-681,
+ * `ton:` / `ton://transfer/`), `unreadable` when it can't be named for sure, or null when it isn't one.
+ * Percent-decoded once; other parameters (amount, spl-token, …) are never read.
+ */
+export function uriRecipient(value: string): string | 'unreadable' | null {
+  const m = /^([a-z][a-z0-9+.-]*):([\s\S]*)$/i.exec(value.trim());
+  if (!m || !PAY_SCHEMES.has(m[1]!.toLowerCase())) return null;
+  const scheme = m[1]!.toLowerCase();
+  let rest: string;
+  try {
+    rest = decodeURIComponent(m[2]!);
+  } catch {
+    return 'unreadable';
+  }
+  const q = rest.indexOf('?');
+  let path = (q < 0 ? rest : rest.slice(0, q)).split('#')[0]!;
+  const query = q < 0 ? '' : rest.slice(q + 1).split('#')[0]!;
+  const named = query
+    .split('&')
+    .map((kv) => kv.split('='))
+    .filter(([k]) => k && RECIPIENT_PARAMS.has(k.toLowerCase()))
+    .map(([, v]) => v ?? '');
+  if (named.length > 1) return 'unreadable';
+  if (scheme === 'ton' && path.startsWith('//')) {
+    if (!path.startsWith('//transfer/')) return 'unreadable';
+    path = path.slice('//transfer/'.length).split('/')[0]!;
+  }
+  if (scheme === 'ethereum') {
+    // ethereum:<target>[@chain][/function]?address=<recipient>: a token transfer names its recipient in address=
+    // only (EIP-681); a to= or recipient= a wallet may ignore can't be read for sure
+    if (query.split('&').some((kv) => /^(to|recipient)=/i.test(kv))) return 'unreadable';
+    const target = path.split(/[@/]/)[0]!;
+    const fn = path.includes('/') ? path.slice(path.indexOf('/') + 1) : '';
+    if (named.length) return fn === 'transfer' || named[0] === target ? named[0]! || 'unreadable' : 'unreadable';
+    return target || null;
+  }
+  if (named.length && named[0] !== path) return 'unreadable';
+  return path.trim() || null;
+}
+
+export interface PageTarget {
+  el: Element;
+  /** the address it holds, or unreadable */
+  address: string | 'unreadable';
+}
+
+/**
+ * What the page's copy buttons and payment links hold: a copy attribute (`data-clipboard-text`, `data-copy`, …)
+ * with an address or a payment URI, and `href` / `data-content` / `value` with a payment URI. Shown elements
+ * only; past MAX_TARGETS shown candidates the rest isn't read (`cut`).
+ */
+export function pageTargets(doc: Document, families: ReadonlySet<LetterFamily>): { targets: PageTarget[]; cut: boolean } {
+  const targets: PageTarget[] = [];
+  let candidates = 0;
+  for (const el of (doc.body ?? doc.documentElement).getElementsByTagName('*')) {
+    const values: string[] = [];
+    for (const a of el.attributes) {
+      const name = a.name.toLowerCase();
+      if (/clipboard|copy/.test(name)) values.push(a.value);
+      else if ((name === 'href' || name === 'data-content' || name === 'value') && uriRecipient(a.value) !== null) values.push(a.value);
+    }
+    if (!values.length) continue;
+    if (!shown(el)) continue;
+    if (++candidates > MAX_TARGETS) return { targets, cut: true };
+    for (const v of values) {
+      const r = uriRecipient(v);
+      if (r === 'unreadable') targets.push({ el, address: 'unreadable' });
+      else if (r !== null) {
+        const found = findLetterAddresses(r, families);
+        if (found.length === 1 && found[0]!.address === r) targets.push({ el, address: r });
+      } else for (const { address } of findLetterAddresses(v.trim(), families)) targets.push({ el, address });
+    }
+  }
+  return { targets, cut: false };
+}
+
+const MAX_HOLDERS = 5_000;
+
+/**
+ * Elements showing `address` shortened (one text node, or prefix and suffix in sibling spans); each element is
+ * read once, and past MAX_HOLDERS the search gives up (null: no upgrade).
+ */
+function shortenedHolders(doc: Document, address: string, families: ReadonlySet<LetterFamily>): Element[] | null {
+  const out = new Set<Element>();
+  const seen = new Set<Element>();
+  const walker = doc.createTreeWalker(doc.body ?? doc.documentElement, NodeFilter.SHOW_TEXT);
+  for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+    const el = n.parentElement;
+    if (!el || !n.textContent?.trim() || SKIP_TAGS.has(el.tagName) || !shown(el)) continue;
+    for (const holder of [el, el.parentElement]) {
+      if (!holder || seen.has(holder)) continue;
+      seen.add(holder);
+      if (seen.size > MAX_HOLDERS) return null;
+      // text nodes as they are, shown child elements' text, anything else (hidden spans, comments) a space
+      const t = [...holder.childNodes].map((c) => (c.nodeType === 3 ? (c.textContent ?? '') : c.nodeType === 1 && shown(c as Element) ? (c.textContent ?? '') : ' ')).join(' ').slice(0, 400);
+      const tokens = [...t.matchAll(SHORT_RE), ...(families.has('TON') ? t.matchAll(TON_SHORT_RE) : []), ...t.matchAll(SPLIT_RE)];
+      if (tokens.some((m) => fits(address, m[1]!, m[2]!))) {
+        out.add(holder);
+        break;
+      }
+    }
+  }
+  return [...out];
+}
+
 const lower = (a: string) => (/^(bc1|0x)/i.test(a) ? a.toLowerCase() : a);
 const fitsAs = (a: string, prefix: string, suffix: string) => {
   const [x, p, s] = /^(bc1|0x)/i.test(prefix) ? [lower(a), prefix.toLowerCase(), suffix.toLowerCase()] : [a, prefix, suffix];
@@ -92,11 +206,11 @@ export function letterAddressLines(doc: Document, addresses: LetterAddress[], no
         // a Solana or TON one only in the deposit or payout slot; the climb passes the signed send
         // addresses, so one set beside the real deposit still counts
         const signedOne = (o: string) => addresses.some((a) => a.role && sameLetterAddress(a.address, o));
-        if (!loose(address) || roleOf(el, address, (lt) => findLetterAddresses(lt, families).some((o) => !sameLetterAddress(o.address, address) && !signedOne(o.address)))) unsigned.add(address);
+        if (!loose(address) || roleAt(el, (lt) => findLetterAddresses(lt, families).some((o) => !sameLetterAddress(o.address, address) && !signedOne(o.address)), LETTER_DEPOSIT).role) unsigned.add(address);
         continue;
       }
       // a signed token's contract beside it doesn't own the label
-      const role = roleOf(el, address, (lt) => findLetterAddresses(lt, families).some((o) => !sameLetterAddress(o.address, address) && !token(o.address)));
+      const role = roleAt(el, (lt) => findLetterAddresses(lt, families).some((o) => !sameLetterAddress(o.address, address) && !token(o.address)), LETTER_DEPOSIT).role;
       shownAs.set(s.address, (shownAs.get(s.address) ?? new Set()).add(role));
     }
   }
@@ -105,6 +219,38 @@ export function letterAddressLines(doc: Document, addresses: LetterAddress[], no
   if (unsigned.size) {
     lines.push({ level: 'warn', text: `This page shows ${unsigned.size > 1 ? 'addresses' : 'an address'} the signed letter doesn't name: ${[...unsigned].map(short).join(', ')}. Don't send.` });
   }
+
+  // copy buttons and payment links: an unsigned one in a send box warns; elsewhere they can only stop the upgrade below
+  const { targets, cut: targetsCut } = pageTargets(doc, families);
+  const othersIn = (address: string) => (lt: string) => findLetterAddresses(lt, families).some((o) => !sameLetterAddress(o.address, address) && !token(o.address));
+  // a copy button's box may show signed addresses beside it (the deposit as text): only an unsigned one ends the climb
+  const unsignedIn = (address: string) => (lt: string) => findLetterAddresses(lt, families).some((o) => !sameLetterAddress(o.address, address) && !signedHas(addresses, o.address));
+  const targetAt = (t: PageTarget) => roleAt(t.el, t.address === 'unreadable' ? () => false : unsignedIn(t.address), LETTER_DEPOSIT);
+  let noUpgrade = false;
+  const badTargets: { role: 'deposit' | 'payout'; address: string }[] = [];
+  let unreadableInDeposit = false;
+  let signedOtherInDeposit = false;
+  for (const t of targets) {
+    const { role } = targetAt(t);
+    if (t.address === 'unreadable') {
+      if (role === 'deposit') unreadableInDeposit = true;
+      noUpgrade = true;
+    } else if (!signedHas(addresses, t.address)) {
+      if (role) badTargets.push({ role, address: t.address });
+      // a Solana or TON account beside the order (a mint, a program) warns nobody, but the card stays careful
+      else if (loose(t.address)) noUpgrade = true;
+    } else if (role === 'deposit' && !addresses.some((a) => a.role === 'deposit' && sameLetterAddress(a.address, t.address as string))) {
+      // a signed payout, refund or token in the deposit box's copy button or link
+      signedOtherInDeposit = true;
+    }
+  }
+  if (signedOtherInDeposit) lines.push({ level: 'warn', text: "This page's copy button or payment link in the deposit box holds a signed address that isn't the deposit (payout, refund or token). Don't send." });
+  for (const r of ['deposit', 'payout'] as const) {
+    const bad = badTargets.filter((b) => b.role === r);
+    if (bad.length) lines.push({ level: 'warn', text: `This page's copy button or payment link in the ${r} box holds an address the signed letter doesn't name: ${[...new Set(bad.map((b) => short(b.address)))].join(', ')}. Don't send.` });
+  }
+  if (unreadableInDeposit) lines.push({ level: 'caution', text: "A payment link in this page's deposit box can't be read for sure. Compare the address in your wallet with the letter yourself." });
+  if (targetsCut) lines.push({ level: 'caution', text: 'This page has more copy buttons and payment links than XMRadar checks. Compare the address in your wallet with the letter yourself.' });
   const deposits = addresses.filter((a) => a.role === 'deposit');
   // anything signed that isn't the deposit: payout, refund, or an address the letter names without a role (BitcoinVN's token contract)
   const others = addresses.filter((a) => a.role !== 'deposit');
@@ -137,7 +283,20 @@ export function letterAddressLines(doc: Document, addresses: LetterAddress[], no
     } else if (as.size) {
       if (!as.has('payout')) lines.push({ level: 'caution', text: `The signed deposit address is on the page, but not labelled as the deposit. Check that your wallet sends to ${d.address}.` });
     } else if ([...shortened, ...split].some(({ prefix, suffix }) => fits(d.address, prefix, suffix))) {
-      lines.push({ level: 'caution', text: `The page shows the deposit address shortened. It fits the signed letter's: ${d.address}. Check that your wallet sends to exactly this address.` });
+      // the copy button or payment link beside the shortened deposit holds the full signed one: in the same labelled box
+      const boxes = new Set(
+        (shortenedHolders(doc, d.address, families) ?? [])
+          .map((el) => roleAt(el, othersIn(d.address), LETTER_DEPOSIT))
+          .filter((r) => r.role === 'deposit')
+          .map((r) => r.box),
+      );
+      const beside = targets.some((t) => t.address !== 'unreadable' && sameLetterAddress(t.address, d.address) && (({ role, box }) => role === 'deposit' && boxes.has(box))(targetAt(t)));
+      if (beside && !blocked && !noUpgrade && !targetsCut) {
+        lines.push({
+          level: 'ok',
+          text: "The deposit address on this page is the one in the signed letter (shortened on screen; the copy button or payment link beside it holds the full address). The QR code isn't checked: scan only if your wallet shows this address.",
+        });
+      } else lines.push({ level: 'caution', text: `The page shows the deposit address shortened. It fits the signed letter's: ${d.address}. Check that your wallet sends to exactly this address.` });
     } else {
       lines.push({ level: 'caution', text: `Deposit address not found as text (QR only?). The signed letter's is ${d.address}: check that your wallet sends to it.` });
     }
