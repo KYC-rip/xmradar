@@ -28,11 +28,16 @@ export interface Settings {
   logFetch?: boolean;
   /** "Remove X's share tracking from links"; read with `cleanXLinksOn`, on unless switched off */
   cleanXLinks?: boolean;
+  /** Tags every copy starts with (PLAN-TAGS) */
+  defaultTags?: string[];
+  /** "Also add tags as #hashtags at the end of the note"; read with `hashtagLineOn`, on unless switched off */
+  hashtagLine?: boolean;
 }
 
 export const shareMenuOn = (s: Partial<Settings> | null | undefined) => s?.shareMenuX !== false;
 export const receiptsOn = (s: Partial<Settings> | null | undefined) => s?.receiptsCheck !== false;
 export const cleanXLinksOn = (s: Partial<Settings> | null | undefined) => s?.cleanXLinks !== false;
+export const hashtagLineOn = (s: Partial<Settings> | null | undefined) => s?.hashtagLine !== false;
 export const logFetchOn = (s: Partial<Settings> | null | undefined) => receiptsOn(s) && s?.logFetch !== false;
 
 export const settingsItem = storage.defineItem<Settings>('sync:settings', {
@@ -50,6 +55,23 @@ function patcher<T extends object>(item: WxtStorageItem<T, Record<string, unknow
 }
 
 export const patchSettings = patcher(settingsItem);
+
+/**
+ * AI tag suggestions (PLAN-TAGS), per browser: a local model first, or a provider with the user's key.
+ * Off by default. The key is its own `local:` item, never synced and never sent to a content script.
+ */
+export type AiSource = 'local' | 'openai' | 'anthropic';
+export interface AiTagSettings {
+  on: boolean;
+  source: AiSource;
+  /** the local or OpenAI-compatible base URL (unused for Anthropic) */
+  baseUrl: string;
+  model: string;
+}
+export const DEFAULT_AI_TAGS: AiTagSettings = { on: false, source: 'local', baseUrl: 'http://localhost:11434', model: '' };
+export const aiTagsItem = storage.defineItem<AiTagSettings>('local:aiTags', { fallback: DEFAULT_AI_TAGS });
+export const aiKeyItem = storage.defineItem<string>('local:aiKey', { fallback: '' });
+export const patchAiTags = patcher(aiTagsItem);
 
 /** Last pubkey seen from the signer, used by the options page for NIP-65 lookups. */
 export const pubkeyItem = storage.defineItem<string | null>('local:pubkey', { fallback: null });

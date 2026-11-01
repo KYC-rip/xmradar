@@ -133,6 +133,8 @@ export interface RelayResult {
   message: string;
 }
 
+import type { SuggestResult } from './ai/tags';
+
 /** content/options → background */
 export type BgRequest =
   | { type: 'fetch-image'; sessionId: string; url: string }
@@ -141,6 +143,9 @@ export type BgRequest =
   | { type: 'republish'; sessionId: string; event: Event; relays: string[] }
   | { type: 'check-duplicate'; sessionId: string; sourceUrl: string; text: string }
   | { type: 'close-session'; sessionId: string }
+  /** AI tag suggestions (PLAN-TAGS): whether Suggest can show, and one request on a trusted click */
+  | { type: 'ai-tags-ready'; sessionId: string }
+  | { type: 'suggest-tags'; sessionId: string; text: string; have?: string[] }
   | { type: 'load-nip65'; pubkey: string }
   | { type: 'test-signer' }
   | { type: 'xmrbio-resolve'; handle: string }
@@ -193,6 +198,10 @@ export type BgResponse<T extends BgRequest['type']> = T extends 'fetch-image'
         ? { results: RelayResult[] }
       : T extends 'check-duplicate'
         ? { duplicate: boolean }
+      : T extends 'ai-tags-ready'
+        ? { ready: boolean; local: boolean }
+      : T extends 'suggest-tags'
+        ? SuggestResult
         : T extends 'load-nip65'
           ? { relays: string[] }
           : T extends 'test-signer'

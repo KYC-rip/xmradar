@@ -14,6 +14,7 @@
 main { padding: 36px 40px 64px; max-width: 760px; box-sizing: border-box; }
 section { display: flex; flex-direction: column; gap: 18px; }
 section[hidden] { display: none; }
+#ai-tags [hidden] { display: none !important; }
 h1 { font-size: 24px; }
 .lead { color: var(--muted); max-width: 620px; }
 kbd { font: 12px var(--mono); padding: 1px 5px; border-radius: 4px; background: var(--chip); }
@@ -23,6 +24,9 @@ kbd { font: 12px var(--mono); padding: 1px 5px; border-radius: 4px; background: 
 .field { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 16px; padding: 4px 0; }
 .field h2 { font-size: 14px; padding-top: 8px; }
 .field > div { display: flex; flex-direction: column; gap: 8px; }
+.stack { display: flex; flex-direction: column; gap: 8px; }
+.indent { padding-left: 24px; }
+input[type='radio'] { accent-color: var(--accent); margin: 0 4px 0 0; }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .chips:empty { display: none; }
 .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--track); }

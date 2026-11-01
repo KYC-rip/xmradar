@@ -20,7 +20,8 @@ import { KIND_ARTICLE, checkBlossomAuth, checkPublishable, checkSigned, dedupeKe
 import { allRelaysFrom, fetchWriteRelays, publishToRelays, readEach, readRelay } from '../nostr/relays';
 import { assertFetchableImageUrl } from '../nostr/url-guard';
 import { checkSessionSender, checkShareMenuSender, isExtensionPageSender, isSignerPage, isXUrl, SIGNER_PAGE, shareMenuRateLimit, withoutTab } from '../sender';
-import { DEFAULT_RELAYS, directoryStatusItem, INDEX_RELAYS, withoutIndex, myHandleItem, postedItem, pubkeyItem, receiptsOn, settingsItem, siteInfoOn, siteWarningsOn, copyReportsOn, swapRecordDaysItem, swapRecordsCleanedItem, xapMarksItem, xClaimsChangedItem, xClaimsOn, xmrSettingsItem } from '../settings';
+import { aiReady, suggestTags } from '../ai/tags';
+import { aiKeyItem, aiTagsItem, DEFAULT_RELAYS, directoryStatusItem, INDEX_RELAYS, withoutIndex, myHandleItem, postedItem, pubkeyItem, receiptsOn, settingsItem, siteInfoOn, siteWarningsOn, copyReportsOn, swapRecordDaysItem, swapRecordsCleanedItem, xapMarksItem, xClaimsChangedItem, xClaimsOn, xmrSettingsItem } from '../settings';
 import { storage } from 'wxt/utils/storage';
 import { activeInbox, burnerCreatingItem, burnerInboxItem, burnerLastErrorItem, burnFreeInbox, createFreeInbox, forgetImportedInbox, importInbox, type BurnerDeps } from '../burner/service';
 import { idbTokenStore } from '../burner/token-store';
@@ -408,6 +409,16 @@ async function handle(msg: BgRequest, sender: Browser.runtime.MessageSender): Pr
     case 'check-duplicate': {
       await requireSession(msg.sessionId, sender);
       return { duplicate: (await postedItem.getValue()).includes(await dedupeKey(msg.sourceUrl, msg.text)) };
+    }
+    case 'ai-tags-ready': {
+      await requireSession(msg.sessionId, sender);
+      const ai = await aiTagsItem.getValue();
+      return { ready: aiReady(ai, await aiKeyItem.getValue()), local: ai.source === 'local' };
+    }
+    case 'suggest-tags': {
+      await requireSession(msg.sessionId, sender);
+      const have = Array.isArray(msg.have) ? msg.have.filter((t): t is string => typeof t === 'string') : [];
+      return suggestTags(await aiTagsItem.getValue(), await aiKeyItem.getValue(), String(msg.text), fetch, undefined, have);
     }
     case 'close-session': {
       await requireSession(msg.sessionId, sender);

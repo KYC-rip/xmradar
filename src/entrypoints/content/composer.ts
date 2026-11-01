@@ -9,7 +9,9 @@ import { cleanXLinks } from '../../extractors/x-links';
 import { sendToBackground, type OpenComposerMsg, type RelayResult } from '../../messaging';
 import { articleTemplate, articleTooLarge, blossomAuthTemplate, buildNote, checkSigned, encodeAuthHeader, wordCount, type PostImage } from '../../nostr/event';
 import { retryable } from '../../nostr/retry';
-import { cleanXLinksOn, settingsItem } from '../../settings';
+import { cleanXLinksOn, hashtagLineOn, settingsItem } from '../../settings';
+import { hashtagsOf } from '../../nostr/tags';
+import { tagRow } from './tag-row';
 import { h, trapFocus } from './dom';
 import { autoCloser, composerDock, createPill, pillView, type ComposerInstance, type PillState } from './publish-pill';
 import { composerKey } from './composer-key';
@@ -108,6 +110,19 @@ async function mountComposer(ctx: ContentScriptContext, msg: OpenComposerMsg, ta
         art ? 'You already published this article. Publishing again replaces the earlier version.' : 'You already posted this to Nostr.',
       );
 
+      // the text's hashtags, then the user's own (PLAN-TAGS); the user owns the list from here
+      const textTags = () => hashtagsOf(textarea.value);
+      const tagsUi = tagRow({ initial: [...hashtagsOf(`${titleInput.value}\n${textarea.value}`), ...(settings.defaultTags ?? [])], textTags });
+      textarea.addEventListener('input', () => tagsUi.refresh());
+      // nothing goes to a model unless it's set up, and then only on a real click on Suggest
+      void sendToBackground({ type: 'ai-tags-ready', sessionId: msg.sessionId })
+        .then((r) => {
+          if (!r.ready) return;
+          const text = () => (art ? [titleInput.value, summaryInput.value, textarea.value.slice(0, 4000)].filter((t) => t.trim()).join('\n\n') : textarea.value);
+          tagsUi.setSuggest(() => sendToBackground({ type: 'suggest-tags', sessionId: msg.sessionId, text: text(), have: [...new Set([...tagsUi.tags(), ...textTags()])] }), r.local);
+        })
+        .catch(() => {});
+
       const selected = new Set<ExtractedImage>(post.images);
       // the post's images, then any pasted or dropped in (notes only); pasted ones live in this page only
       const images = [...post.images];
@@ -136,6 +151,7 @@ async function mountComposer(ctx: ContentScriptContext, msg: OpenComposerMsg, ta
         art ? titleInput : '',
         art ? summaryInput : '',
         textarea,
+        tagsUi.el,
         art ? wordsLine : '',
         art ? sizeLine : '',
         imageGrid,
@@ -359,6 +375,7 @@ async function mountComposer(ctx: ContentScriptContext, msg: OpenComposerMsg, ta
         busy = true;
         minimise();
         textarea.readOnly = titleInput.readOnly = summaryInput.readOnly = true;
+        tagsUi.setReadOnly(true);
         publishBtn.disabled = true;
         publishBtn.classList.add('busy');
         results.replaceChildren();
@@ -387,9 +404,17 @@ async function mountComposer(ctx: ContentScriptContext, msg: OpenComposerMsg, ta
               markdown: text,
               sourceUrl: post.sourceUrl,
               appendSource: appendSource.checked,
+              tags: tagsUi.tags(),
             });
           } else {
-            template = buildNote({ text, images: [...prepared.values()], sourceUrl: post.sourceUrl, appendSource: appendSource.checked });
+            template = buildNote({
+              text,
+              images: [...prepared.values()],
+              sourceUrl: post.sourceUrl,
+              appendSource: appendSource.checked,
+              tags: tagsUi.tags(),
+              hashtagLine: hashtagLineOn(await settingsItem.getValue()),
+            });
           }
           if (settings.debug) debugPre.textContent = JSON.stringify(template, null, 2);
           step({ kind: 'signing' });
@@ -416,7 +441,10 @@ async function mountComposer(ctx: ContentScriptContext, msg: OpenComposerMsg, ta
           setStatus((e as Error).message, 'error');
           step({ kind: 'error', message: (e as Error).message });
         } finally {
-          if (!done) textarea.readOnly = titleInput.readOnly = summaryInput.readOnly = false;
+          if (!done) {
+            textarea.readOnly = titleInput.readOnly = summaryInput.readOnly = false;
+            tagsUi.setReadOnly(false);
+          }
           busy = false;
           publishBtn.classList.remove('busy');
           publishBtn.disabled = false;

@@ -1,6 +1,7 @@
 import { verifyEvent, type Event, type EventTemplate } from 'nostr-tools/pure';
 import type { ExtractedArticle, ExtractedImage } from '../extractors/types';
 import { replaceImages } from '../extractors/html-to-markdown';
+import { eventTags, missingHashtagLine } from './tags';
 
 export interface PostImage {
   url: string;
@@ -25,6 +26,9 @@ export function buildNote(opts: {
   images: PostImage[];
   sourceUrl?: string;
   appendSource?: boolean;
+  /** `t` tags (PLAN-TAGS); with `hashtagLine`, the ones missing from the text are added to it as #tags */
+  tags?: string[];
+  hashtagLine?: boolean;
   now?: number;
 }): EventTemplate {
   const seen = new Set<string>();
@@ -35,14 +39,16 @@ export function buildNote(opts: {
     return true;
   });
 
-  const parts = [opts.text.trim()];
+  const tTags = eventTags(opts.tags ?? []);
+  const line = opts.hashtagLine ? missingHashtagLine(opts.text, tTags.map((t) => t[1]!)) : '';
+  const parts = [line ? `${opts.text.trim()}\n\n${line}`.trim() : opts.text.trim()];
   if (images.length) parts.push(images.map((i) => i.url).join('\n'));
   const source = opts.appendSource && opts.sourceUrl ? normalizeUrl(opts.sourceUrl) : undefined;
   if (source) parts.push(source);
 
   const tags = images.map(imetaTag);
   if (source) tags.push(['r', source]);
-  tags.push(['client', 'XMRadar']);
+  tags.push(...tTags, ['client', 'XMRadar']);
 
   return {
     kind: 1,
@@ -66,6 +72,8 @@ export function buildArticle(opts: {
   sourceUrl: string;
   publishedAt: number;
   appendSource?: boolean;
+  /** `t` tags only: an article's text is never changed for them */
+  tags?: string[];
   now?: number;
 }): EventTemplate {
   const source = normalizeUrl(opts.sourceUrl);
@@ -80,7 +88,7 @@ export function buildArticle(opts: {
   if (opts.summary.trim()) tags.push(['summary', opts.summary.trim()]);
   if (opts.cover) tags.push(['image', opts.cover.url]);
   tags.push(['published_at', String(Math.floor(opts.publishedAt / 1000))], ['r', source], ['alt', `Long-form article: ${opts.title.trim()}`]);
-  tags.push(...media.map(imetaTag), ['client', 'XMRadar']);
+  tags.push(...media.map(imetaTag), ...eventTags(opts.tags ?? []), ['client', 'XMRadar']);
   return { kind: KIND_ARTICLE, created_at: opts.now ?? Math.floor(Date.now() / 1000), content: parts.join('\n\n'), tags };
 }
 
@@ -98,6 +106,7 @@ export function articleTemplate(opts: {
   markdown: string;
   sourceUrl: string;
   appendSource?: boolean;
+  tags?: string[];
   now?: number;
 }): EventTemplate {
   const { article, postImages, prepared } = opts;
@@ -114,6 +123,7 @@ export function articleTemplate(opts: {
     sourceUrl: opts.sourceUrl,
     publishedAt: article.publishedAt,
     appendSource: opts.appendSource,
+    tags: opts.tags,
     now: opts.now,
   });
 }

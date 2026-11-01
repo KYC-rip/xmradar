@@ -7,6 +7,7 @@ import { mountBurnerPanel } from '../../ui/burner-panel';
 import { mountReceiptsPanel } from '../../ui/receipts-panel';
 import { setStatus } from '../../ui/dom';
 import { mountBlossomField, mountRelayEditor } from '../../ui/posting-fields';
+import { mountAiTagsPanel, mountTagsField } from '../../ui/ai-tags-panel';
 import { mountSections } from '../../ui/sections';
 import { mountXmrToggles } from '../../ui/xmr-toggles';
 import { initIdentity, testSigner } from './identity';
@@ -60,6 +61,8 @@ for (const [el, patch] of boxes) {
 
 const relays = mountRelayEditor($('relay-editor'));
 void mountBlossomField($('blossom-field'));
+void mountTagsField(document);
+void mountAiTagsPanel(document);
 
 $('test-signer').addEventListener('click', () => void testSigner(signerStatus));
 
