@@ -199,7 +199,7 @@ export type BgResponse<T extends BgRequest['type']> = T extends 'fetch-image'
       : T extends 'check-duplicate'
         ? { duplicate: boolean }
       : T extends 'ai-tags-ready'
-        ? { ready: boolean; local: boolean }
+        ? { ready: boolean; local: boolean; auto: boolean; autoAdd: boolean }
       : T extends 'suggest-tags'
         ? SuggestResult
         : T extends 'load-nip65'

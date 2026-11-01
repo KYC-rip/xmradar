@@ -81,7 +81,25 @@
                     <input id="ai-local-url" type="url" class="mono" spellcheck="false" aria-label="Local model server" placeholder="http://localhost:11434" />
                     <button id="ai-find">Find local models</button>
                   </div>
-                  <p class="hint">Runs on your computer; nothing is sent elsewhere. Ollama allows extensions by default. LM Studio: turn on CORS in its server settings.</p>
+                  <p class="hint">Runs on your computer; nothing is sent elsewhere.</p>
+                  <details class="hint setup">
+                    <summary>First time? Let the model answer the extension</summary>
+                    <ol>
+                      <li>Get a small model, e.g. <code>ollama pull llama3.2:3b</code> (about 2 GB).</li>
+                      <li>
+                        Ollama turns extensions away until you allow them. These steps allow only this extension:
+                        <br />macOS, in Terminal, then quit and reopen Ollama (run it again after the Mac restarts):
+                        <code class="cmd">launchctl setenv OLLAMA_ORIGINS "<span class="ext-origin">chrome-extension://…</span>"</code>
+                        Windows, in Command Prompt, then quit and reopen Ollama:
+                        <code class="cmd">setx OLLAMA_ORIGINS "<span class="ext-origin">chrome-extension://…</span>"</code>
+                        Linux: run <code>sudo systemctl edit ollama</code>, add under <code>[Service]</code>, then <code>sudo systemctl restart ollama</code>:
+                        <code class="cmd">Environment="OLLAMA_ORIGINS=<span class="ext-origin">chrome-extension://…</span>"</code>
+                        Already allow other origins? List them all, separated by commas.
+                      </li>
+                      <li>LM Studio instead: start its server and turn on CORS in the server settings.</li>
+                      <li>Click Find local models, then Test.</li>
+                    </ol>
+                  </details>
                 </div>
                 <label><input type="radio" name="ai-source" value="key" /> <b>Or a provider with your own key</b></label>
                 <div id="ai-key-box" class="stack indent">
@@ -104,6 +122,10 @@
                   <button id="ai-test">Test</button>
                 </div>
                 <span id="ai-status" class="row-hint" role="status" aria-live="polite"></span>
+                <label><input id="ai-auto" type="checkbox" /> Suggest as soon as the composer opens, without clicking Suggest</label>
+                <p id="ai-auto-key" class="hint indent">With a provider, every copy's text and tags then go to it as you open the composer.</p>
+                <label><input id="ai-auto-add" type="checkbox" /> Add the suggestions to the tags right away</label>
+                <p class="hint indent">Default tags the post doesn't mention make room for the model's, and stay one click away. Tags you add or remove yourself are left alone.</p>
               </div>
             </div>
           </div>

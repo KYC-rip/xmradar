@@ -264,7 +264,8 @@ describe('settings', () => {
 describe('Options: tag suggestions panel', () => {
   const mount = async () => {
     const html = readFileSync(join(process.cwd(), 'src/entrypoints/options/index.html'), 'utf8');
-    document.body.innerHTML = html.match(/<div id="ai-tags">[\s\S]*?<span id="ai-status"[^>]*><\/span>\s*<\/div>\s*<\/div>/)![0];
+    const page = new DOMParser().parseFromString(html, 'text/html');
+    document.body.replaceChildren(page.getElementById('ai-tags')!);
     await mountAiTagsPanel(document);
     const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
     const change = (el: HTMLElement) => el.dispatchEvent(new Event('change'));
@@ -300,6 +301,30 @@ describe('Options: tag suggestions panel', () => {
     await vi.waitFor(async () => expect(await aiTagsItem.getValue()).toMatchObject({ source: 'openai', model: 'gpt-x', baseUrl: 'https://api.openai.com/v1' }));
   });
 
+  it("the setup steps allow only this extension's own address", async () => {
+    await mount();
+    const cmds = [...document.querySelectorAll('.setup code.cmd')].map((c) => c.textContent);
+    expect(cmds).toHaveLength(3);
+    for (const c of cmds) expect(c).toContain(`OLLAMA_ORIGINS${c!.startsWith('launchctl') || c!.startsWith('setx') ? ' "' : '='}${location.origin}`);
+    expect(cmds.join(' ')).not.toContain('*');
+  });
+  it('the automatic options save, and the provider warning shows only for a provider', async () => {
+    await aiTagsItem.setValue({ on: true, source: 'local', baseUrl: 'http://localhost:11434', model: 'm' });
+    const { $, change } = await mount();
+    expect($('ai-auto-key').hidden).toBe(true);
+    const auto = $<HTMLInputElement>('ai-auto');
+    const add = $<HTMLInputElement>('ai-auto-add');
+    auto.checked = true;
+    change(auto);
+    add.checked = true;
+    change(add);
+    await vi.waitFor(async () => expect(await aiTagsItem.getValue()).toMatchObject({ auto: true, autoAdd: true }));
+    pick('key');
+    expect($('ai-auto-key').hidden).toBe(false);
+    auto.checked = false;
+    change(auto);
+    expect($('ai-auto-key').hidden).toBe(true);
+  });
   it('a local URL with /v1 is saved as the server root', async () => {
     await aiTagsItem.setValue({ on: true, source: 'local', baseUrl: 'http://localhost:11434', model: 'm' });
     const { $ } = await mount();
@@ -334,5 +359,62 @@ describe('Ollama turning the extension away', () => {
   it('the prompt names no example tags a small model could copy', () => {
     const sys = JSON.parse(tagRequest(local, '', 'post').init.body as string).messages[0].content as string;
     expect(sys).not.toMatch(/\[\s*"/);
+  });
+});
+
+describe('automatic suggestions', () => {
+  const ok = (tags: string[]) => ({ status: 'ok' as const, tags });
+  const offers = (el: HTMLElement) => [...el.querySelectorAll('.tag-offer')].map((b) => b.textContent);
+
+  it('auto asks once as the composer opens, for tags besides those already there; off, it waits for a click', async () => {
+    const suggest = vi.fn(async () => ok(['thorchain']));
+    const row = tagRow({ initial: ['monero', 'privacy'], defaults: ['privacy'], textTags: () => ['monero'] });
+    row.setSuggest(suggest, true, { auto: true });
+    expect(suggest).toHaveBeenCalledTimes(1);
+    expect(suggest).toHaveBeenCalledWith(['monero', 'privacy']);
+    expect(row.el.querySelector('.tag-note')!.textContent).toBe('Asking your local model…');
+    await vi.waitFor(() => expect(offers(row.el)).toEqual(['+ thorchain']));
+    expect(row.tags()).toEqual(['monero', 'privacy']);
+    const later = vi.fn(async () => ok([]));
+    tagRow({ initial: [] }).setSuggest(later, true, { auto: false });
+    expect(later).not.toHaveBeenCalled();
+  });
+
+  it('autoAdd on an untouched row: the tags go in; a default the post never mentions makes room, one click away', async () => {
+    const row = tagRow({ initial: ['monero', 'privacy', 'nostr'], defaults: ['privacy', 'nostr', 'monero'], textTags: () => [], text: () => 'Monero 0.19 is out' });
+    row.setSuggest(async () => ok(['thorchain', 'nostr', 'defi', 'treasury', 'baddebt']), true, { auto: true, autoAdd: true });
+    await vi.waitFor(() => expect(row.tags()).toEqual(['monero', 'nostr', 'thorchain', 'defi', 'treasury']));
+    expect(offers(row.el)).toEqual(['+ privacy', '+ baddebt']);
+    expect(row.tags()).toHaveLength(MAX_TAGS);
+  });
+
+  it('autoAdd after the user edited: only free slots, and a removed tag never comes back by itself', async () => {
+    let answer!: (r: ReturnType<typeof ok>) => void;
+    const row = tagRow({ initial: ['monero', 'privacy'], defaults: ['privacy'], textTags: () => [], trusted: () => true });
+    row.setSuggest(() => new Promise((r) => (answer = r)), true, { autoAdd: true });
+    (row.el.querySelectorAll('.tag-x')[1] as HTMLButtonElement).click(); // removes privacy
+    [...row.el.querySelectorAll('button')].find((b) => /Suggest/.test(b.textContent!))!.click();
+    answer(ok(['privacy', 'xmr', 'a1', 'b2', 'c3']));
+    await vi.waitFor(() => expect(row.tags()).toEqual(['monero', 'xmr', 'a1', 'b2', 'c3']));
+    // still offered: one click if the user changes their mind
+    expect(offers(row.el)).toEqual(['+ privacy']);
+  });
+
+  it('the text changed while asking: the answer is only suggestions', async () => {
+    let answer!: (r: ReturnType<typeof ok>) => void;
+    const row = tagRow({ initial: ['privacy'], defaults: ['privacy'], textTags: () => [] });
+    row.setSuggest(() => new Promise((r) => (answer = r)), false, { auto: true, autoAdd: true });
+    expect(row.el.querySelector('.tag-note')!.textContent).toBe('Asking the provider…');
+    row.refresh();
+    answer(ok(['thorchain']));
+    await vi.waitFor(() => expect(offers(row.el)).toEqual(['+ thorchain']));
+    expect(row.tags()).toEqual(['privacy']);
+  });
+
+  it('a default the post mentions in plain words stays, hyphenated or not', async () => {
+    const row = tagRow({ initial: ['privacy', 'self-custody', 'nostr'], defaults: ['privacy', 'self-custody', 'nostr'], text: () => 'Better PRIVACY through self custody.' });
+    row.setSuggest(async () => ok(['wallet']), true, { auto: true, autoAdd: true });
+    await vi.waitFor(() => expect(row.tags()).toEqual(['privacy', 'self-custody', 'wallet']));
+    expect(offers(row.el)).toEqual(['+ nostr']);
   });
 });

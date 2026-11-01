@@ -12,7 +12,7 @@ export const ANTHROPIC_MODEL = 'claude-haiku-5-5';
 export const LOCAL_SERVERS = ['http://localhost:11434', 'http://localhost:1234'];
 /** Ollama turns away other origins, extensions included, until they're allowed */
 export const OLLAMA_REFUSED =
-  'The local server refused the extension. Ollama: set OLLAMA_ORIGINS to chrome-extension://*,moz-extension://* and restart it. LM Studio: turn on CORS in its server settings.';
+  'The local server refused the extension. Ollama: allow it with OLLAMA_ORIGINS (steps under Tag suggestions in Options), then restart it. LM Studio: turn on CORS in its server settings.';
 export const SAMPLE_TEXT = 'Monero 0.19 is out: faster sync, better privacy for everyone. Update your node and wallet today.';
 
 export type SuggestResult = { status: 'ok'; tags: string[] } | { status: 'failed'; reason: string };

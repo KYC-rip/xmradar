@@ -111,15 +111,19 @@ async function mountComposer(ctx: ContentScriptContext, msg: OpenComposerMsg, ta
       );
 
       // the text's hashtags, then the user's own (PLAN-TAGS); the user owns the list from here
+      // the post as the tags see it: an article's title and summary too (the body capped for the model)
+      const postText = (bodyMax?: number) =>
+        (art ? [titleInput.value, summaryInput.value, textarea.value.slice(0, bodyMax)] : [textarea.value]).filter((t) => t.trim()).join('\n\n');
+      // what Nostr apps count: the hashtags in the content
       const textTags = () => hashtagsOf(textarea.value);
-      const tagsUi = tagRow({ initial: [...hashtagsOf(`${titleInput.value}\n${textarea.value}`), ...(settings.defaultTags ?? [])], textTags });
-      textarea.addEventListener('input', () => tagsUi.refresh());
-      // nothing goes to a model unless it's set up, and then only on a real click on Suggest
+      const tagsUi = tagRow({ initial: [...hashtagsOf(postText()), ...(settings.defaultTags ?? [])], defaults: settings.defaultTags, textTags, text: () => postText() });
+      for (const field of art ? [textarea, titleInput, summaryInput] : [textarea]) field.addEventListener('input', () => tagsUi.refresh());
+      // nothing goes to a model unless it's set up, and then only on a real click on Suggest, or as the composer
+      // opens when the user turned that on (the composer opening is their own click; a page can't start it)
       void sendToBackground({ type: 'ai-tags-ready', sessionId: msg.sessionId })
         .then((r) => {
           if (!r.ready) return;
-          const text = () => (art ? [titleInput.value, summaryInput.value, textarea.value.slice(0, 4000)].filter((t) => t.trim()).join('\n\n') : textarea.value);
-          tagsUi.setSuggest(() => sendToBackground({ type: 'suggest-tags', sessionId: msg.sessionId, text: text(), have: [...new Set([...tagsUi.tags(), ...textTags()])] }), r.local);
+          tagsUi.setSuggest((have) => sendToBackground({ type: 'suggest-tags', sessionId: msg.sessionId, text: postText(4000), have }), r.local, r);
         })
         .catch(() => {});
 

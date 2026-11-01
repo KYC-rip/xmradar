@@ -413,7 +413,7 @@ async function handle(msg: BgRequest, sender: Browser.runtime.MessageSender): Pr
     case 'ai-tags-ready': {
       await requireSession(msg.sessionId, sender);
       const ai = await aiTagsItem.getValue();
-      return { ready: aiReady(ai, await aiKeyItem.getValue()), local: ai.source === 'local' };
+      return { ready: aiReady(ai, await aiKeyItem.getValue()), local: ai.source === 'local', auto: !!ai.auto, autoAdd: !!ai.autoAdd };
     }
     case 'suggest-tags': {
       await requireSession(msg.sessionId, sender);

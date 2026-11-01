@@ -68,6 +68,11 @@ export function mountAiTagsPanel(root: ParentNode, fetchFn: FetchFn = (...a) => 
   const status = byId(root, 'ai-status');
   const find = byId<HTMLButtonElement>(root, 'ai-find');
   const test = byId<HTMLButtonElement>(root, 'ai-test');
+  const auto = byId<HTMLInputElement>(root, 'ai-auto');
+  const autoKey = byId(root, 'ai-auto-key');
+  const autoAdd = byId<HTMLInputElement>(root, 'ai-auto-add');
+  // the setup steps allow only this extension's own address (a Firefox install has its own UUID)
+  for (const o of root.querySelectorAll('.ext-origin')) o.textContent = location.origin;
   let s: AiTagSettings = DEFAULT_AI_TAGS;
   // the base URL of the other source, kept while the user switches back and forth
   let localBase = DEFAULT_AI_TAGS.baseUrl;
@@ -87,6 +92,9 @@ export function mountAiTagsPanel(root: ParentNode, fetchFn: FetchFn = (...a) => 
     localBox.hidden = !local;
     keyBox.hidden = local;
     base.hidden = s.source !== 'openai';
+    auto.checked = !!s.auto;
+    autoAdd.checked = !!s.autoAdd;
+    autoKey.hidden = local || !s.auto;
   };
   const save = async (patch: Partial<AiTagSettings>) => {
     // a result from the other source would be stale
@@ -98,6 +106,8 @@ export function mountAiTagsPanel(root: ParentNode, fetchFn: FetchFn = (...a) => 
   const setOptions = (names: string[]) => models.replaceChildren(...names.map((n) => Object.assign(document.createElement('option'), { value: n })));
 
   on.addEventListener('change', () => void save({ on: on.checked }));
+  auto.addEventListener('change', () => void save({ auto: auto.checked }));
+  autoAdd.addEventListener('change', () => void save({ autoAdd: autoAdd.checked }));
   for (const r of radios)
     r.addEventListener('change', () => {
       if (r.checked) switchTo(r.value === 'local' ? 'local' : provider.value === 'anthropic' ? 'anthropic' : 'openai');

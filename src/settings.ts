@@ -67,6 +67,10 @@ export interface AiTagSettings {
   /** the local or OpenAI-compatible base URL (unused for Anthropic) */
   baseUrl: string;
   model: string;
+  /** ask as the composer opens, without a click on Suggest */
+  auto?: boolean;
+  /** the answer goes straight into the tags (default tags the model drops stay one click away) */
+  autoAdd?: boolean;
 }
 export const DEFAULT_AI_TAGS: AiTagSettings = { on: false, source: 'local', baseUrl: 'http://localhost:11434', model: '' };
 export const aiTagsItem = storage.defineItem<AiTagSettings>('local:aiTags', { fallback: DEFAULT_AI_TAGS });
