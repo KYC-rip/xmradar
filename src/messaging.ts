@@ -134,6 +134,7 @@ export interface RelayResult {
 }
 
 import type { SuggestResult } from './ai/tags';
+import type { AiSource } from './settings';
 
 /** content/options → background */
 export type BgRequest =
@@ -145,7 +146,9 @@ export type BgRequest =
   | { type: 'close-session'; sessionId: string }
   /** AI tag suggestions (PLAN-TAGS): whether Suggest can show, and one request on a trusted click */
   | { type: 'ai-tags-ready'; sessionId: string }
-  | { type: 'suggest-tags'; sessionId: string; text: string; have?: string[] }
+  | { type: 'suggest-tags'; sessionId: string; text: string; have?: string[]; source?: AiSource }
+  /** the composer's Auto switch: `auto` only, for the source the composer was opened with */
+  | { type: 'set-ai-auto'; sessionId: string; on: boolean; source: AiSource }
   | { type: 'load-nip65'; pubkey: string }
   | { type: 'test-signer' }
   | { type: 'xmrbio-resolve'; handle: string }
@@ -199,7 +202,9 @@ export type BgResponse<T extends BgRequest['type']> = T extends 'fetch-image'
       : T extends 'check-duplicate'
         ? { duplicate: boolean }
       : T extends 'ai-tags-ready'
-        ? { ready: boolean; local: boolean; auto: boolean; autoAdd: boolean }
+        ? { ready: boolean; local: boolean; source: AiSource; auto: boolean; autoAdd: boolean }
+      : T extends 'set-ai-auto'
+        ? { ok: true }
       : T extends 'suggest-tags'
         ? SuggestResult
         : T extends 'load-nip65'

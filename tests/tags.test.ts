@@ -2,11 +2,12 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
+import { setAuto, suggestFor, tagsReady } from '../src/ai/requests';
 import { aiReady, findLocalModels, MAX_PROMPT_CHARS, OLLAMA_REFUSED, parseTagReply, suggestTags, tagRequest, validBaseUrl } from '../src/ai/tags';
 import { tagRow } from '../src/entrypoints/content/tag-row';
 import { buildArticle, buildNote } from '../src/nostr/event';
 import { cleanTag, eventTags, hashtagsOf, MAX_TAGS, missingHashtagLine } from '../src/nostr/tags';
-import { aiKeyItem, aiTagsItem, settingsItem, type AiTagSettings } from '../src/settings';
+import { aiKeyItem, aiTagsItem, autoAddOn, autoOn, settingsItem, type AiTagSettings } from '../src/settings';
 import { mountAiTagsPanel, parseTagList } from '../src/ui/ai-tags-panel';
 
 const KEY = 'sk-secret-key-123';
@@ -308,22 +309,26 @@ describe('Options: tag suggestions panel', () => {
     for (const c of cmds) expect(c).toContain(`OLLAMA_ORIGINS${c!.startsWith('launchctl') || c!.startsWith('setx') ? ' "' : '='}${location.origin}`);
     expect(cmds.join(' ')).not.toContain('*');
   });
-  it('the automatic options save, and the provider warning shows only for a provider', async () => {
+  it('automatic is on by default for a local model, off for a provider, and never carries over', async () => {
     await aiTagsItem.setValue({ on: true, source: 'local', baseUrl: 'http://localhost:11434', model: 'm' });
     const { $, change } = await mount();
-    expect($('ai-auto-key').hidden).toBe(true);
     const auto = $<HTMLInputElement>('ai-auto');
     const add = $<HTMLInputElement>('ai-auto-add');
+    expect([auto.checked, add.checked]).toEqual([true, true]);
+    expect($('ai-auto-key').hidden).toBe(true);
+    pick('key');
+    expect([auto.checked, add.checked]).toEqual([false, false]);
+    expect($('ai-auto-key').hidden).toBe(true);
     auto.checked = true;
     change(auto);
-    add.checked = true;
-    change(add);
-    await vi.waitFor(async () => expect(await aiTagsItem.getValue()).toMatchObject({ auto: true, autoAdd: true }));
-    pick('key');
     expect($('ai-auto-key').hidden).toBe(false);
-    auto.checked = false;
-    change(auto);
-    expect($('ai-auto-key').hidden).toBe(true);
+    await vi.waitFor(async () => expect(await aiTagsItem.getValue()).toMatchObject({ source: 'openai', auto: true }));
+    pick('local');
+    await vi.waitFor(async () => expect(autoOn(await aiTagsItem.getValue())).toBe(true));
+    pick('key');
+    await vi.waitFor(async () => expect(autoOn(await aiTagsItem.getValue())).toBe(false));
+    expect(autoAddOn({ source: 'openai' })).toBe(false);
+    expect(autoOn({ source: 'local', auto: false })).toBe(false);
   });
   it('a local URL with /v1 is saved as the server root', async () => {
     await aiTagsItem.setValue({ on: true, source: 'local', baseUrl: 'http://localhost:11434', model: 'm' });
@@ -416,5 +421,93 @@ describe('automatic suggestions', () => {
     row.setSuggest(async () => ok(['wallet']), true, { auto: true, autoAdd: true });
     await vi.waitFor(() => expect(row.tags()).toEqual(['privacy', 'self-custody', 'wallet']));
     expect(offers(row.el)).toEqual(['+ nostr']);
+  });
+});
+
+describe('the Auto switch in the composer', () => {
+  const ok = (tags: string[]) => ({ status: 'ok' as const, tags });
+  const sw = (el: HTMLElement) => el.querySelector<HTMLButtonElement>('.tag-auto')!;
+
+  it('shows the saved state; a page click or change does nothing; a real click saves and asks', async () => {
+    const suggest = vi.fn(async () => ok(['thorchain']));
+    const saveAuto = vi.fn(async () => ({ ok: true }));
+    let real = false;
+    const row = tagRow({ initial: [], trusted: () => real });
+    row.setSuggest(suggest, true, { auto: false, saveAuto });
+    document.body.append(row.el);
+    const b = sw(row.el);
+    expect(b.classList.contains('hidden')).toBe(false);
+    expect(b.textContent).toBe('Auto');
+    expect(b.getAttribute('aria-checked')).toBe('false');
+    b.click();
+    b.dispatchEvent(new Event('change'));
+    expect(saveAuto).not.toHaveBeenCalled();
+    expect(b.getAttribute('aria-checked')).toBe('false');
+    real = true;
+    b.click();
+    expect(b.disabled).toBe(true);
+    await vi.waitFor(() => expect(suggest).toHaveBeenCalledTimes(1));
+    expect(saveAuto).toHaveBeenCalledWith(true);
+    expect(b.getAttribute('aria-checked')).toBe('true');
+    b.click();
+    await vi.waitFor(() => expect(saveAuto).toHaveBeenLastCalledWith(false));
+    expect(suggest).toHaveBeenCalledTimes(1);
+    row.el.remove();
+  });
+
+  it('a failed save puts it back and asks nothing; read-only or closed asks nothing', async () => {
+    const suggest = vi.fn(async () => ok(['x1']));
+    const row = tagRow({ initial: [], trusted: () => true });
+    row.setSuggest(suggest, false, { auto: false, saveAuto: async () => Promise.reject(new Error('no session')) });
+    document.body.append(row.el);
+    expect(sw(row.el).textContent).toBe('Auto (sends each copy to the provider)');
+    sw(row.el).click();
+    await vi.waitFor(() => expect(row.el.querySelector('.tag-note')!.textContent).toBe("Couldn't save the Auto switch"));
+    expect(sw(row.el).getAttribute('aria-checked')).toBe('false');
+    row.setReadOnly(true);
+    expect(sw(row.el).disabled).toBe(true);
+    row.el.remove();
+
+    let saved!: () => void;
+    const closed = tagRow({ initial: [], trusted: () => true });
+    closed.setSuggest(suggest, true, { saveAuto: () => new Promise<void>((r) => (saved = r)) });
+    sw(closed.el).click(); // not on the page: the composer closed
+    saved();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(suggest).not.toHaveBeenCalled();
+  });
+
+  it('turned off while asking: that answer only suggests', async () => {
+    let answer!: (r: ReturnType<typeof ok>) => void;
+    const row = tagRow({ initial: ['monero'], trusted: () => true });
+    row.setSuggest(() => new Promise((r) => (answer = r)), true, { auto: true, autoAdd: true, saveAuto: async () => ({ ok: true }) });
+    document.body.append(row.el);
+    sw(row.el).click();
+    answer(ok(['thorchain']));
+    await vi.waitFor(() => expect([...row.el.querySelectorAll('.tag-offer')].map((o) => o.textContent)).toEqual(['+ thorchain']));
+    expect(row.tags()).toEqual(['monero']);
+    row.el.remove();
+  });
+});
+
+describe('the background tag requests', () => {
+  it('Auto saves only auto, for the source the composer opened with; anything else is refused', async () => {
+    await aiTagsItem.setValue({ on: true, source: 'local', baseUrl: 'http://localhost:11434', model: 'm', autoAdd: false });
+    expect(await tagsReady()).toMatchObject({ ready: true, local: true, source: 'local', auto: true, autoAdd: false });
+    await expect(setAuto({ on: 'yes', source: 'local' })).rejects.toThrow('Bad request');
+    await expect(setAuto({ on: true, source: 'openai' })).rejects.toThrow('Tag settings changed: close and reopen the composer');
+    expect(await setAuto({ on: false, source: 'local' })).toEqual({ ok: true });
+    expect(await aiTagsItem.getValue()).toMatchObject({ auto: false, autoAdd: false });
+  });
+  it('a composer opened for the local model never sends to a provider chosen since', async () => {
+    await aiKeyItem.setValue(KEY);
+    await aiTagsItem.setValue({ ...openai });
+    const fetchFn = vi.fn(async () => chat('["x"]')) as unknown as typeof fetch;
+    expect(await suggestFor({ text: 'post', source: 'local' }, fetchFn)).toEqual({ status: 'failed', reason: 'Tag settings changed: close and reopen the composer' });
+    expect(await suggestFor({ text: 'post' }, fetchFn)).toMatchObject({ status: 'failed' });
+    expect(fetchFn).not.toHaveBeenCalled();
+    expect(await suggestFor({ text: 'post', source: 'openai', have: ['a', 1] }, fetchFn)).toEqual({ status: 'ok', tags: ['x'] });
+    expect(await tagsReady()).toMatchObject({ local: false, auto: false, autoAdd: false });
   });
 });

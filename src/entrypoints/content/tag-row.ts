@@ -4,10 +4,12 @@ import { h } from './dom';
 
 /** asks for tags besides `have` (the row's and the text's) */
 export type Suggest = (have: string[]) => Promise<SuggestResult>;
-/** `auto`: ask as the composer opens; `autoAdd`: the answer goes straight into the tags */
+/** `auto`: ask as the composer opens; `autoAdd`: the answer goes straight into the tags; `saveAuto`: the row's Auto switch */
 export interface SuggestMode {
   auto?: boolean;
   autoAdd?: boolean;
+  /** saves the Auto choice (resolves when saved, rejects when not); absent: no switch */
+  saveAuto?: (on: boolean) => Promise<unknown>;
 }
 
 export interface TagRowOptions {
@@ -50,6 +52,11 @@ export function tagRow(opts: TagRowOptions) {
   let touched = false;
   const removed = new Set<string>();
   let textChanged = false;
+  // the Auto switch: its state, a save on its way, and "turned off while asking" (that answer only suggests)
+  let autoState = false;
+  let saving = false;
+  let offWhileAsking = false;
+  let saveAuto: SuggestMode['saveAuto'];
 
   const chips = h('span', { class: 'tag-chips' });
   const input = h('input', { type: 'text', class: 'tag-input', attrs: { 'aria-label': 'Add a tag', placeholder: 'Add tag' } });
@@ -57,9 +64,13 @@ export function tagRow(opts: TagRowOptions) {
   const warn = h('div', { class: 'tag-warn', attrs: { role: 'status', 'aria-live': 'polite' } });
   const offered = h('div', { class: 'tag-suggestions hidden' });
   const suggestBtn = h('button', { type: 'button', class: 'link' });
+  // a button, not a checkbox: no change event a page could fire, and nothing toggles without our handler
+  const autoBtn = h('button', { type: 'button', class: 'tag-auto hidden', attrs: { role: 'switch', 'aria-checked': 'false', title: 'Suggest as soon as the composer opens' } });
   const label = () => {
     suggestBtn.textContent = local ? 'Suggest (local model)' : 'Suggest tags';
     suggestBtn.classList.toggle('hidden', !suggest);
+    autoBtn.textContent = local ? 'Auto' : 'Auto (sends each copy to the provider)';
+    autoBtn.classList.toggle('hidden', !suggest || !saveAuto);
   };
   label();
 
@@ -88,6 +99,8 @@ export function tagRow(opts: TagRowOptions) {
     }
     offered.classList.toggle('hidden', !left.length);
     suggestBtn.disabled = readOnly || inFlight;
+    autoBtn.setAttribute('aria-checked', String(autoState));
+    autoBtn.disabled = readOnly || saving;
     const count = new Set([...tags, ...(opts.textTags?.() ?? [])]).size;
     warn.textContent =
       count > MAX_TAGS ? `${count} tags with the text's hashtags. More than ${MAX_TAGS} looks like spam, and ROS hides it from people who don't follow you.` : '';
@@ -135,7 +148,7 @@ export function tagRow(opts: TagRowOptions) {
   let inFlight = false;
   /** the model's tags, as suggestions or (autoAdd, and the text unchanged meanwhile) into the tags */
   const apply = (picks: string[]) => {
-    if (!autoAdd || textChanged || readOnly) {
+    if (!autoAdd || textChanged || readOnly || offWhileAsking) {
       suggestions = picks;
       note.textContent = picks.every((t) => tags.includes(t)) ? 'No new tags suggested.' : '';
       return;
@@ -159,6 +172,7 @@ export function tagRow(opts: TagRowOptions) {
     if (!suggest || inFlight || readOnly) return;
     inFlight = true;
     textChanged = false;
+    offWhileAsking = false;
     note.textContent = local ? 'Asking your local model…' : 'Asking the provider…';
     render();
     try {
@@ -175,11 +189,32 @@ export function tagRow(opts: TagRowOptions) {
   suggestBtn.addEventListener('click', (e) => {
     if (trusted(e)) void ask();
   });
+  autoBtn.addEventListener('click', async (e) => {
+    if (!trusted(e) || !saveAuto || readOnly || saving) return;
+    const on = !autoState;
+    autoState = on;
+    if (!on && inFlight) offWhileAsking = true;
+    saving = true;
+    render();
+    try {
+      await saveAuto(on);
+    } catch (err) {
+      autoState = !on;
+      const why = (err as Error)?.message ?? '';
+      note.textContent = /settings changed/i.test(why) ? why : "Couldn't save the Auto switch";
+      return;
+    } finally {
+      saving = false;
+      render();
+    }
+    // still on, still editable, still on the page: ask for this composer too
+    if (on && autoState && !readOnly && el.isConnected) void ask();
+  });
 
   const el = h(
     'div',
     { class: 'tags' },
-    h('div', { class: 'tag-line' }, h('span', { class: 'tag-label', textContent: 'Tags' }), chips, input, suggestBtn),
+    h('div', { class: 'tag-line' }, h('span', { class: 'tag-label', textContent: 'Tags' }), chips, input, suggestBtn, autoBtn),
     offered,
     note,
     warn,
@@ -193,7 +228,10 @@ export function tagRow(opts: TagRowOptions) {
       suggest = fn;
       local = isLocal;
       autoAdd = !!mode.autoAdd;
+      autoState = !!mode.auto;
+      saveAuto = mode.saveAuto;
       label();
+      render();
       if (mode.auto) void ask();
     },
     /** the text changed: count its hashtags again (and an answer on its way is only a suggestion now) */

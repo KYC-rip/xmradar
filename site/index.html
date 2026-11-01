@@ -114,7 +114,7 @@
     <article class="feature">
       <span class="kicker">02 · NKIP-0001 · letters of guarantee</span>
       <h3>Swap guard</h3>
-      <p>On an exchange's order page, XMRadar checks the signed NKIP-0001 receipt, or the operator's letter of guarantee (PGP or MistProof), against the addresses on the page and in what you copy. A verified copy is saved in your browser for disputes. The toolbar shows the site's xmr.club grade, with a warning for open incidents.</p>
+      <p>On an exchange's order page, XMRadar checks the signed NKIP-0001 receipt, or the operator's letter of guarantee (PGP or MistProof), against the addresses on the page and in what you copy. A verified copy is saved in your browser for disputes. The toolbar shows the site's xmr.club grade, with a warning for open incidents, and a lookalike of a listed exchange or wallet gets a warning page before it loads.</p>
       <p class="small">Exchange data from <a href="https://xmr.club">xmr.club</a>, licensed <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>.</p>
       <div class="feature-demo rows">
         <div class="row"><span class="dot ok"></span><b>Receipt verified</b><span class="muted">example.swap</span></div>
@@ -133,7 +133,7 @@
     <article class="feature">
       <span class="kicker">04 · Nostr</span>
       <h3>Copy posts to Nostr</h3>
-      <p>Right-click a post on X, Bluesky, Mastodon or any page, or hover it and press Alt+Shift+N. Text and images go to your relays, signed by your own Nostr signer.</p>
+      <p>Right-click a post on X, Bluesky, Mastodon or any page, or hover it and press Alt+Shift+N. Text, images and up to 5 tags go to your relays, signed by your own Nostr signer. Tags can be suggested by a model on your own computer, or a provider with your own key.</p>
       <div class="keys" aria-label="Alt+Shift+N"><span>Alt</span><span>Shift</span><span>N</span></div>
     </article>
   </div>
@@ -171,9 +171,10 @@
     <li><span class="tick">✓</span><div><b>Your signer signs</b><span class="body">Nostr events go through your NIP-07 extension, and you approve each one.</span></div></li>
     <li><span class="tick">✓</span><div><b>No transaction ids in public</b><span class="body">Tip receipts never include a transaction id, tx key or payment proof.</span></div></li>
     <li><span class="tick">✓</span><div><b>Discovery is off by default</b><span class="body">Looking up X accounts on relays is opt-in, because relays can see which accounts you view.</span></div></li>
-    <li><span class="tick">✓</span><div><b>The site you visit stays in your browser</b><span class="body">xmr.club's signed list is downloaded whole, the same file for everyone, and matched on your device.</span></div></li>
+    <li><span class="tick">✓</span><div><b>The site you visit stays in your browser</b><span class="body">xmr.club's signed list is downloaded whole, the same file for everyone, and matched on your device, lookalike warnings included.</span></div></li>
     <li><span class="tick">✓</span><div><b>Receipts and letters stay local</b><span class="body">Checked and saved in your browser only. A letter is asked for only from the order page's own site, and keys come from xmr.club's signed list, never from the page.</span></div></li>
     <li><span class="tick">✓</span><div><b>Burner mail stays local</b><span class="body">GhostMail gets only what the inbox needs (its address and token, and a random proof-of-work seed when it's created), nothing about the page you are on.</span></div></li>
+    <li><span class="tick">✓</span><div><b>Tag suggestions are opt-in</b><span class="body">Off by default. A local model keeps the post on your computer; a provider gets the post's text and tags only with your own key, which no page can read.</span></div></li>
   </ul>
 </section>
 

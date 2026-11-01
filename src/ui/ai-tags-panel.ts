@@ -1,6 +1,6 @@
 import { ANTHROPIC_MODEL, findLocalModels, localRoot, OLLAMA_REFUSED, SAMPLE_TEXT, suggestTags, validBaseUrl } from '../ai/tags';
 import { cleanTag, MAX_TAGS } from '../nostr/tags';
-import { aiKeyItem, aiTagsItem, DEFAULT_AI_TAGS, hashtagLineOn, patchAiTags, patchSettings, settingsItem, type AiSource, type AiTagSettings } from '../settings';
+import { aiKeyItem, aiTagsItem, autoAddOn, autoOn, DEFAULT_AI_TAGS, hashtagLineOn, patchAiTags, patchSettings, settingsItem, type AiSource, type AiTagSettings } from '../settings';
 import { setStatus } from './dom';
 
 type FetchFn = typeof fetch;
@@ -81,7 +81,8 @@ export function mountAiTagsPanel(root: ParentNode, fetchFn: FetchFn = (...a) => 
   const modelOf: Record<AiSource, string> = { local: '', openai: '', anthropic: ANTHROPIC_MODEL };
   const switchTo = (source: AiSource) => {
     model.value = modelOf[source];
-    void save({ source, baseUrl: source === 'local' ? localBase : keyBase, model: modelOf[source] });
+    // a choice made for one source never carries over: unset falls back to the new source's default
+    void save({ source, baseUrl: source === 'local' ? localBase : keyBase, model: modelOf[source], auto: undefined, autoAdd: undefined });
   };
 
   const render = () => {
@@ -92,9 +93,9 @@ export function mountAiTagsPanel(root: ParentNode, fetchFn: FetchFn = (...a) => 
     localBox.hidden = !local;
     keyBox.hidden = local;
     base.hidden = s.source !== 'openai';
-    auto.checked = !!s.auto;
-    autoAdd.checked = !!s.autoAdd;
-    autoKey.hidden = local || !s.auto;
+    auto.checked = autoOn(s);
+    autoAdd.checked = autoAddOn(s);
+    autoKey.hidden = local || !autoOn(s);
   };
   const save = async (patch: Partial<AiTagSettings>) => {
     // a result from the other source would be stale
@@ -181,5 +182,11 @@ export function mountAiTagsPanel(root: ParentNode, fetchFn: FetchFn = (...a) => 
     key.value = k;
     on.disabled = false;
     render();
+    // the composer's Auto switch saves too: keep these boxes current
+    aiTagsItem.watch((v) => {
+      if (!v) return;
+      s = { ...s, auto: v.auto, autoAdd: v.autoAdd };
+      render();
+    });
   });
 }

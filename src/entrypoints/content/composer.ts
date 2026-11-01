@@ -123,7 +123,10 @@ async function mountComposer(ctx: ContentScriptContext, msg: OpenComposerMsg, ta
       void sendToBackground({ type: 'ai-tags-ready', sessionId: msg.sessionId })
         .then((r) => {
           if (!r.ready) return;
-          tagsUi.setSuggest((have) => sendToBackground({ type: 'suggest-tags', sessionId: msg.sessionId, text: postText(4000), have }), r.local, r);
+          tagsUi.setSuggest((have) => sendToBackground({ type: 'suggest-tags', sessionId: msg.sessionId, text: postText(4000), have, source: r.source }), r.local, {
+            ...r,
+            saveAuto: (on) => sendToBackground({ type: 'set-ai-auto', sessionId: msg.sessionId, on, source: r.source }),
+          });
         })
         .catch(() => {});
 

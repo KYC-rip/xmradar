@@ -6,7 +6,8 @@ A browser extension for Chrome and Firefox that brings Monero to the pages you a
 - **Your Monero identity:** publish your address on Nostr and link it to your X account, step by step.
 - **Burner email:** a throwaway GhostMail address in one click, for sign-ups.
 - **Swap receipts and letters of guarantee:** on an exchange's order page that carries a signed NKIP-0001 receipt, or whose operator signs a letter of guarantee (PGP or MistProof), a check of the signature and the page's addresses, and a copy saved in your browser for disputes.
-- **Copy posts to Nostr:** from X, Bluesky, Mastodon, LinkedIn, Facebook, or any page.
+- **Warnings before a copy loads:** a lookalike of a listed exchange or wallet (`www-trocador.app`, a Cyrillic letter, a one-letter typo) or one of xmr.club's confirmed impersonators gets a warning page before any request reaches it.
+- **Copy posts to Nostr:** from X, Bluesky, Mastodon, LinkedIn, Facebook, or any page, with tags and optional tag suggestions from a local model or your own key.
 
 Free software under the GNU GPL v3 or later (see `LICENSE`). Releases: https://github.com/KYC-rip/xmradar/releases
 
@@ -14,11 +15,14 @@ Website: https://xmradar.app (source in `site/`; `python3 -I site/build.py` fill
 
 ### Copy posts to Nostr
 
-Right-click a post → **Copy post to Nostr** → edit in the preview → **Publish**. You can also hover a post and press `Alt+Shift+N`, or on X pick **Copy to Nostr** in a tweet's share menu (turn it off under Options → Posting to Nostr → Behaviour).
+Right-click a post → **Copy post to Nostr** → edit in the composer → **Publish**. You can also hover a post and press `Alt+Shift+N`, or on X pick **Copy to Nostr** in a tweet's share menu (turn it off under Options → Posting to Nostr → Behaviour). Publishing runs in a small pill in the corner (Retry, View, Open); several copies can run at once, and a draft is kept until you publish or close it.
 
 - Signing goes through your NIP-07 extension (Alby, nos2x…), so your key never touches this extension.
 - Images are re-uploaded to a Blossom server (default `https://blossom.primal.net`) and tagged with NIP-92 `imeta`.
 - Relays: whatever is set in the options page. If none are set, your NIP-65 write relays are used, and if those can't be found, damus/nos.lol/primal.
+- Paste or drop pictures into a note. X links lose their share tracking (`?s=`, `?t=`), on by default.
+- **Tags:** the composer's Tags row starts with the post's hashtags and your default tags (Options → Posting to Nostr → Tags). They go out as lowercase `t` tags, at most 5: more looks like spam, and ROS hides such notes from people who don't follow you. A note also gets the tags it doesn't already show as a last `#a #b` line (switch in Options).
+- **Tag suggestions** (off by default, Options → Posting to Nostr → Tag suggestions): a local model first (Ollama or LM Studio on this computer; nothing leaves it), or a provider with your own key (OpenAI-compatible or Anthropic; the key stays in this browser, unsynced, and pages never see it). Click **Suggest**, or turn on **Auto** next to it to ask as the composer opens. **Add the suggestions to the tags right away** (Options) puts the answer straight into the tags instead of "+ tag" buttons; default tags the post doesn't mention then make room and stay one click away, and a tag you removed is never added back by itself. With a local model both are on unless you turn them off; with a provider both start off; changing the source resets them. Ollama refuses extensions until you allow this one with `OLLAMA_ORIGINS` (the exact command is under *First time?* in Options). A model's answer only ever becomes tags that pass the tag rules.
 
 ## Build
 
@@ -61,11 +65,11 @@ Until XMRadar is in the stores, install a release zip (or build it yourself):
 
 ## Options
 
-- **Test signer**: opens example.com, asks your NIP-07 signer for your pubkey, and shows your npub.
-- **Relays**: enter them manually, or use *Load from my NIP-65 list*.
-- **Blossom server**.
-- **Append link to original** (default off).
-- **Debug**: shows the unsigned event JSON before signing.
+- **Posting to Nostr:** **Test signer** (opens xmradar.app/signer, asks your NIP-07 signer for your pubkey, shows your npub); relays, by hand or **Load from NIP-65**; Blossom server; default tags and the hashtag line; tag suggestions; append a link to the original (off); X's share menu entry; remove X's share tracking; show the event JSON before signing (debug).
+- **Monero identity:** the four steps below.
+- **Badges on X:** badges, addresses from X profiles, discovery via relays, the Xap receipt question, the badge's look.
+- **Burner email.**
+- **Swaps and sites:** receipt and letter checks, fetching letters, xmr.club site info, in-page warnings and the warning page, its Report button, how long saved letters and receipts are kept (90 days by default), and the saved list.
 
 ## X Articles (long-form)
 
@@ -73,11 +77,17 @@ Open an X Article on its own page (it has a normal `/status/<id>` link), right-c
 
 ## Tip with Monero (Phase 2a)
 
-On x.com, right-click a tweet or profile → **Tip with Monero (look up on xmr.bio)**. XMRadar asks xmr.bio about that one handle (only on this click), checks the response signature against the pinned xmr.bio key, rejects stale or replayed responses, and validates the address (mainnet, Keccak checksum). The popup shows a `monero:` QR code, the address, an optional amount, an "Open in wallet" link and where the data came from. XMRadar never sends or holds funds. Badges on X come in later phases (see PLAN-PHASE2.md).
+On x.com, right-click a tweet or profile → **Tip with Monero (look up on xmr.bio)**. XMRadar asks xmr.bio about that one handle (only on this click), checks the response signature against the pinned xmr.bio key, rejects stale or replayed responses, and validates the address (mainnet, Keccak checksum). The popup shows a `monero:` QR code, the address, an optional amount, an "Open in wallet" link and where the data came from. XMRadar never sends or holds funds.
 
 ## Monero badges on X (Phase 2b)
 
-With **Discover X badges via relays** turned on under **Options → Badges on X** (off by default), XMRadar marks authors whose npub has published a Monero address (NIP-A3, kind 10133) and links the X handle (NIP-39, kind 10011) with a proof tweet that XMRadar checks itself, through X's oEmbed API and then syndication. Their tweets get a **Xap** button (the Monero symbol) in the action bar, next to X's share button; their profile header and hover card get an orange badge (the Monero symbol and **XMR** by default; change the icon or hide the label there). Relays and X can see which accounts you're looking at while discovery is on. Clicking either opens the tip popup with every source. Without discovery, badges need the xmr.bio directory, which comes in Phase 2d.
+With **Discover X badges via relays** turned on under **Options → Badges on X** (off by default), XMRadar marks authors whose npub has published a Monero address (NIP-A3, kind 10133) and links the X handle (NIP-39, kind 10011) with a proof tweet that XMRadar checks itself, through X's oEmbed API and then syndication. Their tweets get a **Xap** button (the Monero symbol) in the action bar, next to X's share button; their profile header and hover card get an orange badge (the Monero symbol and **XMR** by default; change the icon or hide the label there). Relays and X can see which accounts you're looking at while discovery is on. Clicking either opens the tip popup with every source. Without discovery, badges come from xmr.bio and X profiles (below).
+
+## Badges from xmr.bio and X profiles (Phases 2d, 2g)
+
+- **xmr.bio's directory:** the whole signed list of handles with a Monero address, downloaded every 6 hours (the same file for everyone) and checked against xmr.bio's pinned key, so no lookup reveals which accounts you view.
+- **X profiles:** an address someone posts on their own profile (bio, Website, pinned post) gets a badge too, kept on this device and labelled **not verified**. Switch: **Read addresses from X profiles**.
+- Every post by a badged author shows a small XMR pill after their name. The profile header's badge must match the @handle it shows.
 
 ## Xap (NKIP-0002)
 
@@ -115,8 +125,8 @@ Some exchanges sign a letter of guarantee for each order instead of an NKIP-0001
 
 - **On an order page** the list names, XMRadar asks that same site for the order's letter: one request to the page's own origin, with the page's cookies (0trace and Bitania give the letter only to the browser that created the order), no redirects, 10 s, 256 KB. Nothing goes to any other host. With **Fetch letters of guarantee on order pages** off, or where the list names no letter URL, a letter is still checked when the page shows it or you copy it.
 - **Checked** in the background with the operator's key from xmr.club's list, after asserting the key's fingerprint matches the one listed. A key the page or the letter offers is never used, and no key is downloaded from the operator. PGP: OpenPGP.js 6.3.2, with MD5, RIPEMD-160 and SHA-1 refused and RSA under 2048 bits refused; every signed block must name this order. MistProof: the `key_id` must match the key, and the payload must be for this order.
-- **The page's addresses** (XMR, BTC, Tron, EVM) are compared with the signed ones, as for receipts: ✓ only when the signed deposit address is shown as the deposit and nothing unsigned is shown. A shortened address (`bc1q…gtx9`) that fits is only △, with the full signed address in the card. An address the letter doesn't name, on the page or in what you copy, is a red warning.
-- **Saved in this browser only**, only when it verified: the exact text and the key it was checked with. **Options → Swaps and sites** lists letters with receipts (tagged "Letter"), with Export: the letter, the key, the date of the xmr.club list it came from, and how to check it yourself with `gpg --verify`. The file contains your order id and addresses.
+- **The page's addresses** (XMR, BTC, Tron, EVM, Solana, TON; token contracts are labelled as such) are compared with the signed ones, as for receipts: ✓ only when the signed deposit address is shown as the deposit and nothing unsigned is shown. A shortened address (`bc1q…gtx9`) is ✓ when the page's copy button or payment link holds the full signed address, otherwise only △, with the full signed address in the card. A deposit on a network XMRadar can't read gets a plain line saying so. An address the letter doesn't name, on the page or in what you copy, is a red warning.
+- **Saved in this browser only**, only when it verified: the exact text and the key it was checked with. Saved letters and receipts are deleted after 90 days by default (1, 7, 30 or 90 days, or never). **Options → Swaps and sites** lists letters with receipts (tagged "Letter"), with Export: the letter, the key, the date of the xmr.club list it came from, and how to check it yourself with `gpg --verify`. The file contains your order id and addresses.
 - **What a verified letter proves:** the operator's key, as xmr.club lists it, signed this text for this order. Amounts and rates are shown as signed, not checked. The key is pinned by xmr.club's list, not by an independent source; a revocation the operator publishes arrives with the next list (about every 12 hours).
 
 ## Site info (xmr.club)
@@ -130,6 +140,15 @@ XMRadar downloads xmr.club's signed site list (`https://xmr.club/api/v1/swap-sit
 - **Trust:** the list must be signed with xmr.club's pinned key, unexpired and newer than the copy kept; an older or expired one is refused and the menu says when the list is out of date. The key comes from xmr.club itself: there's no independent second source for it yet. xmr.club is run by the same team as XMRadar.
 - Switch it off under **Options → Swaps and sites**: no download, no badge, no warnings.
 
+## Warnings before a copy loads
+
+Built from xmr.club's signed list, inside the browser; the address you open is never sent anywhere.
+
+- **Before the page loads:** the browser's own request rules send a navigation to an address that uses a listed exchange's or wallet's name (`www-trocador.app`, `trocador-app.im`) to XMRadar's warning page, before any request reaches the site. One-letter typos (`trocadorr.app`), letters from other scripts (a Cyrillic `о`) and xmr.club's confirmed impersonators are caught the same way. **Continue**, under Details, lets that host through for 7 days.
+- **Report this copy:** one click sends the address and the service it copies to xmr.club for review; nothing is sent unless you click. Switch: **Report button on the warning page**.
+- **On the page:** a banner on a site with an open incident, a D–F grade, or a new service that holds your coins during a swap.
+- Switch them off with **In-page warnings** under **Options → Swaps and sites**.
+
 ## Your Monero identity (Phase 2c)
 
 In the options page, under **Monero identity**, a four-step tracker walks you through it: connect your signer, confirm your X handle, publish your Monero address, then post the proof tweet and paste its link. Done steps collapse to one line with Change, Replace, Remove or Unlink. Each change reads your current Nostr list from every relay, keeps all other tags, shows a diff, and is signed once in a temporary tab (your signer still asks first). Relays that can't be read are skipped, and you have to confirm before publishing without them. Your badge is live for other XMRadar users with discovery on once both steps are done.
@@ -137,7 +156,7 @@ In the options page, under **Monero identity**, a four-step tracker walks you th
 ## Security notes
 
 - The bridge to `window.nostr` runs in the page's own JavaScript world. Page scripts can see and imitate those messages, so the real security boundary is your signer's approval prompt.
-- The bridge only signs kind 1 (notes) and kind 24242 (Blossom upload auth).
+- The bridge only signs kind 1 (notes), kind 30023 (long-form articles) and kind 24242 (Blossom upload auth).
 - Every signed event is checked before use: correct pubkey, unchanged content, valid signature.
 - The background only uploads or publishes for a composer session that you opened in that same tab. Sessions end when the composer closes, or after 15 minutes at most.
 - A session starts from the browser's right-click menu, the keyboard shortcut, or a real (trusted) click on **Copy to Nostr** in X's share menu, in the top frame of an x.com tab, at most once every 2 s per tab. The tweet is the one whose share button you clicked, checked by its status ID. A page can't start a session by itself, and you still review the composer and approve in your signer.
@@ -147,14 +166,15 @@ In the options page, under **Monero identity**, a four-step tracker walks you th
 - Letters of guarantee: the order page is matched from the browser's record of the tab, never from the page; the page learns the order id and letter URL, never a key. The letter request goes only to the page's own origin. OpenPGP.js is in the background only, never in the scripts that run on pages.
 - Swap receipts: the page URL a receipt is checked for comes from the browser's record of the tab, never from the page; only the top frame counts. The manifest and policy come from that host only, without cookies, referrer or redirects, at most 256 KB. Manifest relays used by the public-record check must be public `wss://` hosts on port 443; a public name that resolves to a private address isn't caught. Receipts are parsed strictly (duplicate keys, fractions and oversized numbers are refused).
 - Image URLs taken from the page are only fetched over http(s) or as `data:image`. Literal local and private addresses are refused, both for the original URL and for where any redirect ends up. A DNS name that resolves to a private IP is not caught; that's accepted for a personal tool.
+- Tag suggestions: the model is asked from the background only, for an open composer session, on a real click on Suggest or as the composer you opened opens (Auto; a page can't turn it on). It gets the post's text and its tags, never images, your key or the page address; the provider key never reaches a page. Local servers must be on localhost, providers on https.
 - **Remaining risk:** a hostile page can impersonate the signer's replies, for example by returning a fake pubkey. The worst it can do is get your text published under someone else's key, or block publishing. It can't use your key without your signer's prompt. Check the "Posting as npub…" line in the composer.
 
-## First-run checklist (real browser)
+## Checklist after a browser or site update
 
-Not yet verified in a browser. Check each of these in Chrome and in Firefox:
+Check each of these in Chrome and in Firefox:
 
-1. Options → **Test signer** shows your npub. **Load from my NIP-65 list** fills in your relays.
-2. On x.com, right-click your tweet that has an image. The modal looks styled (if it shows up unstyled, the page's CSP is blocking the shadow-root CSS). Text and image are correct. Publish, and the note shows up on njump. Clicking **Done** closes the modal.
+1. Options → **Test signer** shows your npub. **Load from NIP-65** fills in your relays.
+2. On x.com, right-click your tweet that has an image. The composer looks styled (if it shows up unstyled, the page's CSP is blocking the shadow-root CSS). Text, image and tags are correct. Publish, and the note shows up on njump.
 3. The same on bsky.app, a Mastodon instance, LinkedIn, and Facebook.
 4. Select text on any http:// or https:// page, right-click, and publish.
 5. Hover a post and press `Alt+Shift+N`.

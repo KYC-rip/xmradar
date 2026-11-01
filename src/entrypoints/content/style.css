@@ -75,6 +75,9 @@ textarea {
 .thumb input { position: absolute; top: 4px; right: 4px; }
 .tags { display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
 .tag-line { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.tag-auto { font: inherit; font-size: 12px; padding: 2px 8px; border: 1px solid #c9c4d8; border-radius: 999px; background: none; color: inherit; cursor: pointer; }
+.tag-auto[aria-checked='true'] { background: #6b3fd4; border-color: #6b3fd4; color: #fff; }
+.tag-auto:disabled { opacity: 0.6; cursor: default; }
 .tag-label { color: #555; }
 .tag-chips { display: contents; }
 .tag-chip { display: inline-flex; align-items: center; gap: 2px; padding: 2px 4px 2px 8px; border-radius: 999px; background: #f0eafc; color: #4b2391; }
