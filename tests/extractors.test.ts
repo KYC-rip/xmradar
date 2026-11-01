@@ -59,6 +59,14 @@ describe('x, outside any tweet on a tweet page', () => {
   });
 });
 
+describe('x, a mention mid-sentence', () => {
+  it('stays on the line: X wraps it in an inline div', () => {
+    const text = '<span>JP (THORChain founder) stated this seems to be </span><div><span><a href="/THORChain">@THORChain</a></span></div><span>’s ultimate test.\n\nNo PR spin.</span>';
+    const doc = makeDoc('https://x.com/XBToshi/status/5', `<article data-testid="tweet"><div data-testid="tweetText">${text}</div><a href="/XBToshi/status/5"><time>1h</time></a></article>`);
+    expect(extractPost(null, doc).post.text).toBe('JP (THORChain founder) stated this seems to be @THORChain’s ultimate test.\n\nNo PR spin.');
+  });
+});
+
 describe('x, long tweets behind Show more', () => {
   const page = (more: string, quoteMore = '') =>
     makeDoc(

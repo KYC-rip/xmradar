@@ -89,6 +89,7 @@ export const xExtractor: Extractor = {
     const text = textEl
       ? htmlToText(textEl, {
           link: (a) => (a.getAttribute('href')?.startsWith('/') ? null : resolveDisplayedLink(a)),
+          inlineDivs: true,
         })
       : '';
     const images: ExtractedImage[] = [...article.querySelectorAll('[data-testid="tweetPhoto"] img')]

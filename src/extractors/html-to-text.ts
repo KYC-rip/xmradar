@@ -7,6 +7,8 @@ const LINE = new Set(['DIV', 'LI', 'SECTION', 'ARTICLE', 'HEADER', 'FOOTER', 'TR
 export interface ToTextOptions {
   /** Return replacement text for a link, or null to fall back to its text content. */
   link?: (a: HTMLAnchorElement) => string | null;
+  /** Divs are inline here (X's post text: a mention sits in an inline-flex div; its line breaks are `\n`). */
+  inlineDivs?: boolean;
 }
 
 /** Turn rendered post HTML into plain text, keeping line breaks, emoji alt text and links. */
@@ -30,7 +32,7 @@ export function htmlToText(root: Node, opts: ToTextOptions = {}): string {
       const replaced = opts.link(el as HTMLAnchorElement);
       if (replaced != null) return void out.push(replaced);
     }
-    const sep = PARAGRAPH.has(el.tagName) ? PARA_BREAK : LINE.has(el.tagName) ? LINE_BREAK : '';
+    const sep = PARAGRAPH.has(el.tagName) ? PARA_BREAK : LINE.has(el.tagName) && !(opts.inlineDivs && el.tagName === 'DIV') ? LINE_BREAK : '';
     out.push(sep);
     el.childNodes.forEach(walk);
     out.push(sep);
