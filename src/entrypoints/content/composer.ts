@@ -5,7 +5,7 @@ import { createShadowRootUi } from 'wxt/utils/content-script-ui/shadow-root';
 import { callBridge } from '../../bridge';
 import { extractPost, type ExtractedImage } from '../../extractors';
 import { expandTweet, xExtractor } from '../../extractors/x';
-import { MAX_THREAD, loadThread } from '../../extractors/x-thread';
+import { MAX_THREAD, loadThread, placeImages, withoutMarkers } from '../../extractors/x-thread';
 import { cleanXLinks } from '../../extractors/x-links';
 import { sendToBackground, type OpenComposerMsg, type RelayResult } from '../../messaging';
 import { articleTemplate, articleTooLarge, blossomAuthTemplate, buildNote, checkSigned, encodeAuthHeader, wordCount, type PostImage } from '../../nostr/event';
@@ -118,7 +118,7 @@ async function mountComposer(ctx: ContentScriptContext, msg: OpenComposerMsg, ta
       // the text's hashtags, then the user's own (PLAN-TAGS); the user owns the list from here
       // the post as the tags see it: an article's title and summary too (the body capped for the model)
       const postText = (bodyMax?: number) =>
-        (art ? [titleInput.value, summaryInput.value, textarea.value.slice(0, bodyMax)] : [textarea.value]).filter((t) => t.trim()).join('\n\n');
+        (art ? [titleInput.value, summaryInput.value, textarea.value.slice(0, bodyMax)] : [withoutMarkers(textarea.value)]).filter((t) => t.trim()).join('\n\n');
       // what Nostr apps count: the hashtags in the content
       const textTags = () => hashtagsOf(textarea.value);
       const tagsUi = tagRow({ initial: [...hashtagsOf(postText()), ...(settings.defaultTags ?? [])], defaults: settings.defaultTags, textTags, text: () => postText() });
@@ -146,7 +146,9 @@ async function mountComposer(ctx: ContentScriptContext, msg: OpenComposerMsg, ta
           if (!pasted.has(img)) lockThread();
           showThreadNotes();
         });
-        return h('label', { class: 'thumb' }, h('img', { src: img.url, alt: img.alt ?? (pasted.has(img) ? 'Pasted image' : '') }), box);
+        // a thread's images carry the number of their [🖼 N] marker in the text
+        const n = post.inlineImages ? post.images.indexOf(img) + 1 : 0;
+        return h('label', { class: 'thumb' }, h('img', { src: img.url, alt: img.alt ?? (pasted.has(img) ? 'Pasted image' : '') }), box, n ? h('span', { class: 'num', textContent: String(n) }) : '');
       };
       const imageGrid = h('div', { class: images.length ? 'images' : 'images hidden' }, ...images.map(thumb));
 
@@ -166,7 +168,8 @@ async function mountComposer(ctx: ContentScriptContext, msg: OpenComposerMsg, ta
         else if (thread.mayContinue) notes.push('The thread may go on below: scroll down to load it, then open Copy to Nostr again.');
         // what goes out now: the text as edited, the images still ticked
         if (selected.size > 12) notes.push(`${selected.size} images: each one is uploaded before the note is sent.`);
-        if (new TextEncoder().encode(textarea.value).length > 32_000) notes.push('This note is over 32 KB. Some relays reject events this large.');
+        // each marker becomes a URL of about this length
+        if (new TextEncoder().encode(textarea.value).length + 120 * selected.size > 32_000) notes.push('This note is over 32 KB. Some relays reject events this large.');
         threadNotes.replaceChildren(...notes.map((n) => h('div', {}, n)));
         threadNotes.classList.toggle('hidden', !notes.length);
       };
@@ -467,8 +470,11 @@ async function mountComposer(ctx: ContentScriptContext, msg: OpenComposerMsg, ta
               tags: tagsUi.tags(),
             });
           } else {
+            // a thread's markers become its images' final URLs, each under its tweet (PLAN-THREADS §4)
+            const placed = post.inlineImages ? placeImages(text, post.images.map((i) => prepared.get(i)?.url ?? null)) : { text, placed: [] };
             template = buildNote({
-              text,
+              text: placed.text,
+              inlined: placed.placed,
               images: [...prepared.values()],
               sourceUrl: post.sourceUrl,
               appendSource: appendSource.checked,

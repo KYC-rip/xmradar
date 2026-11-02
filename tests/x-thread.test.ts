@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MAX_THREAD, authorOf, combineThread, loadThread, xThread } from '../src/extractors/x-thread';
+import { MAX_THREAD, authorOf, combineThread, loadThread, placeImages, withoutMarkers, xThread } from '../src/extractors/x-thread';
 import { makeDoc } from './helpers';
 
 const tweet = (id: string, text: string, opts: { by?: string; extra?: string; cut?: boolean } = {}) =>
@@ -69,7 +69,7 @@ describe('xThread', () => {
 });
 
 describe('combineThread', () => {
-  it('joins texts by a blank line, skips empty ones, keeps all images in order and the first link', () => {
+  it('joins texts by a blank line, skips empty ones, marks each image under its tweet, keeps the first link', () => {
     const doc = makeDoc('https://x.com/XBToshi/status/1', '');
     const p = (n: string, text: string, images: string[] = [], articleCard?: boolean) => ({
       site: 'x',
@@ -78,13 +78,43 @@ describe('combineThread', () => {
       sourceUrl: `https://x.com/XBToshi/status/${n}`,
       ...(articleCard ? { articleCard } : {}),
     });
-    expect(combineThread([p('1', ' one\n', ['a']), p('2', '  '), p('3', 'three', ['b', 'c'])], doc)).toEqual({
+    expect(combineThread([p('1', ' one\n', ['a']), p('2', '  '), p('3', 'three', ['b', 'c']), p('4', '', ['d'])], doc)).toEqual({
       site: 'x',
-      text: 'one\n\nthree',
-      images: [{ url: 'a' }, { url: 'b' }, { url: 'c' }],
+      text: 'one\n[🖼 1]\n\nthree\n[🖼 2]\n[🖼 3]\n\n[🖼 4]',
+      images: [{ url: 'a' }, { url: 'b' }, { url: 'c' }, { url: 'd' }],
       sourceUrl: 'https://x.com/XBToshi/status/1',
+      inlineImages: true,
     });
-    expect(combineThread([p('1', 'a'), p('2', 'b', [], true)], doc).articleCard).toBe(true);
+    const plain = combineThread([p('1', 'a'), p('2', 'b', [], true)], doc);
+    expect(plain.articleCard).toBe(true);
+    expect(plain.inlineImages).toBeUndefined();
+  });
+  it('keeps the images at the end when a tweet already has a marker of its own', () => {
+    const doc = makeDoc('https://x.com/XBToshi/status/1', '');
+    const p = (text: string, images: string[]) => ({ site: 'x', text, images: images.map((url) => ({ url })), sourceUrl: 'https://x.com/XBToshi/status/1' });
+    const t = combineThread([p('see [🖼 1] here', ['a']), p('two', ['b'])], doc);
+    expect(t.text).toBe('see [🖼 1] here\n\ntwo');
+    expect(t.inlineImages).toBeUndefined();
+  });
+});
+
+describe('placeImages', () => {
+  it('puts each ticked image where its marker is and drops an unticked one with its line', () => {
+    expect(placeImages('one\n[🖼 1]\n\ntwo\n[🖼 2]\n[🖼 3]\n\nthree', ['https://b/1', null, 'https://b/3'])).toEqual({
+      text: 'one\nhttps://b/1\n\ntwo\nhttps://b/3\n\nthree',
+      placed: ['https://b/1', 'https://b/3'],
+    });
+    // an unticked last image takes no trailing blank line with it
+    expect(placeImages('one\n[🖼 1]', [null]).text).toBe('one');
+  });
+  it("leaves a marker with no such image as the user's text, and moved markers work inline", () => {
+    expect(placeImages('see [🖼 9] and [🖼 0]; here [🖼 1] too', ['https://b/1'])).toEqual({ text: 'see [🖼 9] and [🖼 0]; here https://b/1 too', placed: ['https://b/1'] });
+  });
+  it('reports nothing placed for a deleted marker, so the image is appended', () => {
+    expect(placeImages('one', ['https://b/1'])).toEqual({ text: 'one', placed: [] });
+  });
+  it('strips markers for tag suggestions', () => {
+    expect(withoutMarkers('a\n[🖼 1]\nb')).toBe('a\n\nb');
   });
 });
 
@@ -92,7 +122,7 @@ describe('loadThread', () => {
   it('extracts the whole thread with its images', async () => {
     const doc = thread(five);
     const t = (await loadThread(doc.getElementById('t3'), doc, no))!;
-    expect(t.post.text).toBe('one\n\ntwo\n\nthree\n\nfour\n\nfive');
+    expect(t.post.text).toBe('one\n[🖼 1]\n\ntwo\n[🖼 2]\n\nthree\n\nfour\n\nfive\n[🖼 3]');
     expect(t.post.images.map((i) => i.url)).toEqual(['a', 'b', 'c'].map((n) => `https://pbs.twimg.com/media/${n}?format=jpg&name=orig`));
     expect(t.post.sourceUrl).toBe('https://x.com/XBToshi/status/1');
     expect(t).toMatchObject({ count: 5, mayContinue: false, capped: false, cut: [] });

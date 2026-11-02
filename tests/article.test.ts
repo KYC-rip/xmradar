@@ -32,6 +32,15 @@ describe('statusIdFromUrl', () => {
   });
 });
 
+describe('X Article from the share menu', () => {
+  it('is found from the tweet X nests the read view in', () => {
+    const doc = makeDoc(URL, `<article data-testid="tweet">${fixture('x-article-loggedin')}</article>`);
+    const { post, fallback } = extractPost(doc.querySelector('article[data-testid="tweet"]')!, doc);
+    expect(fallback).toBe(false);
+    expect(post.article?.title).toBe('The Web-App Cash Register Nobody Can Delist');
+  });
+});
+
 describe('X Article, logged in (Draft.js)', () => {
   const target = loggedIn.querySelector('[data-testid="longformRichTextComponent"] h2')!;
   const { post, fallback } = extractPost(target, loggedIn);

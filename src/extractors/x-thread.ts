@@ -94,19 +94,48 @@ export function xThread(tweet: Element | null, doc: Document, continues: (articl
   return { tweets, capped, mayContinue: capped || continues(tweets.at(-1)!) };
 }
 
-/** The thread's tweets as one post: their texts in order with a blank line between, all images, the first tweet's link. */
+export const imageMarker = (n: number) => `[🖼 ${n}]`;
+const MARKER = /\[🖼 (\d{1,3})\]/g;
+/** the text without image markers, for what reads it as words (tag suggestions) */
+export const withoutMarkers = (text: string) => text.replace(MARKER, '');
+
+/**
+ * The thread's tweets as one post: their texts in order with a blank line between, each tweet's images
+ * marked right under it (`[🖼 N]`, made URLs at publish, PLAN-THREADS §4), the first tweet's link.
+ */
 export function combineThread(posts: ExtractedPost[], doc: Document): ExtractedPost {
   const first = posts[0]!;
+  // a thread whose own text already has a marker keeps its images at the end, so no tweet text is taken for one
+  const inline = !posts.some((p) => new RegExp(MARKER.source).test(p.text));
+  let n = 0;
+  const parts = posts.map((p) => [p.text.trim(), ...(inline ? p.images.map(() => imageMarker(++n)) : [])].filter(Boolean).join('\n'));
   return {
     site: 'x',
-    text: posts
-      .map((p) => p.text.trim())
-      .filter(Boolean)
-      .join('\n\n'),
+    text: parts.filter(Boolean).join('\n\n'),
     images: posts.flatMap((p) => p.images),
     sourceUrl: first.sourceUrl || (absUrl(doc.location.pathname, doc) ?? doc.location.href),
     ...(posts.some((p) => p.articleCard) ? { articleCard: true } : {}),
+    ...(inline && n ? { inlineImages: true } : {}),
   };
+}
+
+/**
+ * The note text with each marker made its image's final URL: `finals[i]` for `images[i]`, null when it was
+ * unticked (its marker goes, and its line too when the marker stood alone). A marker with no such image is
+ * the user's own text and stays. Returns the URLs placed, so they aren't appended again.
+ */
+export function placeImages(text: string, finals: (string | null)[]): { text: string; placed: string[] } {
+  const placed: string[] = [];
+  const known = (d: string) => +d >= 1 && +d <= finals.length;
+  const out = text
+    .replace(/^[ \t]*\[🖼 (\d{1,3})\][ \t]*(?:\n|$)/gm, (m, d: string) => (known(d) && finals[+d - 1] === null ? '' : m))
+    .replace(MARKER, (m, d: string) => {
+      if (!known(d)) return m;
+      const url = finals[+d - 1];
+      if (url) placed.push(url);
+      return url ?? '';
+    });
+  return { text: out.replace(/\n+$/, ''), placed };
 }
 
 export interface LoadedThread {

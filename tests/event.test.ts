@@ -15,6 +15,13 @@ describe('buildNote', () => {
       tags: [['imeta', 'url https://b.example/aa.png', 'm image/png', 'x aa', 'dim 10x20', 'alt a cat'], ['client', 'XMRadar']],
     });
   });
+  it("doesn't append images the text already shows, but tags them all", () => {
+    const a = { url: 'https://b/a.png', sha256: 'aa' };
+    const b = { url: 'https://b/b.png', sha256: 'bb' };
+    const ev = buildNote({ text: 'one\nhttps://b/a.png\n\ntwo', images: [a, b], inlined: ['https://b/a.png'], now: 1 });
+    expect(ev.content).toBe('one\nhttps://b/a.png\n\ntwo\n\nhttps://b/b.png');
+    expect(ev.tags.filter((t) => t[0] === 'imeta').map((t) => t[1])).toEqual(['url https://b/a.png', 'url https://b/b.png']);
+  });
   it('optionally appends the source link with an r tag', () => {
     const ev = buildNote({ text: 'hi', images: [], sourceUrl: 'https://twitter.com/a/status/1?s=20', appendSource: true, now: 1 });
     expect(ev.content).toBe('hi\n\nhttps://x.com/a/status/1');

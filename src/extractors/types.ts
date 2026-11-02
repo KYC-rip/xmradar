@@ -25,6 +25,8 @@ export interface ExtractedPost {
   article?: ExtractedArticle;
   /** A tweet that only shares an X Article (the full article is on its own page). */
   articleCard?: boolean;
+  /** A combined X thread: `[🖼 N]` markers in the text stand for `images[N-1]` (PLAN-THREADS §4). */
+  inlineImages?: boolean;
 }
 
 export interface Extractor {

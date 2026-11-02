@@ -29,6 +29,8 @@ export function buildNote(opts: {
   /** `t` tags (PLAN-TAGS); with `hashtagLine`, the ones missing from the text are added to it as #tags */
   tags?: string[];
   hashtagLine?: boolean;
+  /** image URLs the text already shows where they belong (a thread's, PLAN-THREADS §4): not appended again */
+  inlined?: string[];
   now?: number;
 }): EventTemplate {
   const seen = new Set<string>();
@@ -42,7 +44,9 @@ export function buildNote(opts: {
   const tTags = eventTags(opts.tags ?? []);
   const line = opts.hashtagLine ? missingHashtagLine(opts.text, tTags.map((t) => t[1]!)) : '';
   const parts = [line ? `${opts.text.trim()}\n\n${line}`.trim() : opts.text.trim()];
-  if (images.length) parts.push(images.map((i) => i.url).join('\n'));
+  const inlined = new Set(opts.inlined ?? []);
+  const appended = images.filter((i) => !inlined.has(i.url));
+  if (appended.length) parts.push(appended.map((i) => i.url).join('\n'));
   const source = opts.appendSource && opts.sourceUrl ? normalizeUrl(opts.sourceUrl) : undefined;
   if (source) parts.push(source);
 

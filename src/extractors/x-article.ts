@@ -33,9 +33,11 @@ interface ArticleParts {
   cover: Element | null;
 }
 
-/** Logged in: Draft.js read view. */
+const READ_VIEW = 'article[data-testid="twitterArticleReadView"]';
+
+/** Logged in: Draft.js read view. X nests it in the tweet, which is what the share menu hands over. */
 function loggedInParts(target: Element): ArticleParts | null {
-  const view = target.closest('article[data-testid="twitterArticleReadView"]');
+  const view = target.closest(READ_VIEW) ?? target.closest('article[data-testid="tweet"]')?.querySelector(READ_VIEW);
   if (!view) return null;
   const rich = view.querySelector('[data-testid="longformRichTextComponent"]');
   const body = rich?.querySelector('[data-contents]') ?? rich ?? null;
