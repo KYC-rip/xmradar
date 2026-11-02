@@ -41,7 +41,13 @@ describe('order page (§4.3, §11)', () => {
   });
   it('hidden copies don’t count; QR-only gives the compare-in-wallet caution', () => {
     expect(addressLines(doc(`<input type="hidden" value="${DEP}"><div hidden>Deposit ${OTHER_BTC}</div><img alt="QR">`), r)).toEqual([
-      { level: 'caution', text: expect.stringContaining('QR only') },
+      { level: 'caution', text: expect.stringContaining('may be in a QR code') },
+    ]);
+  });
+  it('no deposit address on a receipt page: always the caution, naming the signed address', () => {
+    // a receipt check can't see copy buttons or payment links, so even a status headline keeps the caution
+    expect(addressLines(doc(`<h2>Sending to your wallet</h2><p>Payout: ${PAY}</p>`), r)).toEqual([
+      { level: 'caution', text: expect.stringContaining(`The signed one is ${DEP}`) },
     ]);
   });
   it('no recognisable label: roles not confirmed', () => {

@@ -5,7 +5,9 @@ import { EXPORT_WARNING } from '../receipts/export';
 import type { SavedReceipt } from '../receipts/store';
 import { lookupWaitMs } from '../receipts/witness';
 import { swapRecordDaysOf } from '../receipts/cleanup';
-import { copyReportsOn, logFetchOn, patchSettings, patchXmrSettings, receiptsOn, settingsItem, siteInfoOn, siteWarningsOn, swapRecordDaysItem, swapRecordsCleanedItem, xmrSettingsItem } from '../settings';
+import { siteLogo } from './site-logo';
+import type { LogoPack } from '../sites/logos';
+import { copyReportsOn, logoPackItem, logFetchOn, patchSettings, patchXmrSettings, receiptsOn, settingsItem, siteInfoOn, siteWarningsOn, swapRecordDaysItem, swapRecordsCleanedItem, xmrSettingsItem } from '../settings';
 import { part, setStatus } from './dom';
 
 /**
@@ -92,15 +94,31 @@ export async function mountReceiptsPanel(root: HTMLElement) {
 
   let saved: SavedReceipt[] = [];
   let letters: SavedLetter[] = [];
+  let pack: LogoPack | null = null;
+  // a pack that arrives or changes while the page is open; it wins over a read still in flight
+  let packWatched = false;
+  logoPackItem.watch((p) => {
+    pack = p;
+    packWatched = true;
+    render();
+  });
 
   async function load() {
     try {
-      [saved, letters] = await Promise.all([sendToBackground({ type: 'receipts-list' }), sendToBackground({ type: 'letters-list' })]);
+      let read: LogoPack | null;
+      [saved, letters, read] = await Promise.all([sendToBackground({ type: 'receipts-list' }), sendToBackground({ type: 'letters-list' }), logoPackItem.getValue()]);
+      if (!packWatched) pack = read;
     } catch (e) {
       return setStatus(status, (e as Error).message, 'error');
     }
     render();
   }
+
+  const titled = (logo: HTMLElement, title: HTMLElement) => {
+    const row = el('div', '', 'rec-head');
+    row.append(logo, title);
+    return row;
+  };
 
   function render() {
     const now = Date.now();
@@ -114,7 +132,7 @@ export async function mountReceiptsPanel(root: HTMLElement) {
         const card = el('div', '', 'card pad');
         const expired = r.expires_at * 1000 <= now;
         card.append(
-          el('h2', `${r.order_id} · ${r.issuer}`),
+          titled(siteLogo(pack, { host: r.issuer }, r.issuer), el('h2', `${r.order_id} · ${r.issuer}`)),
           el('div', `${r.deposit_asset} → ${r.payout_asset} · ${new Date(s.savedAt).toLocaleString()}${expired ? ' · Expired' : ''}`, 'row-hint'),
           el('div', recordText(s, now), 'row-hint'),
         );
@@ -152,7 +170,7 @@ export async function mountReceiptsPanel(root: HTMLElement) {
       const title = el('h2', `${l.orderId} · ${l.siteName} `);
       title.append(el('span', 'Letter', 'tag'));
       card.append(
-        title,
+        titled(siteLogo(pack, { siteId: l.siteId }, l.siteName), title),
         el('div', `${l.format === 'mistproof' ? 'MistProof' : 'PGP letter of guarantee'} · ${new Date(l.savedAt).toLocaleString()}`, 'row-hint'),
         el('div', l.page, 'row-hint'),
       );

@@ -5,6 +5,7 @@ import { createShadowRootUi } from 'wxt/utils/content-script-ui/shadow-root';
 import { callBridge } from '../../bridge';
 import { extractPost, type ExtractedImage } from '../../extractors';
 import { expandTweet, xExtractor } from '../../extractors/x';
+import { MAX_THREAD, loadThread } from '../../extractors/x-thread';
 import { cleanXLinks } from '../../extractors/x-links';
 import { sendToBackground, type OpenComposerMsg, type RelayResult } from '../../messaging';
 import { articleTemplate, articleTooLarge, blossomAuthTemplate, buildNote, checkSigned, encodeAuthHeader, wordCount, type PostImage } from '../../nostr/event';
@@ -56,7 +57,11 @@ export async function openComposer(ctx: ContentScriptContext, msg: OpenComposerM
 async function mountComposer(ctx: ContentScriptContext, msg: OpenComposerMsg, target: Element | null): Promise<ComposerInstance> {
   // a timeline tweet may be cut behind "Show more"; a selection is taken as it is
   if (!msg.selection?.trim() && xExtractor.matches(document)) target = (await expandTweet(target, document).catch(() => null)) ?? target;
-  const { post, fallback } = extractPost(target, document, { selection: msg.selection, srcUrl: msg.srcUrl });
+  const { post: single, fallback } = extractPost(target, document, { selection: msg.selection, srcUrl: msg.srcUrl });
+  // a thread on its own page is copied whole as one note, switchable back to the one tweet (PLAN-THREADS)
+  const thread =
+    !fallback && !msg.selection?.trim() && !msg.srcUrl && !single.article && xExtractor.matches(document) ? await loadThread(target, document).catch(() => null) : null;
+  let post = thread?.post ?? single;
   const settings = await settingsItem.getValue();
   const previousFocus = document.activeElement as HTMLElement | null;
   let closed = false;
@@ -135,11 +140,37 @@ async function mountComposer(ctx: ContentScriptContext, msg: OpenComposerMsg, ta
       const images = [...post.images];
       const thumb = (img: ExtractedImage) => {
         const box = h('input', { type: 'checkbox', checked: true, attrs: { 'aria-label': 'Include image' } });
-        box.addEventListener('change', () => (box.checked ? selected.add(img) : selected.delete(img)));
+        box.addEventListener('change', () => {
+          if (box.checked) selected.add(img);
+          else selected.delete(img);
+          if (!pasted.has(img)) lockThread();
+          showThreadNotes();
+        });
         return h('label', { class: 'thumb' }, h('img', { src: img.url, alt: img.alt ?? (pasted.has(img) ? 'Pasted image' : '') }), box);
       };
       const imageGrid = h('div', { class: images.length ? 'images' : 'images hidden' }, ...images.map(thumb));
 
+      // whole thread or the one tweet; once the text or the thread's images are edited, switching would lose that
+      const threadBox = h('input', { type: 'checkbox', checked: true });
+      const threadNotes = h('div', { class: 'warn hidden' });
+      const lockThread = () => {
+        if (!thread || threadBox.disabled) return;
+        threadBox.disabled = true;
+        threadBox.parentElement!.title = 'Edited; reopen Copy to Nostr to switch';
+      };
+      const showThreadNotes = () => {
+        if (!thread || !threadBox.checked) return threadNotes.classList.add('hidden');
+        const notes: string[] = [];
+        if (thread.cut.length) notes.push(`Post ${thread.cut.join(', ')} of the thread is still cut short (“Show more” didn't open); check the text.`);
+        if (thread.capped) notes.push(`The thread is longer than ${MAX_THREAD} posts; only ${MAX_THREAD} around this one are copied.`);
+        else if (thread.mayContinue) notes.push('The thread may go on below: scroll down to load it, then open Copy to Nostr again.');
+        // what goes out now: the text as edited, the images still ticked
+        if (selected.size > 12) notes.push(`${selected.size} images: each one is uploaded before the note is sent.`);
+        if (new TextEncoder().encode(textarea.value).length > 32_000) notes.push('This note is over 32 KB. Some relays reject events this large.');
+        threadNotes.replaceChildren(...notes.map((n) => h('div', {}, n)));
+        threadNotes.classList.toggle('hidden', !notes.length);
+      };
+      const articleCardLine = h('div', { class: post.articleCard ? 'warn' : 'warn hidden' }, 'This post shares an X Article. To copy the whole article, open it and use Copy to Nostr there.');
       const reupload = h('input', { type: 'checkbox', checked: true });
       const appendSource = h('input', { type: 'checkbox', checked: settings.appendSourceLink });
       const debugPre = h('pre', { class: settings.debug ? 'debug' : 'hidden' });
@@ -152,7 +183,9 @@ async function mountComposer(ctx: ContentScriptContext, msg: OpenComposerMsg, ta
         { class: 'dialog', attrs: { role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Copy post to Nostr' } },
         h('header', {}, h('h2', { textContent: art ? 'Copy article to Nostr' : 'Copy to Nostr' }), h('span', { class: 'site', textContent: art ? 'X Article' : post.site })),
         fallback ? h('div', { class: 'warn' }, msg.selection ? "Couldn't detect a post — using your selection." : "Couldn't detect a post — using page content.") : '',
-        post.articleCard ? h('div', { class: 'warn' }, 'This post shares an X Article. To copy the whole article, open it and use Copy to Nostr there.') : '',
+        articleCardLine,
+        thread ? h('label', { class: 'thread' }, threadBox, ` Whole thread (${thread.count} posts)`) : '',
+        threadNotes,
         signerLine,
         dupeLine,
         art ? titleInput : '',
@@ -165,7 +198,7 @@ async function mountComposer(ctx: ContentScriptContext, msg: OpenComposerMsg, ta
         h(
           'div',
           { class: 'options' },
-          post.images.length ? h('label', {}, reupload, ' Re-upload images to Blossom') : '',
+          single.images.length || thread?.post.images.length ? h('label', {}, reupload, ' Re-upload images to Blossom') : '',
           h('label', {}, appendSource, ' Append link to original'),
         ),
         debugPre,
@@ -282,7 +315,27 @@ async function mountComposer(ctx: ContentScriptContext, msg: OpenComposerMsg, ta
         if (e.dataTransfer?.types.includes('Files')) e.preventDefault();
       });
       textarea.addEventListener('drop', (e) => onPasteOrDrop(e, e.dataTransfer, 'drop', pasteTarget));
+      threadBox.addEventListener('change', () => {
+        if (!thread) return;
+        post = threadBox.checked ? thread.post : single;
+        textarea.value = clean(post.text);
+        // the post's images again, then the pasted ones as they were
+        const kept = images.filter((i) => pasted.has(i));
+        images.splice(0, images.length, ...post.images, ...kept);
+        for (const i of [...selected]) if (!pasted.has(i)) selected.delete(i);
+        for (const i of post.images) selected.add(i);
+        imageGrid.replaceChildren(...images.map((i) => thumb(i)));
+        for (const [i, box] of imageGrid.querySelectorAll<HTMLInputElement>('input[type=checkbox]').entries()) box.checked = selected.has(images[i]!);
+        imageGrid.classList.toggle('hidden', !images.length);
+        articleCardLine.classList.toggle('hidden', !post.articleCard);
+        showThreadNotes();
+        tagsUi.refresh();
+        void checkDuplicate();
+      });
+      showThreadNotes();
       textarea.addEventListener('input', () => {
+        lockThread();
+        showThreadNotes();
         checkSize();
         clearTimeout(dupeTimer);
         dupeTimer = setTimeout(checkDuplicate, 400);

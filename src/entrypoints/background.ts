@@ -21,7 +21,7 @@ import { allRelaysFrom, fetchWriteRelays, publishToRelays, readEach, readRelay }
 import { assertFetchableImageUrl } from '../nostr/url-guard';
 import { checkSessionSender, checkShareMenuSender, isExtensionPageSender, isSignerPage, isXUrl, SIGNER_PAGE, shareMenuRateLimit, withoutTab } from '../sender';
 import { setAuto, suggestFor, tagsReady } from '../ai/requests';
-import { DEFAULT_RELAYS, directoryStatusItem, INDEX_RELAYS, withoutIndex, myHandleItem, postedItem, pubkeyItem, receiptsOn, settingsItem, siteInfoOn, updateCheckOn, updateStateItem, siteWarningsOn, copyReportsOn, swapRecordDaysItem, swapRecordsCleanedItem, xapMarksItem, xClaimsChangedItem, xClaimsOn, xmrSettingsItem } from '../settings';
+import { DEFAULT_RELAYS, directoryStatusItem, INDEX_RELAYS, withoutIndex, myHandleItem, postedItem, pubkeyItem, receiptsOn, settingsItem, siteInfoOn, updateCheckOn, updateStateItem, logoPackItem, siteWarningsOn, copyReportsOn, swapRecordDaysItem, swapRecordsCleanedItem, xapMarksItem, xClaimsChangedItem, xClaimsOn, xmrSettingsItem } from '../settings';
 import { storage } from 'wxt/utils/storage';
 import { activeInbox, burnerCreatingItem, burnerInboxItem, burnerLastErrorItem, burnFreeInbox, createFreeInbox, forgetImportedInbox, importInbox, type BurnerDeps } from '../burner/service';
 import { idbTokenStore } from '../burner/token-store';
@@ -49,6 +49,7 @@ import { GUARD_PATH } from '../sites/guard-rules';
 import { guardKeeper, type DnrApi, type GuardTokens } from '../sites/guard-keeper';
 import { reportCopy, reportFlags } from '../sites/report';
 import { releaseUrl, UPDATE_NOTICE_ID, updateFor, updateKeeper } from '../update/check';
+import { logoKeeper } from '../sites/logos';
 
 const MENU_ID = 'xmradar';
 const TIP_MENU_ID = 'xmradar-tip';
@@ -199,6 +200,8 @@ export default defineBackground(() => {
   // switched off while the worker wasn't running: nothing may stay kept
   void xmrSettingsItem.getValue().then((s) => (xClaimsOn(s) ? undefined : claims.clear()));
   void xmrSettingsItem.getValue().then((s) => applySiteInfoSetting(siteInfoOn(s)));
+  // a pack missed while the worker was down (or kept by a version without logos)
+  void siteFeedItem.getValue().then((f) => logos.sync(f));
   void applyGuard();
   // the guard page's address is new each browser session (use_dynamic_url): this listener starts the worker
   // at browser start, so the rules are rewritten to the new address before the first navigations
@@ -714,6 +717,15 @@ const directory = directoryKeeper({
     persistCaches();
   },
 });
+// exchange logos for the saved records: xmr.club's pack, named with its hash in the signed list (PLAN-LOGOS)
+const logos = logoKeeper({
+  held: logoPackItem,
+  feed: () => siteFeedItem.getValue(),
+  fetch: (...args) => fetch(...args),
+  readBody: boundedBody,
+  sha256Hex: (b) => sha256Hex(b as Uint8Array<ArrayBuffer>),
+  enabled: async () => siteInfoOn(await xmrSettingsItem.getValue()),
+});
 const SITE_FEED_ALARM = 'site-feed';
 const SITE_FEED_HOURS = 12;
 const tabStates = new Map<number, TabState>();
@@ -842,6 +854,7 @@ async function downloadSiteFeed() {
     const feed = readFeed(JSON.parse(text), Math.floor(Date.now() / 1000), keptAt);
     if (generation !== siteFeedGeneration || !siteInfoOn(await xmrSettingsItem.getValue())) return;
     await siteFeedItem.setValue(feed);
+    void logos.sync(feed);
   } catch (e) {
     // the kept copy stays; the popup says when it's out of date
     console.warn('[XMRadar] site feed', (e as Error).message);
@@ -858,6 +871,7 @@ async function applySiteInfoSetting(on: boolean) {
   siteFeedGeneration++;
   await browser.alarms.clear(SITE_FEED_ALARM);
   await siteFeedItem.removeValue();
+  await logoPackItem.removeValue();
   await tabStateReady;
   siteInfoByTab.clear();
   for (const [tabId, state] of tabStates) {

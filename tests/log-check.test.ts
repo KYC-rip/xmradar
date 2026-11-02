@@ -199,7 +199,55 @@ describe('letterAddressLines: the page against a verified letter', () => {
     const split = letterAddressLines(page('<p>Single-use address</p><span>TDmAwaqvQms5</span><span hidden>…</span><span>ejYY1ara</span>'), tron);
     expect(split).toMatchObject([{ level: 'caution', text: expect.stringContaining('shortened') }]);
     // two words that don't fit it are no shortened address
-    expect(letterAddressLines(page('<p>Single-use address</p><span>TDmAwaqvQms5 xxxxxxxx</span>'), tron)[0]!.text).toContain('not found');
+    expect(letterAddressLines(page('<p>Single-use address</p><span>TDmAwaqvQms5 xxxxxxxx</span>'), tron)[0]!.text).toContain("couldn't find the deposit address");
+  });
+
+  describe('a deposit address the page does not show as text', () => {
+    const xmr: LetterAddress[] = [{ address: 'TDmAwaqvQms5G6XmgX3hDpiN44ejYY1ara', role: 'deposit' }];
+    const lines = (html: string) => letterAddressLines(page(html), xmr);
+    const level = (html: string) => lines(html)[0]!.level;
+
+    it('Mistex while sending (a stepper, a spinner, the status headline): neutral, quoting the headline, with the signed address', () => {
+      const out = lines('<ol><li>✓ Awaiting deposit</li><li>Sending</li></ol><svg class="ex-spinner__svg" viewBox="0 0 80 80"><circle r="30"/></svg><h2>Sending to your wallet</h2><p>Funds are on the way</p>');
+      expect(out).toEqual([{ level: 'off', text: expect.stringContaining('This page says “Sending to your wallet”') }]);
+      expect(out[0]!.text).toContain(xmr[0]!.address);
+    });
+
+    it.each(['<h2>Exchange completed!</h2>', '<h3>Your swap has been successfully processed.</h3>', '<div role="status">Deposit received</div>', '<p aria-live="polite">Transfer in progress</p>', '<h1>We’ve received your deposit</h1>'])(
+      'a status headline: %s',
+      (html) => expect(level(html)).toBe('off'),
+    );
+
+    it.each([
+      ['the words in plain text', '<p>Sending to your wallet</p>'],
+      ['a future step in a progress bar', '<ol><li><h4>Sending to your wallet</h4></li></ol>'],
+      ['a FAQ question', '<h3>What happens once the exchange completed?</h3>'],
+      ['a FAQ answer in details', '<details><summary>Deposit</summary><h4>Deposit received</h4></details>'],
+      ['a longer heading', '<h2>Send 0.1 XMR, then sending to your wallet starts</h2>'],
+      ['an email notice', '<h2>A confirmation email has been sent</h2>'],
+      ['a footer heading', '<footer><h4>Exchange completed</h4></footer>'],
+      ['a stepper label alone', '<p>Completed</p>'],
+    ])('no live status (%s): the caution', (_, html) => expect(level(html)).toBe('caution'));
+
+    it.each([
+      ['a QR picture', '<img alt="Deposit QR code" src="data:image/png;base64,AA==">'],
+      ['a QR class on the parent', '<div class="deposit-qr"><canvas></canvas></div>'],
+      ['an aria-hidden QR', '<div aria-hidden="true"><svg class="qrcode"></svg></div>'],
+    ])('%s keeps the caution, even under a status headline', (_, html) => {
+      expect(lines(`<h2>Exchange completed!</h2>${html}`)).toEqual([{ level: 'caution', text: expect.stringContaining('QR code, copy button or payment link') }]);
+    });
+
+    it('a QR code that is really hidden does not count', () => {
+      expect(level('<h2>Exchange completed!</h2><div hidden><img alt="QR"></div>')).toBe('off');
+    });
+
+    it('a copy button holding the signed deposit keeps the caution', () => {
+      expect(level('<h2>Exchange completed!</h2><button data-clipboard-text="TDmAwaqvQms5G6XmgX3hDpiN44ejYY1ara">Copy</button>')).toBe('caution');
+    });
+
+    it('a deposit-stage page with a QR XMRadar cannot see (a CSS background): the caution', () => {
+      expect(level('<ol><li>Awaiting deposit</li><li>Sending</li><li>Completed</li></ol><div style="background:url(data:image/png;base64,AA==)"></div>')).toBe('caution');
+    });
   });
 
   it('warns about a Tron address the letter does not name, in the deposit slot', () => {

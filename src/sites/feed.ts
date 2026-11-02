@@ -109,7 +109,7 @@ export interface Intern {
 }
 
 /** bumped when XMRadar reads more of the feed, so a copy kept by an older version is fetched again */
-export const FEED_READER_V = 7;
+export const FEED_READER_V = 8;
 
 export interface SiteFeed {
   /** the FEED_READER_V that parsed it */
@@ -119,6 +119,32 @@ export interface SiteFeed {
   sites: SiteEntry[];
   /** hosts xmr.club confirmed as copies of a listing (PLAN-IMPERSONATORS); checked again before use */
   impersonators?: Impersonator[];
+  /** xmr.club's logo pack (PLAN-LOGOS): one file for everyone, fetched only when its hash changes */
+  logoPack?: LogoPackRef;
+}
+
+export interface LogoPackRef {
+  url: string;
+  sha256: string;
+  bytes: number;
+  sizePx: number;
+}
+
+const LOGO_PATH = /^\/feed\/[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)*\.json$/;
+/** `logo_pack`, whole or not at all: a file under https://xmr.club/feed/, nothing else */
+export function parseLogoPack(v: unknown): LogoPackRef | null {
+  if (!isObj(v) || typeof v.url !== 'string' || typeof v.sha256 !== 'string' || !/^[0-9a-f]{64}$/.test(v.sha256)) return null;
+  if (!int(v.bytes) || (v.bytes as number) < 1 || (v.bytes as number) > 1024 * 1024 || v.format !== 'webp') return null;
+  if (!int(v.size_px) || (v.size_px as number) < 8 || (v.size_px as number) > 64) return null;
+  let u: URL;
+  try {
+    u = new URL(v.url);
+  } catch {
+    return null;
+  }
+  const path = /^https:\/\/xmr\.club(\/[^?#]*)$/.exec(v.url)?.[1];
+  if (u.protocol !== 'https:' || u.hostname !== 'xmr.club' || u.username || u.password || u.port || u.search || u.hash || !path || !LOGO_PATH.test(path) || u.pathname !== path) return null;
+  return { url: v.url, sha256: v.sha256, bytes: v.bytes as number, sizePx: v.size_px as number };
 }
 
 export interface Impersonator {
@@ -276,7 +302,8 @@ export function readFeed(envelope: unknown, nowSecs: number, keptIssuedAt = 0, k
   if (issuedAt <= keptIssuedAt) throw new Error('Feed is not newer than the one kept');
   const sites = data.sites.map(parseSite).filter((s): s is SiteEntry => !!s);
   const impersonators = parseImpersonators(data.impersonators, sites);
-  return { reader: FEED_READER_V, issuedAt, expiresAt, sites, ...(impersonators.length ? { impersonators } : {}) };
+  const logoPack = parseLogoPack(data.logo_pack);
+  return { reader: FEED_READER_V, issuedAt, expiresAt, sites, ...(impersonators.length ? { impersonators } : {}), ...(logoPack ? { logoPack } : {}) };
 }
 
 /** A page host as the feed writes hosts: lowercase, no trailing dot, no leading `www.`. */

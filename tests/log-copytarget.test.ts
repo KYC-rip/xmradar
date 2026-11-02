@@ -85,8 +85,8 @@ describe('the shortened deposit with its copy button (BitcoinVN)', () => {
   it('without a copy target: today’s shortened caution', () => {
     expect(textOf(depositBox(''))).toContain('shortened. It fits');
   });
-  it('the signed deposit only in a copy button, no text: still "not found as text"', () => {
-    expect(textOf(`<div><p>Single-use address</p><button data-clipboard-text="${DEPOSIT}">Copy</button></div>`)).toContain('not found as text');
+  it('the signed deposit only in a copy button, no text: still the "couldn’t find as text" caution', () => {
+    expect(textOf(`<div><p>Single-use address</p><button data-clipboard-text="${DEPOSIT}">Copy</button></div>`)).toContain("couldn't find the deposit address as text");
   });
   it('the copy button with the signed deposit in another box: no upgrade', () => {
     const html = `<div><p>Single-use address</p><div>${shortSpans(DEPOSIT)}</div></div><div><p>Help</p><div><button data-clipboard-text="${DEPOSIT}">Copy</button></div></div>`;

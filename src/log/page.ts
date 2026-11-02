@@ -1,5 +1,5 @@
 import type { Line } from '../receipts/check';
-import { DEPOSIT_WORDS, roleAt, shown, visibleTexts, type Role } from '../receipts/page';
+import { DEPOSIT_WORDS, depositNotShown, pageHasQr, pastDepositStatus, roleAt, shown, visibleTexts, type Role } from '../receipts/page';
 import type { LetterAddress, UnreadDeposit } from './check';
 import { findLetterAddresses, letterFamily, sameLetterAddress, tonForms, type LetterFamily } from './families';
 
@@ -298,7 +298,9 @@ export function letterAddressLines(doc: Document, addresses: LetterAddress[], no
         });
       } else lines.push({ level: 'caution', text: `The page shows the deposit address shortened. It fits the signed letter's: ${d.address}. Check that your wallet sends to exactly this address.` });
     } else {
-      lines.push({ level: 'caution', text: `Deposit address not found as text (QR only?). The signed letter's is ${d.address}: check that your wallet sends to it.` });
+      // a copy button or payment link that holds it (or one XMRadar can't read) is something to send to, like a QR code
+      const held = unreadableInDeposit || targets.some((t) => t.address !== 'unreadable' && sameLetterAddress(t.address, d.address));
+      lines.push(depositNotShown(d.address, held || pageHasQr(doc) ? null : pastDepositStatus(doc)));
     }
   }
   return lines;

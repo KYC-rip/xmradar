@@ -46,6 +46,62 @@ export function shown(el: Element): boolean {
   return true;
 }
 
+const QR_HINT = /qr/i;
+const QR_ATTRS = ['class', 'id', 'alt', 'aria-label', 'title', 'data-testid'];
+const QR_MIN_PX = 96;
+/**
+ * Could this page be showing a QR code? A hint in an attribute of the picture or its parent, or a square
+ * canvas, picture or many-part drawing of QR size. It guesses yes freely: a yes keeps the caution. A miss
+ * matters only on a letter page whose own status headline says the deposit is behind (pastDepositStatus),
+ * where the line turns neutral but still names the signed address. QR drawings are often aria-hidden: only a
+ * really hidden one doesn't count.
+ */
+export function pageHasQr(doc: Document): boolean {
+  for (const el of (doc.body ?? doc.documentElement).querySelectorAll('img, svg, canvas, picture, [class*="qr" i], [id*="qr" i]')) {
+    if (el.closest('template, noscript, [hidden]') || el.parentElement?.closest('svg')) continue;
+    const v = (el as Element & { checkVisibility?: (o?: object) => boolean }).checkVisibility;
+    if (typeof v === 'function' && !v.call(el, { visibilityProperty: true, opacityProperty: true })) continue;
+    if ([el, el.parentElement].some((e) => e && QR_ATTRS.some((a) => QR_HINT.test(e.getAttribute(a) ?? '')))) return true;
+    const { width: w, height: h } = el.getBoundingClientRect();
+    if (Math.min(w, h) < QR_MIN_PX || Math.abs(w - h) > Math.max(w, h) * 0.1) continue;
+    if (el.tagName !== 'svg' && el.tagName !== 'SVG') return true;
+    // a spinner or an icon has a few parts; a QR code drawn as an SVG has many, or one long path
+    if (el.getAttribute('shape-rendering') === 'crispEdges' || el.querySelectorAll('rect, path').length >= 50 || [...el.querySelectorAll('path')].some((p) => (p.getAttribute('d') ?? '').length > 2000)) return true;
+  }
+  return false;
+}
+
+/**
+ * A page's live status headline that says the order is past the deposit (Mistex while sending: an h2
+ * "Sending to your wallet"; done: "Exchange completed!"). Only a heading or status element whose whole text is
+ * that status, not in a list, nav, footer, aside or details: progress bars, menus and FAQs list the same words
+ * from the start. Returns the headline, to quote.
+ */
+const PAST_DEPOSIT_STATUS =
+  /^(?:(?:your )?(?:exchange|swap|order|transaction) (?:is |has been )?(?:successfully )?(?:completed?|finished|processed)|sending(?: funds)? to your (?:wallet|address)|funds are on the way|transfer in progress|(?:deposit|payment) (?:received|confirmed)|we(?:'|’)?ve received your (?:deposit|payment)|we have received your (?:deposit|payment))[.!]?$/i;
+export function pastDepositStatus(doc: Document): string | null {
+  for (const el of (doc.body ?? doc.documentElement).querySelectorAll('h1, h2, h3, h4, [role="status"], [aria-live]')) {
+    if (el.closest('li, ol, ul, nav, footer, aside, details') || !shown(el)) continue;
+    const t = (el.textContent ?? '').replace(/\s+/g, ' ').trim();
+    if (t.length <= 80 && PAST_DEPOSIT_STATUS.test(t)) return t;
+  }
+  return null;
+}
+
+/**
+ * The line for a deposit address the page doesn't show as text: neutral only with `past`, the page's own
+ * status headline saying the deposit is behind (the caller checked nothing on the page may hold the address);
+ * otherwise the caution, since XMRadar can't see every way a page shows an address.
+ */
+export function depositNotShown(address: string, past: string | null): Line {
+  return past
+    ? { level: 'off', text: `This page says “${past}”, so the order is past the deposit step and no longer shows the deposit address. If you still have to send, the signed one is ${address}.` }
+    : {
+        level: 'caution',
+        text: `XMRadar couldn't find the deposit address as text on this page (it may be in a QR code, copy button or payment link). The signed one is ${address}: check that your wallet sends to it.`,
+      };
+}
+
 const LEVEL_CHARS = 400;
 const LEVEL_NODES = 2_000;
 
@@ -175,7 +231,7 @@ export function addressLines(doc: Document, r: Receipt): Line[] {
   else if (!depositFamily) {
     if (payoutAs.has('payout')) lines.push({ level: 'ok', text: 'The payout address on this page is the one the exchange signed.' });
     else if (payoutAs.size) lines.push({ level: 'ok', text: 'The payout address on this page is the one the exchange signed, but it isn’t labelled as yours.' });
-  } else if (!depositAs.size) lines.push({ level: 'caution', text: `Deposit address not found as text (QR only?): check that your wallet shows ${short(r.deposit_address)}.` });
+  } else if (!depositAs.size) lines.push(depositNotShown(r.deposit_address, null));
   else if (depositAs.has('deposit') && !unsigned.size)
     lines.push({
       level: 'ok',

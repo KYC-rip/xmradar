@@ -1,4 +1,3 @@
-import { MONERO_OUTER, MONERO_PARTS, MONERO_VIEWBOX } from '../../identity/badge-look';
 import type { LetterAddress } from '../../log/check';
 import type { Line } from '../../receipts/check';
 import { unitsOf } from '../../receipts/units';
@@ -93,24 +92,24 @@ export const worstOf = (lines: Line[]) => lines.reduce<Line['level']>((w, l) => 
 
 const lineList = (lines: Line[]) => h('ul', {}, ...lines.map((l) => h('li', { class: l.level }, h('span', { class: 'm', textContent: MARK[l.level] }), h('span', { textContent: l.text }))));
 
-function moneroIcon(doc: Document): SVGSVGElement {
+/** XMRadar's own mark (the popup's radar): the card speaks for XMRadar, whatever the pair is */
+function radarIcon(doc: Document): SVGSVGElement {
   const ns = 'http://www.w3.org/2000/svg';
   const svg = doc.createElementNS(ns, 'svg');
-  svg.setAttribute('viewBox', MONERO_VIEWBOX);
+  svg.setAttribute('viewBox', '0 0 64 64');
   svg.setAttribute('class', 'icon');
   svg.setAttribute('aria-hidden', 'true');
-  const outer = doc.createElementNS(ns, 'g');
-  outer.setAttribute('transform', MONERO_OUTER);
-  for (const [transform, d, fill] of MONERO_PARTS) {
-    const g = doc.createElementNS(ns, 'g');
-    g.setAttribute('transform', transform);
-    const path = doc.createElementNS(ns, 'path');
-    path.setAttribute('d', d);
-    path.setAttribute('fill', fill);
-    g.append(path);
-    outer.append(g);
-  }
-  svg.append(outer);
+  const el = (tag: string, attrs: Record<string, string>) => {
+    const e = doc.createElementNS(ns, tag);
+    for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
+    return e;
+  };
+  svg.append(
+    el('circle', { cx: '32', cy: '32', r: '32', fill: '#7b3fe4' }),
+    el('path', { d: 'M32 32 L32 6 A26 26 0 0 1 58 32 Z', fill: '#fff', 'fill-opacity': '.35' }),
+    el('line', { x1: '32', y1: '32', x2: '32', y2: '6', stroke: '#fff', 'stroke-width': '6', 'stroke-linecap': 'round' }),
+    el('circle', { cx: '46', cy: '18', r: '7', fill: '#ff7a1a' }),
+  );
   return svg;
 }
 
@@ -276,7 +275,7 @@ export function mountReceiptCard(doc: Document, opts: { toastMs?: number } = {})
         render(entries, extra);
       }),
     );
-    const icon = moneroIcon(doc);
+    const icon = radarIcon(doc);
     if (phase === 'chip') {
       const label = h('button', { class: `label title ${worst}`, textContent: `${noun(entries)} ${MARK[worst]}`, attrs: { 'aria-expanded': 'false', title: toastText(entries, extra) } });
       label.addEventListener(

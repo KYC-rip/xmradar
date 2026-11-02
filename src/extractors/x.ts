@@ -51,9 +51,12 @@ export function tweetFor(target: Element | null, doc: Document): Element | null 
  * "Show more" that is a link would leave the page, so only buttons are clicked. Returns the tweet
  * to extract from (the redrawn one if X replaced it), or the original target's tweet.
  */
+/** The tweet's own "Show more" (not a quoted tweet's): its text is cut. */
+export const cutTweet = (article: Element) => [...article.querySelectorAll<HTMLElement>('[data-testid="tweet-text-show-more-link"]')].find((b) => isOwn(article, b));
+
 export async function expandTweet(target: Element | null, doc: Document, timeoutMs = 2000): Promise<Element | null> {
   const article = tweetFor(target, doc);
-  const more = article && [...article.querySelectorAll<HTMLElement>('[data-testid="tweet-text-show-more-link"]')].find((b) => isOwn(article, b));
+  const more = article && cutTweet(article);
   if (!article || !more || more.localName !== 'button') return article;
   const id = ownStatusId(article);
   const textOf = (a: Element) => [...a.querySelectorAll('[data-testid="tweetText"]')].find((t) => isOwn(a, t))?.textContent?.length ?? 0;

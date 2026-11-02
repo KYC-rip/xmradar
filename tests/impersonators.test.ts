@@ -41,7 +41,7 @@ describe('reading impersonators', () => {
   it('the live shape', () => {
     const f = read(LIVE_SHAPE);
     expect(f.reader).toBe(FEED_READER_V);
-    expect(FEED_READER_V).toBe(7);
+    expect(FEED_READER_V).toBe(8);
     expect(f.impersonators).toEqual([
       { host: 'pegasussawp.com', siteId: 'pegasusswap', added: '2026-10-31' },
       { host: 'www-trocador.app', siteId: 'trocador', added: '2026-10-31' },

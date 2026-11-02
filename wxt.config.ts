@@ -23,6 +23,13 @@ export default defineConfig({
   outDir: 'output',
   // Firefox defaults to MV2; MAIN-world scripting and the same code path need MV3 (Firefox 140+)
   manifestVersion: 3,
+  hooks: {
+    // use_dynamic_url is Chrome's; Firefox warns about the unknown key and already gives each install its own
+    // random moz-extension:// address, so the guard page can't be probed there either
+    'build:manifestGenerated': (wxt, manifest) => {
+      if (wxt.config.browser === 'firefox') for (const r of manifest.web_accessible_resources ?? []) if (typeof r === 'object') delete (r as { use_dynamic_url?: boolean }).use_dynamic_url;
+    },
+  },
   manifest: {
     name: 'XMRadar',
     // 4-part version so about:addons and chrome://extensions show the CI build: 0.1.0.142

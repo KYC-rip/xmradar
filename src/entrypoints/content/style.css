@@ -89,6 +89,8 @@ input[type='text'].tag-input { flex: 1; min-width: 90px; padding: 4px 8px; }
 .tag-warn { color: #9a5b00; }
 .tag-note { color: #555; }
 .options { display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+.thread { display: flex; align-items: center; gap: 4px; font-size: 13px; font-weight: 600; }
+.thread:has(input:disabled) { opacity: .6; }
 .warn { background: #fff4d6; color: #6b4e00; padding: 6px 10px; border-radius: 6px; font-size: 13px; }
 .hidden { display: none; }
 .debug { background: #f4f3f8; padding: 8px; border-radius: 6px; font-size: 12px; max-height: 200px; overflow: auto; white-space: pre-wrap; }

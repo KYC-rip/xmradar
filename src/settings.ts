@@ -2,6 +2,7 @@ import type { DirectoryStatus } from './identity/directory';
 import { storage, type WxtStorageItem } from 'wxt/utils/storage';
 import type { Marks } from './xap/marks';
 import type { UpdateState } from './update/check';
+import type { LogoPack } from './sites/logos';
 import { isBadgeIcon, type BadgeIcon } from './identity/badge-look';
 
 export const DEFAULT_RELAYS = ['wss://relay.damus.io', 'wss://nos.lol', 'wss://relay.primal.net'];
@@ -59,6 +60,8 @@ function patcher<T extends object>(item: WxtStorageItem<T, Record<string, unknow
 }
 
 export const patchSettings = patcher(settingsItem);
+/** xmr.club's exchange logos for the saved swap records (PLAN-LOGOS); kept only while site info is on */
+export const logoPackItem = storage.defineItem<LogoPack | null>('local:logoPack', { fallback: null });
 /** the daily update check's last answer (PLAN-UPDATECHECK) */
 export const updateStateItem = storage.defineItem<UpdateState | null>('local:updateCheck', { fallback: null });
 
