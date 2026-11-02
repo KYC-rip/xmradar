@@ -21,7 +21,7 @@ import { allRelaysFrom, fetchWriteRelays, publishToRelays, readEach, readRelay }
 import { assertFetchableImageUrl } from '../nostr/url-guard';
 import { checkSessionSender, checkShareMenuSender, isExtensionPageSender, isSignerPage, isXUrl, SIGNER_PAGE, shareMenuRateLimit, withoutTab } from '../sender';
 import { setAuto, suggestFor, tagsReady } from '../ai/requests';
-import { DEFAULT_RELAYS, directoryStatusItem, INDEX_RELAYS, withoutIndex, myHandleItem, postedItem, pubkeyItem, receiptsOn, settingsItem, siteInfoOn, siteWarningsOn, copyReportsOn, swapRecordDaysItem, swapRecordsCleanedItem, xapMarksItem, xClaimsChangedItem, xClaimsOn, xmrSettingsItem } from '../settings';
+import { DEFAULT_RELAYS, directoryStatusItem, INDEX_RELAYS, withoutIndex, myHandleItem, postedItem, pubkeyItem, receiptsOn, settingsItem, siteInfoOn, updateCheckOn, updateStateItem, siteWarningsOn, copyReportsOn, swapRecordDaysItem, swapRecordsCleanedItem, xapMarksItem, xClaimsChangedItem, xClaimsOn, xmrSettingsItem } from '../settings';
 import { storage } from 'wxt/utils/storage';
 import { activeInbox, burnerCreatingItem, burnerInboxItem, burnerLastErrorItem, burnFreeInbox, createFreeInbox, forgetImportedInbox, importInbox, type BurnerDeps } from '../burner/service';
 import { idbTokenStore } from '../burner/token-store';
@@ -48,6 +48,7 @@ import { markFor, withMark } from '../xap/marks';
 import { GUARD_PATH } from '../sites/guard-rules';
 import { guardKeeper, type DnrApi, type GuardTokens } from '../sites/guard-keeper';
 import { reportCopy, reportFlags } from '../sites/report';
+import { releaseUrl, UPDATE_NOTICE_ID, updateFor, updateKeeper } from '../update/check';
 
 const MENU_ID = 'xmradar';
 const TIP_MENU_ID = 'xmradar-tip';
@@ -152,6 +153,25 @@ const swapRecords = swapRecordsKeeper({
   cleaned: (c) => swapRecordsCleanedItem.setValue(c),
 });
 
+// the daily update check: XMRadar is installed from a zip, so no browser updates it (PLAN-UPDATECHECK)
+const updates = updateKeeper({
+  held: updateStateItem,
+  fetch: (...args) => fetch(...args),
+  readBody: boundedBody,
+  alarms: browser.alarms,
+  enabled: async () => updateCheckOn(await settingsItem.getValue()),
+  current: () => browser.runtime.getManifest().version,
+  notify: async (version) => {
+    await browser.notifications.create(UPDATE_NOTICE_ID, {
+      type: 'basic',
+      iconUrl: browser.runtime.getURL('/icon/128.png'),
+      title: 'XMRadar',
+      message: `XMRadar ${version} is out. Click to see what's new and download.`,
+    });
+  },
+  clearNotice: () => browser.notifications.clear(UPDATE_NOTICE_ID).catch(() => {}),
+});
+
 const burner: BurnerDeps = { meta: { get: () => burnerInboxItem.getValue(), set: (v) => burnerInboxItem.setValue(v) }, tokens: idbTokenStore };
 
 export default defineBackground(() => {
@@ -160,6 +180,18 @@ export default defineBackground(() => {
     if (a.name === SITE_FEED_ALARM) void refreshSiteFeed();
     void directory.onAlarm(a.name);
     void swapRecords.onAlarm(a.name);
+    void updates.onAlarm(a.name);
+  });
+  void settingsItem.getValue().then((s) => updates.apply(updateCheckOn(s)));
+  settingsItem.watch((s, old) => {
+    if (updateCheckOn(s) !== updateCheckOn(old)) void updates.apply(updateCheckOn(s));
+  });
+  // the update notification opens the release page of the version it names, built from the checked number
+  browser.notifications.onClicked.addListener(async (id) => {
+    if (id !== UPDATE_NOTICE_ID) return;
+    await browser.notifications.clear(id).catch(() => {});
+    const url = releaseUrl(updateFor(await updateStateItem.getValue(), browser.runtime.getManifest().version));
+    if (url) await browser.tabs.create({ url });
   });
   void swapRecords.apply();
   swapRecordDaysItem.watch(() => void swapRecords.apply());

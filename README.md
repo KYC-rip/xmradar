@@ -61,6 +61,7 @@ Until XMRadar is in the stores, install a release zip (or build it yourself):
 **Firefox (140+):**
 - Quick test: open `about:debugging#/runtime/this-firefox`, click *Load Temporary Add-on*, and pick `xmradar-<version>-firefox.zip` (or `output/firefox-mv3/manifest.json`). Temporary add-ons are removed when Firefox restarts. Firefox Developer Edition and Nightly can keep it installed with `xpinstall.signatures.required` set to `false`.
 - Permanent: run `pnpm zip` and submit the Firefox zip to AMO as **unlisted** (self-distribution; include the source zip, since the build is bundled). Install the signed `.xpi` you get back.
+- To update, install the new zip the same way (Chrome: replace the folder's contents and click the reload icon on `chrome://extensions`). XMRadar tells you when a new version is out; see **Updates** below.
 - Firefox MV3 doesn't grant site access at install time. Open the extension's options page and click **Grant access**, or enable it under *about:addons → XMRadar → Permissions*.
 
 ## Options
@@ -70,6 +71,11 @@ Until XMRadar is in the stores, install a release zip (or build it yourself):
 - **Badges on X:** badges, addresses from X profiles, discovery via relays, the Xap receipt question, the badge's look.
 - **Burner email.**
 - **Swaps and sites:** receipt and letter checks, fetching letters, xmr.club site info, in-page warnings and the warning page, its Report button, how long saved letters and receipts are kept (90 days by default), and the saved list.
+- **Updates:** the daily update check (on).
+
+## Updates
+
+A browser never updates an extension installed from a zip, so XMRadar checks for you. Once a day it asks `https://xmradar.app/latest.json` for the latest version number, with no cookies or referrer, and no version, ID or page in the request. Like visiting the site, the request shows your IP address and browser, and that XMRadar is in use; it follows your browser's proxy or Tor settings. When a newer version is out, you get one notification for it, a line in XMRadar's menu and a link under **Options → Updates**, all pointing to that version's GitHub release page. Nothing is downloaded or installed: get the zip there and check it against `SHA256SUMS`. Switch it off with **Check for updates once a day**.
 
 ## X Articles (long-form)
 

@@ -16,8 +16,9 @@
           <li><a href="#badges" data-nav="badges">Badges on X</a></li>
           <li><a href="#burner" data-nav="burner">Burner email</a></li>
           <li><a href="#receipts" data-nav="receipts">Swaps and sites</a></li>
+          <li><a href="#updates" data-nav="updates">Updates <span id="nav-update" class="count"></span></a></li>
         </ul>
-        <p class="hint side-note">Changes save as you make them. Follows your system's light or dark mode.<br /><a id="build-info" target="_blank" rel="noopener"></a></p>
+        <p class="hint side-note">Changes save as you make them. Follows your system's light or dark mode.<br /><a id="build-info" target="_blank" rel="noopener"></a><br /><a data-update-link class="hidden" target="_blank" rel="noopener"></a></p>
       </nav>
 
       <main>
@@ -334,6 +335,23 @@
           <div class="row"><button data-receipts="export-all">Export all</button></div>
           <div data-receipts="list" class="cards"></div>
           <span data-receipts="status" role="status" aria-live="polite"></span>
+        </section>
+
+        <section id="updates" data-section="updates">
+          <h1>Updates</h1>
+          <p class="lead">
+            XMRadar is installed from a download, so your browser never updates it. It can tell you when a new version is out; you download it from the release page and check it there.
+          </p>
+          <p><a data-update-link class="hidden" target="_blank" rel="noopener"></a></p>
+          <div id="update-switch" class="card">
+            <label class="setting">
+              <div><span class="row-title">Check for updates once a day</span><span class="row-hint">A notification and a line in XMRadar's menu when a new version is out. Nothing is downloaded or installed.</span></div>
+              <input id="update-check" type="checkbox" role="switch" class="switch" />
+            </label>
+          </div>
+          <p class="row-hint">
+            Once a day, XMRadar asks xmradar.app for the latest version number. The request carries no version, ID or page; like visiting the site, it shows your IP address and browser, and that XMRadar is in use. It follows your browser's proxy or Tor settings.
+          </p>
         </section>
       </main>
     </div>

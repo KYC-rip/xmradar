@@ -1,5 +1,6 @@
 import { npubEncode } from 'nostr-tools/nip19';
 import { currentBuild } from '../../build-info';
+import { mountUpdatePanel } from '../../ui/update-notice';
 import { sendToBackground } from '../../messaging';
 import { cleanXLinksOn, patchSettings, pubkeyItem, settingsItem, shareMenuOn, type Settings } from '../../settings';
 import { mountBadgeLook } from '../../ui/badge-look-controls';
@@ -63,6 +64,7 @@ const relays = mountRelayEditor($('relay-editor'));
 void mountBlossomField($('blossom-field'));
 void mountTagsField(document);
 void mountAiTagsPanel(document);
+void mountUpdatePanel(document);
 
 $('test-signer').addEventListener('click', () => void testSigner(signerStatus));
 

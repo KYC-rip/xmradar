@@ -62,6 +62,14 @@ def safe_out(out: Path) -> Path:
     return o
 
 
+def latest_json(tag: str, version: str) -> str:
+    """xmradar.app/latest.json, read by XMRadar's daily update check: the release's version and tag, no URLs."""
+    short = '.'.join(version.split('.')[:3])
+    if not re.fullmatch(r'\d{1,4}\.\d{1,4}\.\d{1,4}\.\d{1,5}', version) or tag != f'v{short}':
+        sys.exit(f'release {tag} does not match its zip version {version}')
+    return json.dumps({'version': short, 'tag': tag, 'build': version}, separators=(',', ':')) + '\n'
+
+
 def release(tag: str | None) -> dict:
     fields = 'tagName,url,assets'
     if tag:
@@ -104,6 +112,7 @@ def main() -> None:
         'SHA_CHROME_SHORT': f'{sums[chrome][:4]}…{sums[chrome][-4:]}',
     }
 
+    latest = latest_json(tag, version)
     page = (SITE / 'index.html').read_text()
     for k, v in values.items():
         page = page.replace('{{' + k + '}}', html.escape(v))
@@ -115,6 +124,7 @@ def main() -> None:
     out.mkdir(parents=True)
     (out / 'index.html').write_text(page)
     (out / '_headers').write_text(HEADERS)
+    (out / 'latest.json').write_text(latest)
     for name in ASSETS:
         src = SITE / name
         (shutil.copytree if src.is_dir() else shutil.copy2)(src, out / name)

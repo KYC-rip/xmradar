@@ -7,6 +7,7 @@ import { pubkeyItem } from '../../settings';
 import { mountTabs, popupTabItem } from '../../ui/tabs';
 import { renderSiteCard } from '../../ui/site-card';
 import { sendToBackground } from '../../messaging';
+import { mountPopupUpdate } from '../../ui/update-notice';
 
 const $ = (id: string) => document.getElementById(id)!;
 
@@ -46,6 +47,12 @@ async function renderHeader() {
 }
 
 void renderHeader();
+
+// a newer XMRadar, from the daily check: its release page in a tab
+mountPopupUpdate($('update') as HTMLButtonElement, async (url) => {
+  await browser.tabs.create({ url });
+  window.close();
+});
 
 // the active tab's xmr.club listings, asked by tab id (no URL needed)
 void browser.tabs.query({ active: true, currentWindow: true }).then(async ([tab]) => {

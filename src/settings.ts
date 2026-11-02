@@ -1,6 +1,7 @@
 import type { DirectoryStatus } from './identity/directory';
 import { storage, type WxtStorageItem } from 'wxt/utils/storage';
 import type { Marks } from './xap/marks';
+import type { UpdateState } from './update/check';
 import { isBadgeIcon, type BadgeIcon } from './identity/badge-look';
 
 export const DEFAULT_RELAYS = ['wss://relay.damus.io', 'wss://nos.lol', 'wss://relay.primal.net'];
@@ -32,12 +33,15 @@ export interface Settings {
   defaultTags?: string[];
   /** "Also add tags as #hashtags at the end of the note"; read with `hashtagLineOn`, on unless switched off */
   hashtagLine?: boolean;
+  /** "Check for updates once a day" (PLAN-UPDATECHECK); read with `updateCheckOn`, on unless switched off */
+  updateCheck?: boolean;
 }
 
 export const shareMenuOn = (s: Partial<Settings> | null | undefined) => s?.shareMenuX !== false;
 export const receiptsOn = (s: Partial<Settings> | null | undefined) => s?.receiptsCheck !== false;
 export const cleanXLinksOn = (s: Partial<Settings> | null | undefined) => s?.cleanXLinks !== false;
 export const hashtagLineOn = (s: Partial<Settings> | null | undefined) => s?.hashtagLine !== false;
+export const updateCheckOn = (s: Partial<Settings> | null | undefined) => s?.updateCheck !== false;
 export const logFetchOn = (s: Partial<Settings> | null | undefined) => receiptsOn(s) && s?.logFetch !== false;
 
 export const settingsItem = storage.defineItem<Settings>('sync:settings', {
@@ -55,6 +59,8 @@ function patcher<T extends object>(item: WxtStorageItem<T, Record<string, unknow
 }
 
 export const patchSettings = patcher(settingsItem);
+/** the daily update check's last answer (PLAN-UPDATECHECK) */
+export const updateStateItem = storage.defineItem<UpdateState | null>('local:updateCheck', { fallback: null });
 
 /**
  * AI tag suggestions (PLAN-TAGS), per browser: a local model first, or a provider with the user's key.
