@@ -94,3 +94,14 @@ dl.state dd { margin: 0; }
 .setup li { margin: 4px 0; }
 .setup code { font-size: 12px; white-space: nowrap; }
 .setup code.cmd { display: block; margin: 3px 0 6px; padding: 4px 8px; overflow-x: auto; white-space: nowrap; border-radius: 6px; background: var(--chip); user-select: all; }
+
+/* Xaps received (PLAN-XAPINBOX) */
+.xap-list { list-style: none; margin: 8px 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.xap-list:empty::before { content: 'No Xaps yet.'; color: var(--muted); }
+.xap-list li { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; padding: 8px 0; border-top: 1px solid var(--border); }
+.xap-list li:first-child { border-top: 0; }
+.xap-list .who { font-weight: 600; }
+.xap-list .npub, .xap-list .when, .xap-list .what { color: var(--muted); font-size: 12px; }
+.xap-list .amount { margin-left: auto; font-weight: 600; }
+.xap-list .state { font-size: 11px; padding: 1px 7px; border-radius: 999px; background: var(--chip); }
+.xap-list .state.verified { color: var(--ok); }

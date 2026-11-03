@@ -53,6 +53,7 @@ function setup(opts: { on?: boolean; current?: string; held?: UpdateState | null
   let on = opts.on ?? true;
   let current = opts.current ?? '0.6.0.6';
   let now = opts.now ?? 10 * DAY;
+  const alarms = new Map<string, { periodInMinutes?: number }>();
   const deps = {
     held: {
       getValue: async () => held,
@@ -65,7 +66,11 @@ function setup(opts: { on?: boolean; current?: string; held?: UpdateState | null
       if (b.length > max) throw new Error('Response too large');
       return b;
     },
-    alarms: { create: vi.fn(async () => {}), clear: vi.fn(async () => {}) },
+    alarms: {
+      create: vi.fn(async (n: string, i: { periodInMinutes: number }) => void alarms.set(n, i)),
+      clear: vi.fn(async (n: string) => void alarms.delete(n)),
+      get: async (n: string) => alarms.get(n),
+    },
     enabled: async () => on,
     current: () => current,
     notify: vi.fn(async (_v: string) => {}),
@@ -91,6 +96,19 @@ describe('updateKeeper', () => {
     expect(t.deps.clearNotice).toHaveBeenCalled();
     await t.k.onAlarm(UPDATE_ALARM);
     expect(t.deps.fetch).not.toHaveBeenCalled();
+  });
+
+  it("keeps the daily alarm's countdown across background restarts", async () => {
+    const t = setup();
+    await t.k.apply(true);
+    t.deps.alarms.create.mockClear();
+    await t.k.apply(true);
+    expect(t.deps.alarms.create).not.toHaveBeenCalled();
+    // an alarm left at another period is replaced
+    await t.deps.alarms.create(UPDATE_ALARM, { periodInMinutes: 60 });
+    t.deps.alarms.create.mockClear();
+    await t.k.apply(true);
+    expect(t.deps.alarms.create).toHaveBeenCalledWith(UPDATE_ALARM, { periodInMinutes: 1440 });
   });
 
   it('on: a daily alarm, and one request with no cookies, referrer or redirects', async () => {

@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { finalizeEvent, generateSecretKey } from 'nostr-tools/pure';
 import { describe, expect, it } from 'vitest';
 import { extractPost } from '../src/extractors';
-import { destination, escapeText, htmlToMarkdown, replaceImages } from '../src/extractors/html-to-markdown';
+import { destination, imageDestination, escapeText, htmlToMarkdown, replaceImages } from '../src/extractors/html-to-markdown';
 import { snowflakeTime, statusIdFromUrl } from '../src/extractors/x-article';
 import type { ExtractedImage } from '../src/extractors';
 import { ARTICLE_WARN_BYTES, articleTemplate, articleTooLarge, buildArticle, checkPublishable, wordCount, type PostImage } from '../src/nostr/event';
@@ -72,7 +72,8 @@ describe('X Article, logged in (Draft.js)', () => {
     expect(m).toContain('\n\n## What [pwa.cash](<https://pwa.cash/>) used to be\n\n');
     expect(m).toContain('\n- [**uPay.rip**](<https://upay.rip/>) detects USDT');
     expect(m).toContain('\n1. Go to <https://pwa.cash/> and sign in with a passkey.\n2. Name your shop');
-    expect(m).toContain('\n\n![](<https://pbs.twimg.com/media/HVU62u3aIAAiQW2?format=jpg&name=orig>)\n\n');
+    // images bare: Primal shows the `<…>` form as text (links keep it; they render)
+    expect(m).toContain('\n\n![](https://pbs.twimg.com/media/HVU62u3aIAAiQW2?format=jpg&name=orig)\n\n');
     expect(m).toContain('\n\n---\n\n');
     expect(m.match(/^## /gm)).toHaveLength(14);
     expect(m.match(/^!\[/gm)).toHaveLength(9);
@@ -110,7 +111,7 @@ describe('X Article, logged out (semantic HTML)', () => {
     // domains, and puts bold one character off after an emoji: compare plain text only
     const words = (m: string) =>
       m
-        .replace(/!\[[^\]]*\]\(<[^>]*>\)/g, '')
+        .replace(/!\[[^\]]*\]\([^)]*\)/g, '')
         .replace(/\[([^\]]*)\]\(<[^>]*>\)/g, '$1')
         .replace(/<(https?:[^>]*)>/g, '$1')
         .replace(/^#+ /gm, '')
@@ -171,7 +172,12 @@ describe('htmlToMarkdown escaping and safety', () => {
     expect(destination('https://e.com/<x>')).toBe('<https://e.com/%3Cx%3E>');
   });
   it('escapes alt text', () => {
-    expect(md('<figure><img src="https://e.com/i.png" alt="a ] b"></figure>').markdown).toBe('![a \\] b](<https://e.com/i.png>)');
+    expect(md('<figure><img src="https://e.com/i.png" alt="a ] b"></figure>').markdown).toBe('![a \\] b](https://e.com/i.png)');
+  });
+  it('writes image URLs bare, percent-encoding what could break out', () => {
+    expect(imageDestination('https://e.com/a_(1) b<x>.png')).toBe('https://e.com/a_%281%29%20b%3Cx%3E.png');
+    expect(md('<figure><img src="https://e.com/a (1).png"></figure>').markdown).toBe('![](https://e.com/a%20%281%29.png)');
+    expect(imageDestination(`https://e.com/a${String.fromCodePoint(0x2028)}b`)).toBe('https://e.com/a%E2%80%A8b');
   });
   it('nests bold and italic and keeps spaces outside the markers', () => {
     expect(md('<p><b>bold <i>both</i></b><span style="font-weight: bold"> s</span></p>').markdown).toBe('**bold *both*** **s**');
@@ -204,18 +210,22 @@ describe('htmlToMarkdown escaping and safety', () => {
 describe('replaceImages', () => {
   const a = 'https://pbs.twimg.com/media/A?name=orig';
   const ab = 'https://pbs.twimg.com/media/A?name=orig&x=1';
-  const text = `p\n\n![](<${a}>)\n\n![](<${ab}>)\n\nsee ${a}\n\n![](<${a}>)`;
+  const text = `p\n\n![](${a})\n\n![](${ab})\n\nsee ${a}\n\n![](${a})`;
 
   it('replaces whole image tokens only, never other occurrences or prefixes of a URL', () => {
     const out = replaceImages(text, new Map([[a, 'https://blossom/1.jpg']]));
-    expect(out).toBe(`p\n\n![](<https://blossom/1.jpg>)\n\n![](<${ab}>)\n\nsee ${a}\n\n![](<https://blossom/1.jpg>)`);
+    expect(out).toBe(`p\n\n![](https://blossom/1.jpg)\n\n![](${ab})\n\nsee ${a}\n\n![](https://blossom/1.jpg)`);
   });
   it('drops unticked images, including duplicates, without leaving blank runs', () => {
-    expect(replaceImages(text, new Map([[a, null]]))).toBe(`p\n\n![](<${ab}>)\n\nsee ${a}`);
+    expect(replaceImages(text, new Map([[a, null]]))).toBe(`p\n\n![](${ab})\n\nsee ${a}`);
+  });
+  it('still replaces the `<…>` form of a draft made before, writing it bare', () => {
+    expect(replaceImages(`x ![](<${a}>) y`, new Map([[a, 'https://blossom/1.jpg']]))).toBe('x ![](https://blossom/1.jpg) y');
   });
   it('handles URLs with parentheses', () => {
     const p = 'https://e.com/a_(1).png';
-    expect(replaceImages(`![x](${destination(p)})`, new Map([[p, 'https://b/2.png']]))).toBe('![x](<https://b/2.png>)');
+    expect(replaceImages(`![x](${imageDestination(p)})`, new Map([[p, 'https://b/2.png']]))).toBe('![x](https://b/2.png)');
+    expect(replaceImages(`![x](${destination(p)})`, new Map([[p, 'https://b/2.png']]))).toBe('![x](https://b/2.png)');
   });
 });
 
@@ -224,7 +234,7 @@ describe('buildArticle', () => {
     tweetId: '2113662765525282909',
     title: ' Title ',
     summary: 'Sum',
-    markdown: 'Body ![](<https://b/1.jpg>)',
+    markdown: 'Body ![](https://b/1.jpg)',
     images: [{ url: 'https://b/1.jpg', sha256: 'aa', mime: 'image/jpeg' }],
     sourceUrl: URL,
     publishedAt: 1761235447913,
@@ -235,7 +245,7 @@ describe('buildArticle', () => {
     const t = buildArticle({ ...base, cover: { url: 'https://b/c.jpg' } });
     expect(t.kind).toBe(30023);
     expect(t.created_at).toBe(1800000000);
-    expect(t.content).toBe('Body ![](<https://b/1.jpg>)');
+    expect(t.content).toBe('Body ![](https://b/1.jpg)');
     expect(t.tags).toEqual([
       ['d', 'x-2113662765525282909'],
       ['title', 'Title'],
@@ -252,7 +262,7 @@ describe('buildArticle', () => {
   it('omits the image tag without a cover and appends the source link on request', () => {
     const t = buildArticle({ ...base, appendSource: true });
     expect(t.tags.some((x) => x[0] === 'image')).toBe(false);
-    expect(t.content).toBe(`Body ![](<https://b/1.jpg>)\n\n---\n\nOriginally published on X: ${URL}`);
+    expect(t.content).toBe(`Body ![](https://b/1.jpg)\n\n---\n\nOriginally published on X: ${URL}`);
   });
   it('warns above 60 KB', () => {
     expect(articleTooLarge('x'.repeat(ARTICLE_WARN_BYTES))).toBe(false);
@@ -265,7 +275,7 @@ describe('articleTemplate (composer images)', () => {
   const one: ExtractedImage = { url: 'https://pbs.twimg.com/media/A?name=orig' };
   const two: ExtractedImage = { url: 'https://pbs.twimg.com/media/B?name=orig', alt: 'b' };
   const article = { id: '2113662765525282909', title: 'T', markdown: '', summary: 'S', cover, images: [one, two], publishedAt: 1761235447913 };
-  const markdown = `Intro\n\n![](<${one.url}>)\n\nMiddle\n\n![b](<${two.url}>)`;
+  const markdown = `Intro\n\n![](${one.url})\n\nMiddle\n\n![b](${two.url})`;
   const up = (url: string, sha: string): PostImage => ({ url, sha256: sha });
   const build = (prepared: Map<ExtractedImage, PostImage>) =>
     articleTemplate({ article, postImages: [cover, one, two], prepared, title: 'T', summary: 'S', markdown, sourceUrl: URL, now: 1 });
@@ -274,7 +284,7 @@ describe('articleTemplate (composer images)', () => {
   it('uses the uploaded URL for the cover tag, the Markdown and imeta', () => {
     const t = build(new Map([[cover, up('https://b/c.jpg', 'cc')], [one, up('https://b/1.jpg', '11')], [two, up('https://b/2.jpg', '22')]]));
     expect(tag(t, 'image')).toEqual([['image', 'https://b/c.jpg']]);
-    expect(t.content).toBe('Intro\n\n![](<https://b/1.jpg>)\n\nMiddle\n\n![b](<https://b/2.jpg>)');
+    expect(t.content).toBe('Intro\n\n![](https://b/1.jpg)\n\nMiddle\n\n![b](https://b/2.jpg)');
     expect(tag(t, 'imeta').map((x) => x[1])).toEqual(['url https://b/c.jpg', 'url https://b/1.jpg', 'url https://b/2.jpg']);
     expect(t.content).not.toContain('pbs.twimg.com');
   });
@@ -285,7 +295,7 @@ describe('articleTemplate (composer images)', () => {
   });
   it('removes an unticked inline image from the Markdown and imeta', () => {
     const t = build(new Map([[cover, up('https://b/c.jpg', 'cc')], [two, up('https://b/2.jpg', '22')]]));
-    expect(t.content).toBe('Intro\n\nMiddle\n\n![b](<https://b/2.jpg>)');
+    expect(t.content).toBe('Intro\n\nMiddle\n\n![b](https://b/2.jpg)');
     expect(tag(t, 'imeta').map((x) => x[1])).toEqual(['url https://b/c.jpg', 'url https://b/2.jpg']);
   });
   it('counts words without Markdown syntax or URLs', () => {

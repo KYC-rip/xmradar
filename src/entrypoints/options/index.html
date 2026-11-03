@@ -241,6 +241,19 @@
               <input data-xmr="receipts" type="checkbox" role="switch" class="switch" />
             </label>
           </div>
+          <div id="xap-inbox" class="card pad">
+            <label class="setting">
+              <div><span class="row-title">Tell me when I get a Xap</span><span class="row-hint">Every 30 minutes, asks your relays and 3 public relays (damus, nos.lol, primal) for Xaps to your npub. They can see that this browser watches your npub.</span><span data-inbox="why" class="row-hint"></span></div>
+              <input data-inbox="switch" type="checkbox" role="switch" class="switch" />
+            </label>
+            <div data-inbox="body" class="hidden">
+              <h2 class="card-head">Xaps received</h2>
+              <p class="row-hint">A Xap is the tipper's word that they sent it. It shows as verified once your wallet confirms it; check your wallet before you thank anyone.</p>
+              <ul data-inbox="list" class="xap-list"></ul>
+              <div class="row"><button data-inbox="check" type="button">Check now</button><span data-inbox="status" class="row-hint" role="status" aria-live="polite"></span></div>
+              <details><summary class="row-hint" data-inbox="relays-summary"></summary><p data-inbox="relays" class="row-hint"></p></details>
+            </div>
+          </div>
           <div id="badge-look" class="card pad">
             <h2 class="card-head">Profile badge look</h2>
             <p class="row-hint">Tweets show a Xap button in the action bar instead.</p>

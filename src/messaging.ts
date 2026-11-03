@@ -183,7 +183,9 @@ export type BgRequest =
   | { type: 'log-found'; siteId: string; text: string }
   | { type: 'letters-list' }
   | { type: 'letter-delete'; id: string }
-  | { type: 'letter-export'; id: string };
+  | { type: 'letter-export'; id: string }
+  | { type: 'xap-inbox-check' }
+  | { type: 'xap-inbox-read' };
 
 /** Port name for creating a free burner inbox; the open port keeps the worker busy during the proof of work. */
 export const BURNER_CREATE_PORT = 'burner-create';
@@ -271,7 +273,9 @@ export type BgResponse<T extends BgRequest['type']> = T extends 'fetch-image'
                                                         ? null
                                                         : T extends 'letter-export'
                                                           ? LetterExport
-                                                          : never;
+                                                          : T extends 'xap-inbox-check' | 'xap-inbox-read'
+                                                            ? null
+                                                            : never;
 
 /** Every response is wrapped so errors survive the message boundary. */
 export type Wrapped<T> = { ok: true; data: T } | { ok: false; error: string };

@@ -132,7 +132,7 @@ export function articleTemplate(opts: {
   });
 }
 
-export const wordCount = (markdown: string) => (markdown.replace(/!\[[^\]]*\]\(<[^>]*>\)|\]\(<[^>]*>\)|[#*_>`\\-]/g, ' ').match(/[\p{L}\p{N}][\p{L}\p{N}'’.]*/gu) ?? []).length;
+export const wordCount = (markdown: string) => (markdown.replace(/!\[[^\]]*\]\((?:<[^>]*>|[^()<>\s]*)\)|\]\(<[^>]*>\)|[#*_>`\\-]/g, ' ').match(/[\p{L}\p{N}][\p{L}\p{N}'’.]*/gu) ?? []).length;
 
 export const articleTooLarge = (content: string) => new TextEncoder().encode(content).length > ARTICLE_WARN_BYTES;
 

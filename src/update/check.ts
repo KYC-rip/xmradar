@@ -54,7 +54,11 @@ export interface UpdateDeps {
   held: Item<UpdateState | null>;
   fetch: typeof fetch;
   readBody: (res: Response, max: number) => Promise<Uint8Array>;
-  alarms: { create(name: string, info: { periodInMinutes: number }): Promise<void> | void; clear(name: string): Promise<unknown> | void };
+  alarms: {
+    create(name: string, info: { periodInMinutes: number }): Promise<void> | void;
+    clear(name: string): Promise<unknown> | void;
+    get(name: string): Promise<{ periodInMinutes?: number } | undefined>;
+  };
   /** the switch in Options */
   enabled(): Promise<boolean>;
   /** this copy's version (the manifest's) */
@@ -147,7 +151,11 @@ export function updateKeeper(deps: UpdateDeps) {
     inFlight?.abort.abort();
     inFlight = null;
     if (on) {
-      await deps.alarms.create(UPDATE_ALARM, { periodInMinutes: UPDATE_HOURS * 60 });
+      // made again only when missing or at another period: making it restarts its countdown, and Firefox
+      // restarts the background often enough that a daily alarm made at every start might never fire
+      if ((await deps.alarms.get(UPDATE_ALARM).catch(() => undefined))?.periodInMinutes !== UPDATE_HOURS * 60) {
+        await deps.alarms.create(UPDATE_ALARM, { periodInMinutes: UPDATE_HOURS * 60 });
+      }
       const held = await deps.held.getValue();
       if (!held || now() - held.attemptAt >= UPDATE_HOURS * 3600_000) return check();
       // asked recently: a notification not shown yet is tried again, one still showing for an older answer

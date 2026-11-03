@@ -45,7 +45,16 @@ export function destination(url: string): string {
   return `<${url.replace(/[<>\s]/g, (c) => encodeURIComponent(c))}>`;
 }
 
-export const imageToken = (img: MarkdownImage) => `![${escapeText(img.alt ?? '')}](${destination(img.url)})`;
+/**
+ * An image destination without `<…>`: Primal and other clients don't read that form for images (they show
+ * the token as text), so the characters it guarded against are percent-encoded instead.
+ */
+export function imageDestination(url: string): string {
+  // encodeURIComponent leaves ( and ) alone, and gives any other space its UTF-8 bytes
+  return url.replace(/[<>()\s]/g, (c) => (c === '(' ? '%28' : c === ')' ? '%29' : encodeURIComponent(c)));
+}
+
+export const imageToken = (img: MarkdownImage) => `![${escapeText(img.alt ?? '')}](${imageDestination(img.url)})`;
 
 function safeUrl(href: string | null, base: string): string | null {
   if (!href) return null;
@@ -240,19 +249,20 @@ export function htmlToMarkdown(root: Element, opts: ToMarkdownOptions): Markdown
   return { markdown, images, firstParagraph };
 }
 
-const IMAGE_TOKEN = /!\[((?:\\.|[^\]\\])*)\]\(<([^<>\n]*)>\)/g;
+// the bare form, and the `<…>` form of drafts made before it
+const IMAGE_TOKEN = /!\[((?:\\.|[^\]\\])*)\]\((?:<([^<>\n]*)>|([^()<>\s]+))\)/g;
 
 /**
  * Point generated image tokens at their final URLs (keyed by original URL), and drop tokens
- * whose image maps to null. Only whole `![alt](<url>)` tokens are touched, never other text.
+ * whose image maps to null. Only whole `![alt](url)` tokens are touched, never other text.
  */
 export function replaceImages(markdown: string, finals: Map<string, string | null>): string {
-  const byDest = new Map([...finals].map(([from, to]) => [destination(from), to] as const));
+  const byDest = new Map([...finals].flatMap(([from, to]) => [[imageDestination(from), to] as const, [destination(from), to] as const]));
   return markdown
-    .replace(IMAGE_TOKEN, (token, alt: string, dest: string) => {
-      const to = byDest.get(`<${dest}>`);
+    .replace(IMAGE_TOKEN, (token, alt: string, bracketed: string | undefined, bare: string | undefined) => {
+      const to = byDest.get(bracketed !== undefined ? `<${bracketed}>` : bare!);
       if (to === undefined) return token;
-      return to === null ? '' : `![${alt}](${destination(to)})`;
+      return to === null ? '' : `![${alt}](${imageDestination(to)})`;
     })
     .replace(/\n{3,}/g, '\n\n')
     .trim();

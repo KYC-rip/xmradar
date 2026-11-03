@@ -1,4 +1,5 @@
 import type { DirectoryStatus } from './identity/directory';
+import type { InboxState } from './xap/inbox';
 import { storage, type WxtStorageItem } from 'wxt/utils/storage';
 import type { Marks } from './xap/marks';
 import type { UpdateState } from './update/check';
@@ -134,6 +135,8 @@ export interface XmrSettings extends XmrSettingsV2 {
   xClaims?: boolean;
   /** "Report button on the warning page" (PLAN-NAMEPILL-REPORT); read with `copyReportsOn`, on unless switched off */
   copyReports?: boolean;
+  /** "Tell me when I get a Xap" (PLAN-XAPINBOX); read with `xapNotifyOn`, off unless switched on */
+  xapNotify?: boolean;
 }
 
 export const siteInfoOn = (s: Partial<XmrSettings> | null | undefined) => s?.siteInfo !== false;
@@ -141,6 +144,8 @@ export const siteInfoOn = (s: Partial<XmrSettings> | null | undefined) => s?.sit
 export const xClaimsOn = (s: Partial<XmrSettings> | null | undefined) => !!s?.badgesX && s?.xClaims !== false;
 export const siteWarningsOn = (s: Partial<XmrSettings> | null | undefined) => siteInfoOn(s) && s?.siteWarnings !== false;
 export const copyReportsOn = (s: Partial<XmrSettings> | null | undefined) => siteWarningsOn(s) && s?.copyReports !== false;
+/** asking relays for Xaps to the user's key links this browser to it, so it's off unless switched on */
+export const xapNotifyOn = (s: Partial<XmrSettings> | null | undefined) => s?.xapNotify === true;
 
 /** v1, before the redesign: one switch for X badges. */
 export interface XmrSettingsV1 {
@@ -183,4 +188,6 @@ export const directoryStatusItem = storage.defineItem<DirectoryStatus | null>('l
 export const swapRecordDaysItem = storage.defineItem<number>('local:swapRecordDays', { fallback: 90 });
 /** The last automatic clean-up that deleted something, for the options page to reload its list */
 export const swapRecordsCleanedItem = storage.defineItem<{ at: number; receipts: number; letters: number } | null>('local:swapRecordsCleaned', { fallback: null });
+// the Xap inbox (PLAN-XAPINBOX): this device only, dropped when switched off or the key changes
+export const xapInboxItem = storage.defineItem<InboxState | null>('local:xapInbox', { fallback: null });
 export const xClaimsChangedItem = storage.defineItem<{ handle: string; at: number } | null>('local:xClaimsChanged', { fallback: null });

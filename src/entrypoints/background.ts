@@ -21,7 +21,7 @@ import { allRelaysFrom, fetchWriteRelays, publishToRelays, readEach, readRelay }
 import { assertFetchableImageUrl } from '../nostr/url-guard';
 import { checkSessionSender, checkShareMenuSender, isExtensionPageSender, isSignerPage, isXUrl, SIGNER_PAGE, shareMenuRateLimit, withoutTab } from '../sender';
 import { setAuto, suggestFor, tagsReady } from '../ai/requests';
-import { DEFAULT_RELAYS, directoryStatusItem, INDEX_RELAYS, withoutIndex, myHandleItem, postedItem, pubkeyItem, receiptsOn, settingsItem, siteInfoOn, updateCheckOn, updateStateItem, logoPackItem, siteWarningsOn, copyReportsOn, swapRecordDaysItem, swapRecordsCleanedItem, xapMarksItem, xClaimsChangedItem, xClaimsOn, xmrSettingsItem } from '../settings';
+import { DEFAULT_RELAYS, directoryStatusItem, INDEX_RELAYS, withoutIndex, myHandleItem, postedItem, pubkeyItem, receiptsOn, settingsItem, siteInfoOn, updateCheckOn, updateStateItem, logoPackItem, xapInboxItem, xapNotifyOn, siteWarningsOn, copyReportsOn, swapRecordDaysItem, swapRecordsCleanedItem, xapMarksItem, xClaimsChangedItem, xClaimsOn, xmrSettingsItem } from '../settings';
 import { storage } from 'wxt/utils/storage';
 import { activeInbox, burnerCreatingItem, burnerInboxItem, burnerLastErrorItem, burnFreeInbox, createFreeInbox, forgetImportedInbox, importInbox, type BurnerDeps } from '../burner/service';
 import { idbTokenStore } from '../burner/token-store';
@@ -50,6 +50,7 @@ import { guardKeeper, type DnrApi, type GuardTokens } from '../sites/guard-keepe
 import { reportCopy, reportFlags } from '../sites/report';
 import { releaseUrl, UPDATE_NOTICE_ID, updateFor, updateKeeper } from '../update/check';
 import { logoKeeper } from '../sites/logos';
+import { INBOX_NOTICE_ID, inboxKeeper, MAX_RELAYS } from '../xap/inbox';
 
 const MENU_ID = 'xmradar';
 const TIP_MENU_ID = 'xmradar-tip';
@@ -173,6 +174,23 @@ const updates = updateKeeper({
   clearNotice: () => browser.notifications.clear(UPDATE_NOTICE_ID).catch(() => {}),
 });
 
+// Xap notifications (PLAN-XAPINBOX): off unless switched on, since asking relays for Xaps to the user's key
+// tells them this browser watches it
+const xapInbox = inboxKeeper({
+  held: xapInboxItem,
+  enabled: async () => xapNotifyOn(await xmrSettingsItem.getValue()),
+  pubkey: () => pubkeyItem.getValue(),
+  // the user's own relays and the defaults, where XMRadar publishes every receipt; index relays keep none
+  relays: async (pubkey) => [...new Set(withoutIndex([...(await resolveRelays(pubkey).catch(() => [])), ...DEFAULT_RELAYS]))].slice(0, MAX_RELAYS),
+  read: (relays, filter, timeoutMs) => readEach(relays, filter, timeoutMs),
+  query: xapPoolQuery,
+  alarms: browser.alarms,
+  notify: async (message) => {
+    await browser.notifications.create(INBOX_NOTICE_ID, { type: 'basic', iconUrl: browser.runtime.getURL('/icon/128.png'), title: 'XMRadar', message });
+  },
+  clearNotice: () => browser.notifications.clear(INBOX_NOTICE_ID).then(() => {}, () => {}),
+});
+
 const burner: BurnerDeps = { meta: { get: () => burnerInboxItem.getValue(), set: (v) => burnerInboxItem.setValue(v) }, tokens: idbTokenStore };
 
 export default defineBackground(() => {
@@ -182,13 +200,25 @@ export default defineBackground(() => {
     void directory.onAlarm(a.name);
     void swapRecords.onAlarm(a.name);
     void updates.onAlarm(a.name);
+    void xapInbox.onAlarm(a.name);
   });
+  void xapInbox.apply();
+  xmrSettingsItem.watch((s, old) => {
+    if (xapNotifyOn(s) !== xapNotifyOn(old)) void xapInbox.apply();
+  });
+  pubkeyItem.watch(() => void xapInbox.apply());
   void settingsItem.getValue().then((s) => updates.apply(updateCheckOn(s)));
   settingsItem.watch((s, old) => {
     if (updateCheckOn(s) !== updateCheckOn(old)) void updates.apply(updateCheckOn(s));
   });
   // the update notification opens the release page of the version it names, built from the checked number
   browser.notifications.onClicked.addListener(async (id) => {
+    // a Xap notification opens the list in Options, never a post a tipper named
+    if (id === INBOX_NOTICE_ID) {
+      await xapInbox.markRead();
+      await browser.tabs.create({ url: browser.runtime.getURL('/options.html?xaps#badges') });
+      return;
+    }
     if (id !== UPDATE_NOTICE_ID) return;
     await browser.notifications.clear(id).catch(() => {});
     const url = releaseUrl(updateFor(await updateStateItem.getValue(), browser.runtime.getManifest().version));
@@ -666,6 +696,16 @@ async function handle(msg: BgRequest, sender: Browser.runtime.MessageSender): Pr
       const s = await idbReceiptStore.get(msg.commitment);
       if (!s) throw new Error('No such receipt');
       return buildExport(s, await idbReceiptStore.getPolicy(s.receipt.policy_hash), Date.now());
+    }
+    case 'xap-inbox-check': {
+      if (!isExtensionPage(sender)) throw new Error('Not allowed');
+      await xapInbox.checkNow();
+      return null;
+    }
+    case 'xap-inbox-read': {
+      if (!isExtensionPage(sender)) throw new Error('Not allowed');
+      await xapInbox.markRead();
+      return null;
     }
     case 'letters-list': {
       if (!isExtensionPage(sender)) throw new Error('Not allowed');

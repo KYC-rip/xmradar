@@ -1,9 +1,10 @@
+import type { InboxState } from '../../xap/inbox';
 import '../../ui/base.css';
 import './style.css';
 import { npubEncode } from 'nostr-tools/nip19';
 import { currentBuild } from '../../build-info';
 import { badgeSummary, setupStatusLast, statusFor } from '../../identity/status';
-import { pubkeyItem } from '../../settings';
+import { pubkeyItem, xapInboxItem } from '../../settings';
 import { mountTabs, popupTabItem } from '../../ui/tabs';
 import { renderSiteCard } from '../../ui/site-card';
 import { sendToBackground } from '../../messaging';
@@ -60,5 +61,18 @@ void browser.tabs.query({ active: true, currentWindow: true }).then(async ([tab]
   renderSiteCard($('this-site'), await sendToBackground({ type: 'site-tab', tabId: tab.id }).catch(() => null));
 });
 pubkeyItem.watch(() => void renderHeader());
+
+// unread Xaps (PLAN-XAPINBOX): a line opening the list in Options
+const showXaps = (st: InboxState | null) => {
+  const n = st?.unread ?? 0;
+  $('xap-new').classList.toggle('hidden', !n);
+  $('xap-new').querySelector('.row-title')!.textContent = n === 1 ? '1 new Xap' : `${n} new Xaps`;
+};
+$('xap-new').addEventListener('click', async () => {
+  await browser.tabs.create({ url: browser.runtime.getURL('/options.html?xaps#badges') });
+  window.close();
+});
+void xapInboxItem.getValue().then(showXaps);
+xapInboxItem.watch(showXaps);
 setupStatusLast.watch(() => void renderHeader());
 void popupTabItem.getValue().then((tab) => mountTabs($('tabs'), tab, show));
