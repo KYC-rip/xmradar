@@ -293,8 +293,9 @@ export function startBadges(ctx: ContentScriptContext) {
   /** The profile header's badge, or none while the header shows another profile than the page's. */
   function scanProfile() {
     const profile = profileSlot(document, location);
+    // any badge elsewhere in the header (an older place for it, or another profile's) goes
+    for (const e of profileHeader(document)?.querySelectorAll(HOST_TAG) ?? []) if (e.parentElement !== profile?.anchor) e.remove();
     if (profile) apply(profile);
-    else profileHeader(document)?.querySelector(`:scope > ${HOST_TAG}`)?.remove();
   }
 
   function schedule(ms: number) {

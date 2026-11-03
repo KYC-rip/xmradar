@@ -92,7 +92,7 @@ With **Discover X badges via relays** turned on under **Options → Badges on X*
 
 ## Badges from xmr.bio and X profiles (Phases 2d, 2g)
 
-- **xmr.bio's directory:** the whole signed list of handles with a Monero address, downloaded every 6 hours (the same file for everyone) and checked against xmr.bio's pinned key, so no lookup reveals which accounts you view.
+- **xmr.bio's directory:** the whole signed list of handles with a Monero address, downloaded every hour (the same file for everyone) and checked against xmr.bio's pinned key, so no lookup reveals which accounts you view.
 - **X profiles:** an address someone posts on their own profile (bio, Website, pinned post) gets a badge too, kept on this device and labelled **not verified**. Switch: **Read addresses from X profiles**.
 - Every post by a badged author shows a small XMR pill after their name. The profile header's badge must match the @handle it shows.
 

@@ -702,7 +702,7 @@ async function handle(msg: BgRequest, sender: Browser.runtime.MessageSender): Pr
 
 const siteFeedItem = storage.defineItem<SiteFeed | null>('local:siteFeed', { fallback: null });
 
-// the xmr.bio directory (2d): downloaded whole every 6 hours while badges are on, never per handle
+// the xmr.bio directory (2d): downloaded whole every hour while badges are on, never per handle
 const directoryItem = storage.defineItem<StoredDirectory | null>('local:xmrbioDirectory', { fallback: null });
 const directory = directoryKeeper({
   held: directoryItem,

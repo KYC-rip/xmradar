@@ -98,7 +98,12 @@ export function profileSlot(doc: Document, loc: { hostname: string; pathname: st
   const walker = doc.createTreeWalker(anchor, 4 /* NodeFilter.SHOW_TEXT */);
   for (let n = walker.nextNode(); n; n = walker.nextNode()) texts.push(n.textContent ?? '');
   const shown = texts.flatMap((t) => [...t.matchAll(/@([A-Za-z0-9_]{1,15})(?![A-Za-z0-9_])/g)].map((m) => m[1])).pop();
-  return shown?.toLowerCase() === handle.toLowerCase() ? { handle, key: `profile:${handle.toLowerCase()}`, anchor } : null;
+  if (shown?.toLowerCase() !== handle.toLowerCase()) return null;
+  // inside the display-name row, after the name and its check: the header stacks the name and @handle
+  // rows, and a badge beside both would sit past the wider one ("@handle Follows you")
+  const name = anchor.querySelector('span')?.closest('div');
+  const row = name && name !== anchor && name.parentElement && anchor.contains(name.parentElement) ? name.parentElement : anchor;
+  return { handle, key: `profile:${handle.toLowerCase()}`, anchor: row };
 }
 
 

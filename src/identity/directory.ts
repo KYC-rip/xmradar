@@ -11,7 +11,7 @@ import { XMRBIO_API } from './xmrbio';
  */
 
 export const DIRECTORY_URL = `${XMRBIO_API}/directory`;
-export const DIRECTORY_HOURS = 6;
+export const DIRECTORY_HOURS = 1;
 export const DIRECTORY_MAX_BYTES = 4 * 1024 * 1024;
 const FUTURE_MS = 10 * 60_000;
 const HANDLE = /^[a-z0-9_]{1,15}$/;
@@ -129,7 +129,11 @@ export interface KeeperDeps {
   status: Item<DirectoryStatus | null>;
   fetch: typeof fetch;
   readBody: (res: Response, max: number) => Promise<Uint8Array>;
-  alarms: { create(name: string, info: { periodInMinutes?: number; delayInMinutes?: number }): Promise<void>; clear(name: string): Promise<boolean | void> };
+  alarms: {
+    create(name: string, info: { periodInMinutes?: number; delayInMinutes?: number }): Promise<void>;
+    clear(name: string): Promise<boolean | void>;
+    get(name: string): Promise<{ periodInMinutes?: number } | undefined>;
+  };
   /** badges on X are switched on */
   enabled(): Promise<boolean>;
   /** a new build was taken, or the directory was dropped: cached badges are out of date */
@@ -143,7 +147,7 @@ export const DIRECTORY_RETRY_ALARM = 'xmrbio-directory-retry';
 export const DIRECTORY_RETRY_MINUTES = 60;
 
 /**
- * Keeps the directory: a 6-hour alarm while badges are on, a 1-hour retry after a failed or
+ * Keeps the directory: an hourly alarm while badges are on, a 1-hour retry after a failed or
  * not-yet-published download, and nothing at all while they're off. Each switch-on starts a new
  * generation, so a download from before a switch-off can neither land nor block the next one.
  */
@@ -181,6 +185,8 @@ export function directoryKeeper(deps: KeeperDeps) {
       if (!next) return await setStatus({ state: 'ok', stale: got.stale });
       await deps.held.setValue(next);
       lookup = Promise.resolve(directoryIndex(next));
+      // a retry left from an earlier failure has nothing left to do
+      await deps.alarms.clear(DIRECTORY_RETRY_ALARM);
       await deps.changed();
       await setStatus({ state: 'ok', stale: next.stale }, next);
     } catch (e) {
@@ -212,7 +218,11 @@ export function directoryKeeper(deps: KeeperDeps) {
     inFlight?.abort.abort();
     inFlight = null;
     if (on) {
-      await deps.alarms.create(DIRECTORY_ALARM, { periodInMinutes: DIRECTORY_HOURS * 60 });
+      // made again only when missing or set with another period, since making it restarts its countdown
+      // and the worker starts often
+      if ((await deps.alarms.get(DIRECTORY_ALARM))?.periodInMinutes !== DIRECTORY_HOURS * 60) {
+        await deps.alarms.create(DIRECTORY_ALARM, { periodInMinutes: DIRECTORY_HOURS * 60 });
+      }
       const [held, st] = await Promise.all([deps.held.getValue(), deps.status.getValue()]);
       const fresh = held && now() - held.fetchedAt < DIRECTORY_HOURS * 3600_000;
       // a failed or unpublished try is retried by its own alarm, not on every worker start

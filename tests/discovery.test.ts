@@ -357,6 +357,14 @@ describe('badge slots', () => {
     // an account that follows you: "Follows you" runs on in textContent ("@Mr_XMR_Follows you", seen 2026-10-30)
     expect(profileSlot(header('@Mr_XMR_</span><span>Follows you'), { hostname: 'x.com', pathname: '/Mr_XMR_' })).toMatchObject({ handle: 'Mr_XMR_' });
   });
+  it("puts the profile badge in the name row, not beside the name and @handle rows (X's layout, 2026-11-03)", () => {
+    const doc = makeDoc(
+      'https://x.com/XmrDubai',
+      `<div data-testid="primaryColumn"><div data-testid="UserName"><div><div><div id="row"><div><span><span>Dubai</span></span></div><div id="tick"></div></div></div>` +
+        `<div><div><span>@XmrDubai</span></div><div data-testid="userFollowIndicator"><span>Follows you</span></div></div></div></div></div>`,
+    );
+    expect(profileSlot(doc, { hostname: 'x.com', pathname: '/XmrDubai' })?.anchor.id).toBe('row');
+  });
 });
 
 describe('badge popup', () => {

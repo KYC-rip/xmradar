@@ -122,7 +122,12 @@ describe('keeping it (background lifecycle)', () => {
   function keeper(responses: (() => Promise<Response>)[], opts: { on?: boolean; now?: number } = {}) {
     const held = item<import('../src/identity/directory').StoredDirectory | null>(null);
     const status = item<import('../src/identity/directory').DirectoryStatus | null>(null);
-    const alarms = { create: vi.fn(async () => {}), clear: vi.fn(async () => true) };
+    const set = new Map<string, { periodInMinutes?: number }>();
+    const alarms = {
+      create: vi.fn(async (name: string, info: { periodInMinutes?: number }) => void set.set(name, info)),
+      clear: vi.fn(async (name: string) => set.delete(name)),
+      get: vi.fn(async (name: string) => set.get(name)),
+    };
     const changed = vi.fn();
     const state = { on: opts.on ?? true, now: opts.now ?? NOW };
     const fetchFn = vi.fn(async () => (responses.shift() ?? (async () => new Response(null, { status: 404 })))());
@@ -133,7 +138,7 @@ describe('keeping it (background lifecycle)', () => {
   it('404 → not published, retried in an hour; then a build arrives, is used, and tabs are told', async () => {
     const t = keeper([async () => new Response(null, { status: 404 }), async () => json(dir('2026-11-03T11:50:00Z', [entry('franz_fk19', B)]))]);
     await t.k.apply(true);
-    expect(t.alarms.create).toHaveBeenCalledWith(DIRECTORY_ALARM, { periodInMinutes: 360 });
+    expect(t.alarms.create).toHaveBeenCalledWith(DIRECTORY_ALARM, { periodInMinutes: 60 });
     expect(t.status.peek()).toMatchObject({ state: 'not-live' });
     expect(t.alarms.create).toHaveBeenCalledWith(DIRECTORY_RETRY_ALARM, { delayInMinutes: 60 });
     expect((await t.k.lookup())('franz_fk19')).toEqual([]);
@@ -200,7 +205,7 @@ describe('keeping it (background lifecycle)', () => {
   it('a fresh held copy, or a failed try under an hour old, isn’t fetched again at startup', async () => {
     const t = keeper([async () => json(dir('2026-11-03T11:50:00Z', [entry('franz_fk19', B)]))]);
     await t.k.apply(true);
-    t.state.now += 3600_000;
+    t.state.now += 30 * 60_000;
     await t.k.apply(true);
     expect(t.fetchFn).toHaveBeenCalledTimes(1);
     const u = keeper([async () => new Response(null, { status: 503 })]);
@@ -211,6 +216,25 @@ describe('keeping it (background lifecycle)', () => {
     expect(u.fetchFn).toHaveBeenCalledTimes(1);
     // the pending retry is set again, for what is left of the hour
     expect(u.alarms.create).toHaveBeenCalledWith(DIRECTORY_RETRY_ALARM, { delayInMinutes: 30 });
+  });
+  it("keeps a running hourly alarm's countdown across worker starts, and replaces one with another period", async () => {
+    const t = keeper([async () => json(dir('2026-11-03T11:50:00Z', [entry('franz_fk19', B)]))]);
+    await t.k.apply(true);
+    t.alarms.create.mockClear();
+    await t.k.apply(true);
+    expect(t.alarms.create).not.toHaveBeenCalledWith(DIRECTORY_ALARM, expect.anything());
+    // an install from before kept a 6-hour alarm
+    await t.alarms.create(DIRECTORY_ALARM, { periodInMinutes: 360 });
+    t.alarms.create.mockClear();
+    await t.k.apply(true);
+    expect(t.alarms.create).toHaveBeenCalledWith(DIRECTORY_ALARM, { periodInMinutes: 60 });
+  });
+  it('a download that works clears the retry left from a failed one', async () => {
+    const t = keeper([async () => new Response(null, { status: 503 }), async () => json(dir('2026-11-03T11:50:00Z', [entry('franz_fk19', B)]))]);
+    await t.k.apply(true);
+    expect(await t.alarms.get(DIRECTORY_RETRY_ALARM)).toEqual({ delayInMinutes: 60 });
+    await t.k.onAlarm(DIRECTORY_RETRY_ALARM);
+    expect(await t.alarms.get(DIRECTORY_RETRY_ALARM)).toBeUndefined();
   });
   it('a storage read that fails once is tried again', async () => {
     const t = keeper([]);
