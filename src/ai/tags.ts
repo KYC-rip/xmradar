@@ -48,7 +48,7 @@ export function aiReady(s: AiTagSettings, key: string): boolean {
 
 const SYSTEM = [
   'You suggest hashtags for a Nostr post so people can find it.',
-  `Reply with only a JSON array of at most ${MAX_SUGGESTIONS} short lowercase tags as strings, without "#".`,
+  `Reply with only a JSON array of at most ${MAX_SUGGESTIONS} short lowercase tags as strings, without "#", spaces or hyphens (selfcustody, not self-custody).`,
   'Every tag must be something the post is about: a topic, project, coin, person or place it names. Never add a tag for something the post does not mention.',
   'Use the common spelling people search for. A name of several words is one tag without spaces (raspberrypi, not raspberry and pi). Fewer good tags beat more weak ones.',
   'Never tag private people by name.',

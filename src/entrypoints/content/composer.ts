@@ -4,7 +4,8 @@ import type { ContentScriptContext } from 'wxt/utils/content-script-context';
 import { createShadowRootUi } from 'wxt/utils/content-script-ui/shadow-root';
 import { callBridge } from '../../bridge';
 import { extractPost, type ExtractedImage } from '../../extractors';
-import { expandTweet, xExtractor } from '../../extractors/x';
+import { expandTweet, xExtractor, tweetFor } from '../../extractors/x';
+import { takeQuoteShot } from './quote-shot';
 import { MAX_THREAD, loadThread, placeImages, withoutMarkers } from '../../extractors/x-thread';
 import { cleanXLinks } from '../../extractors/x-links';
 import { sendToBackground, type OpenComposerMsg, type RelayResult } from '../../messaging';
@@ -62,6 +63,9 @@ async function mountComposer(ctx: ContentScriptContext, msg: OpenComposerMsg, ta
   const thread =
     !fallback && !msg.selection?.trim() && !msg.srcUrl && !single.article && xExtractor.matches(document) ? await loadThread(target, document).catch(() => null) : null;
   let post = thread?.post ?? single;
+  // the opened tweet's quoted post as a picture, taken before anything of the composer shows (PLAN-QUOTESHOT)
+  const quoted = !fallback && !msg.selection?.trim() && !msg.srcUrl && !single.article && xExtractor.matches(document) ? tweetFor(target, document) : null;
+  const shot = quoted ? await takeQuoteShot(quoted, msg.sessionId) : null;
   const settings = await settingsItem.getValue();
   const previousFocus = document.activeElement as HTMLElement | null;
   let closed = false;
@@ -148,7 +152,14 @@ async function mountComposer(ctx: ContentScriptContext, msg: OpenComposerMsg, ta
         });
         // a thread's images carry the number of their [🖼 N] marker in the text
         const n = post.inlineImages ? post.images.indexOf(img) + 1 : 0;
-        return h('label', { class: 'thumb' }, h('img', { src: img.url, alt: img.alt ?? (pasted.has(img) ? 'Pasted image' : '') }), box, n ? h('span', { class: 'num', textContent: String(n) }) : '');
+        const title = shot && 'image' in shot && img === shot.image ? 'Quoted post' : undefined;
+        return h(
+          'label',
+          { class: 'thumb', ...(title ? { attrs: { title } } : {}) },
+          h('img', { src: img.url, alt: img.alt ?? (pasted.has(img) ? 'Pasted image' : '') }),
+          box,
+          n ? h('span', { class: 'num', textContent: String(n) }) : '',
+        );
       };
       const imageGrid = h('div', { class: images.length ? 'images' : 'images hidden' }, ...images.map(thumb));
 
@@ -313,6 +324,20 @@ async function mountComposer(ctx: ContentScriptContext, msg: OpenComposerMsg, ta
         },
         status: setStatus,
       };
+      // the quoted post's picture counts as an added one; it's the user's to untick
+      if (shot && 'image' in shot) {
+        const room = pasteTarget.room();
+        if (room.count > 0 && shot.size <= room.bytes) {
+          images.push(shot.image);
+          pasted.set(shot.image, shot.size);
+          selected.add(shot.image);
+          imageGrid.append(thumb(shot.image));
+          imageGrid.classList.remove('hidden');
+        } else {
+          URL.revokeObjectURL(shot.image.url);
+          setStatus('No room for a picture of the quoted post.', 'error');
+        }
+      } else if (shot) setStatus(`Couldn't take a picture of the quoted post (${shot.error}).`, 'error');
       textarea.addEventListener('paste', (e) => onPasteOrDrop(e, e.clipboardData, 'paste', pasteTarget));
       textarea.addEventListener('dragover', (e) => {
         if (e.dataTransfer?.types.includes('Files')) e.preventDefault();

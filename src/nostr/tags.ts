@@ -2,11 +2,12 @@
 /** more looks like spam: ROS hides a stranger's note with more than 5 hashtags (`t` tags and #words together) */
 export const MAX_TAGS = 5;
 const MAX_LEN = 50;
-const TAG_RE = /^[\p{L}\p{N}_](?:[\p{L}\p{N}_-]*[\p{L}\p{N}_])?$/u;
+// no hyphen: clients (and X) end a hashtag there, so #self-custody would show as #self and plain text
+const TAG_RE = /^[\p{L}\p{N}_]+$/u;
 
-/** A tag name from what the user (or a model) typed, or null: no `#`, no spaces, lowercase, at least one letter. */
+/** A tag name from what the user (or a model) typed, or null: no `#`, spaces or hyphens, lowercase, at least one letter. */
 export function cleanTag(input: string): string | null {
-  const t = input.trim().replace(/^#+/, '').replace(/\s+/g, '').toLowerCase();
+  const t = input.trim().replace(/^#+/, '').replace(/[\s-]+/g, '').toLowerCase();
   if (!t || t.length > MAX_LEN || !TAG_RE.test(t) || !/\p{L}/u.test(t)) return null;
   return t;
 }
@@ -14,11 +15,12 @@ export function cleanTag(input: string): string | null {
 /** The `#hashtags` in a text, in order, deduped; not inside a URL (`…/a#frag`) and never only digits. */
 export function hashtagsOf(text: string): string[] {
   const out: string[] = [];
-  for (const m of text.matchAll(/(^|[^\p{L}\p{N}_&/#])#([\p{L}\p{N}_][\p{L}\p{N}_-]*)/gu)) {
+  // clients end a hashtag at a hyphen: #self-custody shows as #self and plain text, so it's no tag of the post
+  for (const m of text.matchAll(/(^|[^\p{L}\p{N}_&/#])#([\p{L}\p{N}_]+)(?![\p{L}\p{N}_]|-[\p{L}\p{N}_])/gu)) {
     const start = m.index + m[1]!.length;
     // a fragment in a link: the word before the # runs back to whitespace through a URL; punctuation ends the link
     if (!/[,;!)\]}>'"]$/.test(m[1]!) && /(?:\S*:\/\/|(?:^|\s)www\.)\S*$/i.test(text.slice(0, start))) continue;
-    const t = cleanTag(m[2]!.replace(/-+$/, ''));
+    const t = cleanTag(m[2]!);
     if (t && !out.includes(t)) out.push(t);
   }
   return out;

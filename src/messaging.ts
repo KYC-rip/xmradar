@@ -184,6 +184,7 @@ export type BgRequest =
   | { type: 'letters-list' }
   | { type: 'letter-delete'; id: string }
   | { type: 'letter-export'; id: string }
+  | { type: 'capture-quote'; sessionId: string; rect: { x: number; y: number; width: number; height: number }; view: { width: number; height: number }; client?: { width: number; height: number } }
   | { type: 'xap-inbox-check' }
   | { type: 'xap-inbox-read' };
 
@@ -273,6 +274,8 @@ export type BgResponse<T extends BgRequest['type']> = T extends 'fetch-image'
                                                         ? null
                                                         : T extends 'letter-export'
                                                           ? LetterExport
+                                                          : T extends 'capture-quote'
+                                                            ? { dataUrl: string }
                                                           : T extends 'xap-inbox-check' | 'xap-inbox-read'
                                                             ? null
                                                             : never;

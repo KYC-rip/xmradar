@@ -133,7 +133,7 @@ export function tagRow(opts: TagRowOptions) {
     if (add(text, true)) {
       input.value = '';
       note.textContent = '';
-    } else note.textContent = 'A tag is letters, digits, _ or -, with at least one letter.';
+    } else note.textContent = 'A tag is letters, digits or _, with at least one letter (hyphens are dropped).';
   };
   input.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' || e.key === ',') {
@@ -165,9 +165,12 @@ export function tagRow(opts: TagRowOptions) {
     suggestions = [...new Set([...before, ...picks])].filter((t) => !tags.includes(t));
     note.textContent = '';
   };
-  /** the word anywhere in the text, as a hashtag or not (`self-custody` also as "self custody") */
-  const mentions = (text: string, t: string) =>
-    new RegExp(`(?<![\\p{L}\\p{N}_])${t.replace(/[-_]/g, '[-_ ]?')}(?![\\p{L}\\p{N}_])`, 'iu').test(text);
+  /** the tag anywhere in the text, as a hashtag or as up to 3 words in a row (`selfcustody` also as "self custody" or "self-custody") */
+  const mentions = (text: string, t: string) => {
+    const want = t.replace(/_/g, '');
+    const words = text.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+    return words.some((_, i) => [1, 2, 3].some((n) => i + n <= words.length && words.slice(i, i + n).join('') === want));
+  };
   const ask = async () => {
     if (!suggest || inFlight || readOnly) return;
     inFlight = true;

@@ -21,12 +21,19 @@ describe('tag names', () => {
   it('cleanTag: no #, no spaces, lowercase, a letter required', () => {
     expect(cleanTag('#Monero')).toBe('monero');
     expect(cleanTag('bitcoin cash')).toBe('bitcoincash');
-    expect(cleanTag('self-custody')).toBe('self-custody');
+    // clients end a hashtag at a hyphen, so it goes
+    expect(cleanTag('self-custody')).toBe('selfcustody');
+    expect(cleanTag('#Cold-Storage')).toBe('coldstorage');
     expect(cleanTag('2026')).toBeNull();
     expect(cleanTag('a.b')).toBeNull();
     expect(cleanTag('<script>')).toBeNull();
     expect(cleanTag('x'.repeat(51))).toBeNull();
-    expect(cleanTag('-x')).toBeNull();
+    expect(cleanTag('-x')).toBe('x');
+  });
+  it('hashtagsOf: a hashtag ends at a hyphen, as clients read it', () => {
+    // #self-custody shows as #self and text in clients: no tag of the post, so no stray 'self'
+    expect(hashtagsOf('#self-custody and #cold_storage #end-')).toEqual(['cold_storage', 'end']);
+    expect(missingHashtagLine('text', ['selfcustody', 'monero'])).toBe('#selfcustody #monero');
   });
   it('hashtagsOf: a link ends at punctuation; www links count as links', () => {
     expect(hashtagsOf('see https://x.com/a,#monero')).toEqual(['monero']);
@@ -417,9 +424,9 @@ describe('automatic suggestions', () => {
   });
 
   it('a default the post mentions in plain words stays, hyphenated or not', async () => {
-    const row = tagRow({ initial: ['privacy', 'self-custody', 'nostr'], defaults: ['privacy', 'self-custody', 'nostr'], text: () => 'Better PRIVACY through self custody.' });
+    const row = tagRow({ initial: ['privacy', 'selfcustody', 'nostr'], defaults: ['privacy', 'self-custody', 'nostr'], text: () => 'Better PRIVACY through self custody.' });
     row.setSuggest(async () => ok(['wallet']), true, { auto: true, autoAdd: true });
-    await vi.waitFor(() => expect(row.tags()).toEqual(['privacy', 'self-custody', 'wallet']));
+    await vi.waitFor(() => expect(row.tags()).toEqual(['privacy', 'selfcustody', 'wallet']));
     expect(offers(row.el)).toEqual(['+ nostr']);
   });
 });

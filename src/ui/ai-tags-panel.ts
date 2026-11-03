@@ -31,7 +31,7 @@ export function mountTagsField(root: ParentNode) {
   };
   input.addEventListener('blur', async () => {
     const tags = parseTagList(input.value);
-    if (!tags) return setStatus(saved, 'A tag is letters, digits, _ or -, with at least one letter.', 'error');
+    if (!tags) return setStatus(saved, 'A tag is letters, digits or _, with at least one letter (hyphens are dropped).', 'error');
     input.value = tags.join(', ');
     await patchSettings({ defaultTags: tags });
     flash();

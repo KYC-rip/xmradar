@@ -51,6 +51,7 @@ import { reportCopy, reportFlags } from '../sites/report';
 import { releaseUrl, UPDATE_NOTICE_ID, updateFor, updateKeeper } from '../update/check';
 import { logoKeeper } from '../sites/logos';
 import { INBOX_NOTICE_ID, inboxKeeper, MAX_RELAYS } from '../xap/inbox';
+import { shootQuote, shotGate, validRequest, type Crop, type ShotDeps } from '../capture/quote-shot';
 
 const MENU_ID = 'xmradar';
 const TIP_MENU_ID = 'xmradar-tip';
@@ -70,6 +71,8 @@ interface Session {
   tabId: number;
   expires: number;
 }
+// one quoted-post picture per composer session (PLAN-QUOTESHOT), kept apart from the session records
+const quoteShots = shotGate(storage.defineItem<string[]>('session:quoteShots', { fallback: [] }));
 
 // storage.session survives MV3 service-worker suspension, unlike module state
 const sessionsItem = storage.defineItem<Session[]>('session:composerSessions', { fallback: [] });
@@ -190,6 +193,38 @@ const xapInbox = inboxKeeper({
   },
   clearNotice: () => browser.notifications.clear(INBOX_NOTICE_ID).then(() => {}, () => {}),
 });
+
+// a quoted post's picture (PLAN-QUOTESHOT): capture, decode and crop stay here; only the crop goes back
+const bitmapOf = async (dataUrl: string) => createImageBitmap(await (await fetch(dataUrl)).blob());
+async function pngDataUrl(blob: Blob): Promise<string> {
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  let bin = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return `data:image/png;base64,${btoa(bin)}`;
+}
+const shotDeps: ShotDeps = {
+  activeTab: async (windowId) => (await browser.tabs.query({ active: true, windowId }))[0],
+  capture: (windowId) => browser.tabs.captureVisibleTab(windowId, { format: 'png' }),
+  size: async (dataUrl) => {
+    const bmp = await bitmapOf(dataUrl);
+    const size = { width: bmp.width, height: bmp.height };
+    bmp.close();
+    return size;
+  },
+  crop: async (dataUrl, a: Crop) => {
+    const bmp = await bitmapOf(dataUrl);
+    const canvas = new OffscreenCanvas(a.sw, a.sh);
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('unsupported');
+    try {
+      ctx.drawImage(bmp, a.sx, a.sy, a.sw, a.sh, 0, 0, a.sw, a.sh);
+    } finally {
+      bmp.close();
+    }
+    return pngDataUrl(await canvas.convertToBlob({ type: 'image/png' }));
+  },
+  isX: (url) => isXUrl(url),
+};
 
 const burner: BurnerDeps = { meta: { get: () => burnerInboxItem.getValue(), set: (v) => burnerInboxItem.setValue(v) }, tokens: idbTokenStore };
 
@@ -419,6 +454,18 @@ async function resolveRelays(pubkey: string): Promise<string[]> {
 
 async function handle(msg: BgRequest, sender: Browser.runtime.MessageSender): Promise<BgResponse<BgRequest['type']>> {
   switch (msg.type) {
+    case 'capture-quote': {
+      await requireSession(msg.sessionId, sender);
+      const tab = sender.tab;
+      // the composer's own top frame only
+      if (sender.frameId !== 0 || tab?.id == null || tab.windowId == null) throw new Error('Not allowed');
+      if (!validRequest(msg)) throw new Error('Bad request');
+      // claimed and stored before capturing, so neither a second ask nor a restarted worker gets another
+      if (!(await quoteShots.claim(msg.sessionId))) throw new Error('Already taken');
+      const canCrop = typeof OffscreenCanvas !== 'undefined' && typeof createImageBitmap !== 'undefined' && 'convertToBlob' in OffscreenCanvas.prototype;
+      if (!canCrop || !browser.tabs.captureVisibleTab) throw new Error('unsupported');
+      return { dataUrl: await shootQuote({ id: tab.id, windowId: tab.windowId }, msg, shotDeps) };
+    }
     case 'fetch-image': {
       await requireSession(msg.sessionId, sender);
       const { bytes, mime } = await loadImage(msg.url);
