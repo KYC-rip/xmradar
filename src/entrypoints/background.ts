@@ -21,7 +21,7 @@ import { allRelaysFrom, fetchWriteRelays, publishToRelays, readEach, readRelay }
 import { assertFetchableImageUrl } from '../nostr/url-guard';
 import { checkSessionSender, checkShareMenuSender, isExtensionPageSender, isSignerPage, isXUrl, SIGNER_PAGE, shareMenuRateLimit, withoutTab } from '../sender';
 import { setAuto, suggestFor, tagsReady } from '../ai/requests';
-import { DEFAULT_RELAYS, directoryStatusItem, INDEX_RELAYS, withoutIndex, myHandleItem, postedItem, pubkeyItem, receiptsOn, settingsItem, siteInfoOn, updateCheckOn, updateStateItem, logoPackItem, xapInboxItem, xapNotifyOn, siteWarningsOn, copyReportsOn, swapRecordDaysItem, swapRecordsCleanedItem, xapMarksItem, xClaimsChangedItem, xClaimsOn, xmrSettingsItem } from '../settings';
+import { DEFAULT_RELAYS, directoryStatusItem, nip65CacheItem, useNip65On, INDEX_RELAYS, withoutIndex, myHandleItem, postedItem, pubkeyItem, receiptsOn, settingsItem, siteInfoOn, updateCheckOn, updateStateItem, logoPackItem, xapInboxItem, xapNotifyOn, siteWarningsOn, copyReportsOn, swapRecordDaysItem, swapRecordsCleanedItem, xapMarksItem, xClaimsChangedItem, xClaimsOn, xmrSettingsItem } from '../settings';
 import { storage } from 'wxt/utils/storage';
 import { activeInbox, burnerCreatingItem, burnerInboxItem, burnerLastErrorItem, burnFreeInbox, createFreeInbox, forgetImportedInbox, importInbox, type BurnerDeps } from '../burner/service';
 import { idbTokenStore } from '../burner/token-store';
@@ -48,6 +48,8 @@ import { markFor, withMark } from '../xap/marks';
 import { GUARD_PATH } from '../sites/guard-rules';
 import { guardKeeper, type DnrApi, type GuardTokens } from '../sites/guard-keeper';
 import { reportCopy, reportFlags } from '../sites/report';
+import { healthStore, type Health } from '../nostr/relay-health';
+import { readRelaysOf, republishAllowed, resolvePostRelays } from '../nostr/post-relays';
 import { releaseUrl, UPDATE_NOTICE_ID, updateFor, updateKeeper } from '../update/check';
 import { logoKeeper } from '../sites/logos';
 import { INBOX_NOTICE_ID, inboxKeeper, MAX_RELAYS } from '../xap/inbox';
@@ -58,7 +60,6 @@ const TIP_MENU_ID = 'xmradar-tip';
 const X_PATTERNS = ['https://x.com/*', 'https://twitter.com/*', 'https://mobile.x.com/*', 'https://mobile.twitter.com/*'];
 const SESSION_TTL_MS = 15 * 60_000;
 const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
-const NIP65_TTL_MS = 60 * 60_000;
 const BADGE_TTL_MS = 6 * 3600_000;
 // a "no badge" answer may come from relays that were briefly down, so it is rechecked sooner
 const NO_BADGE_TTL_MS = 3600_000;
@@ -82,7 +83,12 @@ const SHARE_MENU_GAP_MS = 2000;
 const resolveSeen = storage.defineItem<SeenEntries>('local:xmrbioResolveSeen', { fallback: [] });
 // resolves run one at a time so concurrent lookups can't overwrite each other's replay guard entry
 let resolveQueue: Promise<unknown> = Promise.resolve();
-const nip65Cache = storage.defineItem<{ pubkey: string; relays: string[]; at: number } | null>('local:nip65Cache', { fallback: null });
+// the relays each composer session's publish went to: a retry may use only those (PLAN-RELAYDEFAULTS)
+const publishRelaysItem = storage.defineItem<Record<string, string[]>>('session:publishRelays', { fallback: {} });
+// relays that keep failing are skipped for a day (PLAN-DEADRELAYS)
+const relayHealth = healthStore(storage.defineItem<Health>('local:relayHealth', { fallback: {} }));
+// best effort: the post went out either way, so a storage error must not turn it into a failure
+const recordHealth = (results: Parameters<typeof relayHealth.record>[0]) => relayHealth.record(results).catch((e) => console.warn('[XMRadar] relay health', (e as Error).message));
 
 type CacheEntries<V> = [string, { v: V; at: number }][];
 const badgeCacheItem = storage.defineItem<CacheEntries<Badge>>('local:badgeCache', { fallback: [] });
@@ -403,6 +409,7 @@ async function deliver(tabId: number, frameId: number, msg: OpenComposerMsg | Op
 
 async function endSession(id: string) {
   await sessionsItem.setValue((await sessionsItem.getValue()).filter((s) => s.id !== id && s.expires > Date.now()));
+  await setPublishRelays(id, null);
 }
 
 async function requireSession(sessionId: string, sender: Browser.runtime.MessageSender) {
@@ -438,18 +445,32 @@ async function imageDim(bytes: ArrayBuffer, mime: string): Promise<string | unde
   }
 }
 
+/**
+ * Where a post goes: your list, else your NIP-65 write relays, else XMRadar's picks (PLAN-RELAYDEFAULTS).
+ * `use` is required: only posts follow the NIP-65 switch (PLAN-NIP65SWITCH); lookups always read the list.
+ */
+function postRelays(pubkey: string | null, use: 'post' | 'lookup', network = true) {
+  return resolvePostRelays(pubkey, {
+    manual: async () => (await settingsItem.getValue()).relays,
+    useNip65: async () => use === 'lookup' || useNip65On(await settingsItem.getValue()),
+    cached: () => nip65CacheItem.getValue(),
+    fetch: network ? (pk) => fetchWriteRelays(pk, [...DEFAULT_RELAYS, ...INDEX_RELAYS]) : undefined,
+    saveCache: (c) => nip65CacheItem.setValue(c),
+  });
+}
+
+/** The same for lookups, whose fallback is only the 3 defaults. */
 async function resolveRelays(pubkey: string): Promise<string[]> {
-  // index relays refuse notes, so they're dropped from every source of post relays
-  const relays = withoutIndex((await settingsItem.getValue()).relays);
-  if (relays.length) return relays;
-  const cached = await nip65Cache.getValue();
-  if (cached?.pubkey === pubkey && Date.now() - cached.at < NIP65_TTL_MS && cached.relays.length) return cached.relays;
-  const fromNip65 = withoutIndex(await fetchWriteRelays(pubkey, [...DEFAULT_RELAYS, ...INDEX_RELAYS]).catch(() => []));
-  if (fromNip65.length) {
-    await nip65Cache.setValue({ pubkey, relays: fromNip65, at: Date.now() });
-    return fromNip65;
-  }
-  return DEFAULT_RELAYS;
+  return readRelaysOf(await postRelays(pubkey, 'lookup'));
+}
+
+/** Kept per live session only, written before the publish so a retry always finds it. */
+async function setPublishRelays(sessionId: string, relays: string[] | null) {
+  const live = new Set((await sessionsItem.getValue()).filter((s) => s.expires > Date.now()).map((s) => s.id));
+  const next = Object.fromEntries(Object.entries(await publishRelaysItem.getValue()).filter(([id]) => live.has(id) && id !== sessionId));
+  if (relays && live.has(sessionId)) next[sessionId] = relays;
+  // at most 50 sessions; the newest stay
+  await publishRelaysItem.setValue(Object.fromEntries(Object.entries(next).slice(-50)));
 }
 
 async function handle(msg: BgRequest, sender: Browser.runtime.MessageSender): Promise<BgResponse<BgRequest['type']>> {
@@ -495,28 +516,34 @@ async function handle(msg: BgRequest, sender: Browser.runtime.MessageSender): Pr
       checkPublishable(msg.event, msg.sourceUrl, statusIdFromUrl);
       if (!verifyEvent(msg.event)) throw new Error('Refusing to publish an invalid event');
       await pubkeyItem.setValue(msg.event.pubkey);
-      const relays = await resolveRelays(msg.event.pubkey);
+      const { relays: all, source } = await postRelays(msg.event.pubkey, 'post');
+      const { use: relays, skipped, overridden } = await relayHealth.partition(all);
+      // only the relays used: a skipped one can't be retried
+      await setPublishRelays(msg.sessionId, relays);
       const key = await dedupeKey(msg.sourceUrl, msg.text);
       const results = await publishToRelays(relays, msg.event);
+      await recordHealth(results);
+      const notes = { skipped, overridden, source };
       const okRelays = results.filter((r) => r.ok).map((r) => r.relay);
       if (okRelays.length) {
         const posted = await postedItem.getValue();
         await postedItem.setValue([...posted.filter((k) => k !== key), key].slice(-1000));
       }
       const nevent = neventEncode({ id: msg.event.id, author: msg.event.pubkey, relays: okRelays.slice(0, 3) });
-      if (msg.event.kind !== KIND_ARTICLE) return { results, nevent };
+      if (msg.event.kind !== KIND_ARTICLE) return { results, nevent, ...notes };
       const identifier = msg.event.tags.find((t) => t[0] === 'd')![1]!;
-      return { results, nevent, naddr: naddrEncode({ kind: KIND_ARTICLE, pubkey: msg.event.pubkey, identifier, relays: okRelays.slice(0, 3) }) };
+      return { results, nevent, ...notes, naddr: naddrEncode({ kind: KIND_ARTICLE, pubkey: msg.event.pubkey, identifier, relays: okRelays.slice(0, 3) }) };
     }
     case 'republish': {
       // the same signed event again, to relays that failed: no new signature, no duplicate (same id),
       // and only to relays from the user's own list
       await requireSession(msg.sessionId, sender);
       if (!verifyEvent(msg.event)) throw new Error('Refusing to publish an invalid event');
-      const allowed = new Set(await resolveRelays(msg.event.pubkey));
-      const relays = (Array.isArray(msg.relays) ? msg.relays : []).filter((r) => typeof r === 'string' && allowed.has(r));
+      const relays = republishAllowed((await publishRelaysItem.getValue())[msg.sessionId], msg.relays);
       if (!relays.length) throw new Error('No relays to retry');
-      return { results: await publishToRelays(relays, msg.event) };
+      const results = await publishToRelays(relays, msg.event);
+      await recordHealth(results);
+      return { results };
     }
     case 'check-duplicate': {
       await requireSession(msg.sessionId, sender);
@@ -539,11 +566,17 @@ async function handle(msg: BgRequest, sender: Browser.runtime.MessageSender): Pr
       await endSession(msg.sessionId);
       return null;
     }
+    case 'relays-in-use': {
+      if (!isExtensionPage(sender)) throw new Error('Not allowed');
+      // never asks a relay: Options opening doesn't look up your npub
+      const pubkey = await pubkeyItem.getValue();
+      return { ...(await postRelays(pubkey, 'post', false)), hasPubkey: !!pubkey };
+    }
     case 'load-nip65': {
       if (!isExtensionPage(sender)) throw new Error('Not allowed');
       const { relays } = await settingsItem.getValue();
       const found = withoutIndex(await fetchWriteRelays(msg.pubkey, [...new Set([...DEFAULT_RELAYS, ...INDEX_RELAYS, ...relays])]));
-      if (found.length) await nip65Cache.setValue({ pubkey: msg.pubkey, relays: found, at: Date.now() });
+      if (found.length) await nip65CacheItem.setValue({ pubkey: msg.pubkey, relays: found, at: Date.now() });
       return { relays: found };
     }
     case 'test-signer': {
@@ -748,6 +781,10 @@ async function handle(msg: BgRequest, sender: Browser.runtime.MessageSender): Pr
       if (!isExtensionPage(sender)) throw new Error('Not allowed');
       await xapInbox.checkNow();
       return null;
+    }
+    case 'update-check-now': {
+      if (!isExtensionPage(sender)) throw new Error('Not allowed');
+      return updates.checkNow();
     }
     case 'xap-inbox-read': {
       if (!isExtensionPage(sender)) throw new Error('Not allowed');

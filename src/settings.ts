@@ -8,6 +8,12 @@ import { isBadgeIcon, type BadgeIcon } from './identity/badge-look';
 
 export const DEFAULT_RELAYS = ['wss://relay.damus.io', 'wss://nos.lol', 'wss://relay.primal.net'];
 /**
+ * Where posts go when you have neither your own list nor a NIP-65 list (PLAN-RELAYDEFAULTS): the defaults
+ * plus two more popular relays that are free to write to, so a post still lands when one is down. Only
+ * posts use these two; every lookup stays on DEFAULT_RELAYS.
+ */
+export const POST_FALLBACK_RELAYS = [...DEFAULT_RELAYS, 'wss://nostr.mom', 'wss://relay.ditto.pub'];
+/**
  * Relays that keep profiles and relay/payment lists but refuse notes: read for relay
  * lists, identity setup and badge discovery. Only kind 10133 is published to them
  * (10011 support is unverified), and never posts.
@@ -37,12 +43,15 @@ export interface Settings {
   hashtagLine?: boolean;
   /** "Check for updates once a day" (PLAN-UPDATECHECK); read with `updateCheckOn`, on unless switched off */
   updateCheck?: boolean;
+  /** "Post to my NIP-65 relay list when the box above is empty" (PLAN-NIP65SWITCH); read with `useNip65On`, on unless switched off */
+  useNip65?: boolean;
 }
 
 export const shareMenuOn = (s: Partial<Settings> | null | undefined) => s?.shareMenuX !== false;
 export const receiptsOn = (s: Partial<Settings> | null | undefined) => s?.receiptsCheck !== false;
 export const cleanXLinksOn = (s: Partial<Settings> | null | undefined) => s?.cleanXLinks !== false;
 export const hashtagLineOn = (s: Partial<Settings> | null | undefined) => s?.hashtagLine !== false;
+export const useNip65On = (s: Partial<Settings> | null | undefined) => s?.useNip65 !== false;
 export const updateCheckOn = (s: Partial<Settings> | null | undefined) => s?.updateCheck !== false;
 export const logFetchOn = (s: Partial<Settings> | null | undefined) => receiptsOn(s) && s?.logFetch !== false;
 
@@ -91,6 +100,8 @@ export const aiKeyItem = storage.defineItem<string>('local:aiKey', { fallback: '
 export const patchAiTags = patcher(aiTagsItem);
 
 /** Last pubkey seen from the signer, used by the options page for NIP-65 lookups. */
+/** your NIP-65 write relays as last read, for an hour (PLAN-RELAYDEFAULTS) */
+export const nip65CacheItem = storage.defineItem<{ pubkey: string; relays: string[]; at: number } | null>('local:nip65Cache', { fallback: null });
 export const pubkeyItem = storage.defineItem<string | null>('local:pubkey', { fallback: null });
 
 /** Hashes of already-published (normalized source URL + content). */

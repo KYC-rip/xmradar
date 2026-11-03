@@ -10,7 +10,8 @@ import { MAX_THREAD, loadThread, placeImages, withoutMarkers } from '../../extra
 import { cleanXLinks } from '../../extractors/x-links';
 import { sendToBackground, type OpenComposerMsg, type RelayResult } from '../../messaging';
 import { articleTemplate, articleTooLarge, blossomAuthTemplate, buildNote, checkSigned, encodeAuthHeader, wordCount, type PostImage } from '../../nostr/event';
-import { retryable } from '../../nostr/retry';
+import { retryable, settled } from '../../nostr/retry';
+import { relayNotice } from '../../nostr/relay-health';
 import { cleanXLinksOn, hashtagLineOn, settingsItem } from '../../settings';
 import { hashtagsOf } from '../../nostr/tags';
 import { tagRow } from './tag-row';
@@ -261,8 +262,8 @@ async function mountComposer(ctx: ContentScriptContext, msg: OpenComposerMsg, ta
       const leave = () => (working() ? minimise() : close());
       instance = {
         busy: working,
-        // published, with no failed relay left worth retrying
-        finished: () => done && !shown.some(retryable),
+        // published and settled: the same rule as the pill's auto-close
+        finished: () => done && settled(shown),
         expanded,
         expand,
         minimise,
@@ -400,6 +401,8 @@ async function mountComposer(ctx: ContentScriptContext, msg: OpenComposerMsg, ta
       let shown: RelayResult[] = [];
       let published: Event | null = null;
       const retryBtn = h('button', { class: 'link', textContent: '' });
+      // skipped relays that keep failing (PLAN-DEADRELAYS), said under the results
+      let relayNote = '';
       const renderResults = (list: RelayResult[]) => {
         shown = shown.length ? shown.map((r) => list.find((n) => n.relay === r.relay) ?? r) : list;
         results.replaceChildren(...shown.map((r) => h('li', { class: r.ok ? 'ok' : 'error', textContent: `${r.ok ? '✓' : '✗'} ${r.relay}${r.ok ? '' : ` — ${r.message}`}` })));
@@ -408,6 +411,7 @@ async function mountComposer(ctx: ContentScriptContext, msg: OpenComposerMsg, ta
           retryBtn.textContent = `Retry ${again.length} failed ${again.length === 1 ? 'relay' : 'relays'}`;
           results.append(h('li', {}, retryBtn));
         }
+        if (relayNote) results.append(h('li', { class: 'note', textContent: relayNote }));
       };
       let outcome: Extract<PillState, { kind: 'published' }> | null = null;
       const showOutcome = () => {
@@ -515,6 +519,7 @@ async function mountComposer(ctx: ContentScriptContext, msg: OpenComposerMsg, ta
           const res = await sendToBackground({ type: 'publish', sessionId: msg.sessionId, event, sourceUrl: post.sourceUrl, text });
           shown = [];
           published = event;
+          relayNote = relayNotice(res.skipped ?? [], res.source, !!res.overridden);
           const ref = res.naddr ?? res.nevent;
           // notes open in RipleyOS's Nostr app; it has no article (naddr) route yet, so articles stay on njump
           outcome = {

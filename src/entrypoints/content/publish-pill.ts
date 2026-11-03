@@ -1,5 +1,5 @@
 import type { RelayResult } from '../../messaging';
-import { retryable } from '../../nostr/retry';
+import { retryable, settled } from '../../nostr/retry';
 import { h } from './dom';
 import { radarIcon } from './x-share';
 
@@ -59,8 +59,8 @@ export function pillView(state: PillState, what: 'note' | 'article'): PillView {
   }
 }
 
-/** Published with no failed relay worth retrying: the pill closes itself shortly after (PLAN-PARALLEL). */
-export const autoCloses = (state: PillState) => state.kind === 'published' && !state.results.some(retryable);
+/** Published and settled (`settled`): the pill closes itself shortly after (PLAN-PARALLEL, PLAN-DEADRELAYS). */
+export const autoCloses = (state: PillState) => state.kind === 'published' && settled(state.results);
 
 /**
  * The auto-close timer of one composer: `arm(state)` whenever its pill shows a state (re)starts it for an

@@ -299,6 +299,43 @@ describe('updateKeeper', () => {
     expect(t.k.onAlarm('site-feed')).toBeUndefined();
     expect(t.deps.fetch).not.toHaveBeenCalled();
   });
+
+  it('Check now with the daily check on: asks at once, keeps the answer and notifies', async () => {
+    const t = setup({ held: { attemptAt: 10 * DAY - 1000, latest: null, notified: null } });
+    await t.k.apply(true);
+    expect(t.deps.fetch).not.toHaveBeenCalled();
+    expect(await t.k.checkNow()).toEqual({ latest: '0.6.1' });
+    expect(t.deps.fetch).toHaveBeenCalledTimes(1);
+    expect(t.held()).toMatchObject({ latest: '0.6.1', notified: '0.6.1' });
+    expect(t.deps.notify).toHaveBeenCalledWith('0.6.1');
+  });
+
+  it('Check now with it off: one request, answer returned but never kept or announced', async () => {
+    const t = setup({ on: false });
+    await t.k.apply(false);
+    expect(await t.k.checkNow()).toEqual({ latest: '0.6.1' });
+    expect(t.deps.fetch).toHaveBeenCalledTimes(1);
+    expect(t.deps.fetch.mock.calls[0]![1]).toMatchObject({ credentials: 'omit', referrerPolicy: 'no-referrer', redirect: 'error' });
+    expect(t.held()).toBeNull();
+    expect(t.deps.notify).not.toHaveBeenCalled();
+    expect(t.deps.alarms.create).not.toHaveBeenCalled();
+  });
+
+  it('Check now reports a failure and keeps the version last seen', async () => {
+    const t = setup({ held: { attemptAt: 0, latest: '0.6.1', notified: '0.6.1' }, now: 0 });
+    await t.k.apply(true);
+    t.deps.fetch.mockImplementation(async () => new Response('nope', { status: 503 }));
+    expect(await t.k.checkNow()).toEqual({ latest: '0.6.1', error: 'HTTP 503' });
+    t.set.on(false);
+    expect(await t.k.checkNow()).toEqual({ latest: null, error: 'HTTP 503' });
+  });
+
+  it('a check skipped because the switch went off is no answer', async () => {
+    const t = setup();
+    t.set.on(false);
+    expect(await t.k.check()).toBe('off');
+    expect(t.deps.fetch).not.toHaveBeenCalled();
+  });
 });
 
 describe('the notice in the popup and Options', () => {
@@ -379,5 +416,14 @@ describe('xmradar.app/latest.json (site/build.py)', () => {
     const build = readFileSync(join(process.cwd(), 'site/build.py'), 'utf8');
     expect(build).toContain("(out / 'latest.json').write_text(latest)");
     expect(build.slice(build.indexOf('HEADERS = '), build.indexOf('"""\n', build.indexOf('HEADERS = ') + 14))).not.toContain('latest');
+  });
+});
+
+describe('Check now line', () => {
+  it('says what the answer means for this copy', async () => {
+    const { checkedText } = await import('../src/ui/update-notice');
+    expect(checkedText({ latest: '0.6.7' }, '0.6.6.3')).toBe('XMRadar 0.6.7 is out.');
+    expect(checkedText({ latest: '0.6.6' }, '0.6.6.3')).toBe('You have the latest version (0.6.6.3).');
+    expect(checkedText({ latest: null, error: 'HTTP 503' }, '0.6.6')).toBe("Couldn't reach xmradar.app. Try again later.");
   });
 });

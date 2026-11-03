@@ -100,6 +100,7 @@ input[type='text'].tag-input { flex: 1; min-width: 90px; padding: 4px 8px; }
 .error { color: #b3261e; }
 .ok { color: #1e7a3a; }
 .results { margin: 0; padding: 0; list-style: none; font-size: 12px; }
+.results .note { opacity: 0.75; margin-top: 4px; }
 footer { display: flex; justify-content: flex-end; gap: 8px; }
 button {
   font: inherit;

@@ -1,4 +1,6 @@
-import { DEFAULT_BLOSSOM, parseRelayList, patchSettings, settingsItem } from '../settings';
+import { sendToBackground } from '../messaging';
+import { relaysInUseText } from '../nostr/post-relays';
+import { DEFAULT_BLOSSOM, nip65CacheItem, parseRelayList, patchSettings, pubkeyItem, settingsItem } from '../settings';
 import { part } from './dom';
 
 const SAVED_MS = 1500;
@@ -138,4 +140,24 @@ export function mountBlossomField(root: HTMLElement) {
     input.value = s.blossomServer;
     input.disabled = false;
   });
+}
+
+/**
+ * The line saying which relays posts go to when the box is empty (PLAN-RELAYDEFAULTS). Asked again when
+ * the list, the key or the NIP-65 cache changes, and when the page comes back (a cache may have gone stale).
+ */
+export function mountRelaysInUse(root: HTMLElement) {
+  const line = part(root, 'relays', 'in-use');
+  let asked = 0;
+  const render = async () => {
+    const n = ++asked;
+    const r = await sendToBackground({ type: 'relays-in-use' }).catch(() => null);
+    if (n !== asked) return;
+    line.textContent = r ? relaysInUseText(r, r.hasPubkey) : '';
+  };
+  void render();
+  settingsItem.watch(() => void render());
+  pubkeyItem.watch(() => void render());
+  nip65CacheItem.watch(() => void render());
+  document.addEventListener('visibilitychange', () => document.visibilityState === 'visible' && void render());
 }

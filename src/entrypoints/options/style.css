@@ -80,7 +80,9 @@ dl.state dd { margin: 0; }
 }
 
 /* Badges: look picker */
-#badge-look, #badge-switches, #receipts-switch, #site-switches, #keep-switch, #update-switch { max-width: 460px; padding: 6px 16px; display: flex; flex-direction: column; }
+#badge-look, #badge-switches, #receipts-switch, #site-switches, #keep-switch, #update-switch, #xap-inbox { max-width: 460px; padding: 6px 16px; display: flex; flex-direction: column; }
+#xap-inbox > [data-inbox="body"] { display: flex; flex-direction: column; gap: 8px; padding: 4px 0 12px; border-top: 1px solid var(--border); padding-top: 12px; }
+#update-switch > .row { padding: 6px 0 10px; }
 #badge-look { padding-top: 14px; gap: 4px; }
 .looks { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 6px 0 2px; }
 .look { position: relative; display: flex; align-items: center; justify-content: center; height: 44px; border: 1px solid var(--border); border-radius: 10px; cursor: pointer; }
@@ -105,3 +107,4 @@ dl.state dd { margin: 0; }
 .xap-list .amount { margin-left: auto; font-weight: 600; }
 .xap-list .state { font-size: 11px; padding: 1px 7px; border-radius: 999px; background: var(--chip); }
 .xap-list .state.verified { color: var(--ok); }
+[data-relays="in-use"]:empty { display: none; }

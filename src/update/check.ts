@@ -76,35 +76,45 @@ export interface UpdateDeps {
 export function updateKeeper(deps: UpdateDeps) {
   const now = deps.now ?? Date.now;
   let generation = 0;
-  let inFlight: { generation: number; done: Promise<void>; abort: AbortController } | null = null;
+  let inFlight: { generation: number; done: Promise<string | undefined>; abort: AbortController } | null = null;
   /** still the same switch-on, and still on: asked again after every wait, right before acting */
   const still = async (gen: number) => gen === generation && (await deps.enabled()) && gen === generation;
 
-  async function ask(gen: number, signal: AbortSignal) {
+  /** The latest version xmradar.app names; throws when it can't be had. */
+  async function fetchLatest(signal: AbortSignal): Promise<string> {
+    const res = await deps.fetch(UPDATE_URL, {
+      credentials: 'omit',
+      referrerPolicy: 'no-referrer',
+      redirect: 'error',
+      cache: 'no-store',
+      signal: AbortSignal.any([signal, AbortSignal.timeout(15_000)]),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    if (!/^application\/json\b/i.test(res.headers.get('content-type') ?? '')) throw new Error('not JSON');
+    const latest = readLatest(JSON.parse(new TextDecoder().decode(await deps.readBody(res, 4096))));
+    if (!latest) throw new Error('no valid version');
+    return latest;
+  }
+
+  /** Asks and keeps the answer; resolves with the failure's message, if any. */
+  async function ask(gen: number, signal: AbortSignal): Promise<string | undefined> {
     const live = () => gen === generation && !signal.aborted;
     let latest: string | null | undefined;
+    let error: string | undefined;
     try {
-      const res = await deps.fetch(UPDATE_URL, {
-        credentials: 'omit',
-        referrerPolicy: 'no-referrer',
-        redirect: 'error',
-        cache: 'no-store',
-        signal: AbortSignal.any([signal, AbortSignal.timeout(15_000)]),
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      if (!/^application\/json\b/i.test(res.headers.get('content-type') ?? '')) throw new Error('not JSON');
-      latest = readLatest(JSON.parse(new TextDecoder().decode(await deps.readBody(res, 4096))));
-      if (!latest) throw new Error('no valid version');
+      latest = await fetchLatest(signal);
     } catch (e) {
-      if (live()) console.warn('[XMRadar] update check', (e as Error).message);
+      error = (e as Error).message;
+      if (live()) console.warn('[XMRadar] update check', error);
     }
-    if (signal.aborted) return;
+    if (signal.aborted) return error ?? 'stopped';
     const held = await deps.held.getValue();
     // a failure keeps the version last seen; an answer replaces it (a forged high one recovers)
     const next: UpdateState = { attemptAt: now(), latest: latest ?? held?.latest ?? null, notified: held?.notified ?? null };
-    if (!live() || !(await still(gen))) return;
+    if (!live() || !(await still(gen))) return error ?? 'stopped';
     await deps.held.setValue(next);
     await announce(next, gen);
+    return error;
   }
 
   /**
@@ -130,14 +140,15 @@ export function updateKeeper(deps: UpdateDeps) {
     await deps.held.setValue({ ...s, notified: out });
   }
 
-  /** Ask now, unless a request of this generation is already running. */
-  function check(): Promise<void> {
+  /** Ask now, unless a request of this generation is already running; resolves with a failure's message. */
+  function check(): Promise<string | undefined> {
     if (inFlight?.generation === generation) return inFlight.done;
     const abort = new AbortController();
     const gen = generation;
-    const run = { generation: gen, abort, done: Promise.resolve() };
+    const run = { generation: gen, abort, done: Promise.resolve<string | undefined>(undefined) };
     run.done = (async () => {
-      if (await deps.enabled()) await ask(gen, abort.signal);
+      // switched off meanwhile: no request, which is no answer
+      return (await deps.enabled()) ? ask(gen, abort.signal) : 'off';
     })().finally(() => {
       if (inFlight === run) inFlight = null;
     });
@@ -168,7 +179,23 @@ export function updateKeeper(deps: UpdateDeps) {
     await deps.clearNotice();
   }
 
+  /**
+   * The "Check now" button. With the daily check on, it's that check run now (the answer is kept and a
+   * notification shown); with it off, one request whose answer is only returned, never kept or announced.
+   */
+  async function checkNow(): Promise<{ latest: string | null; error?: string }> {
+    if (await deps.enabled()) {
+      const error = await check();
+      return { latest: (await deps.held.getValue())?.latest ?? null, ...(error ? { error } : {}) };
+    }
+    try {
+      return { latest: await fetchLatest(new AbortController().signal) };
+    } catch (e) {
+      return { latest: null, error: (e as Error).message };
+    }
+  }
+
   const onAlarm = (name: string) => (name === UPDATE_ALARM ? check() : undefined);
 
-  return { check, apply, onAlarm };
+  return { check, checkNow, apply, onAlarm };
 }

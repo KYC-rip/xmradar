@@ -1,3 +1,4 @@
+import type { PostRelays, PostRelaySource } from './nostr/post-relays';
 import type { Event } from 'nostr-tools/pure';
 import type { ResolvedIdentity } from './identity/envelope';
 import type { Badge } from './identity/resolve';
@@ -186,7 +187,9 @@ export type BgRequest =
   | { type: 'letter-export'; id: string }
   | { type: 'capture-quote'; sessionId: string; rect: { x: number; y: number; width: number; height: number }; view: { width: number; height: number }; client?: { width: number; height: number } }
   | { type: 'xap-inbox-check' }
-  | { type: 'xap-inbox-read' };
+  | { type: 'xap-inbox-read' }
+  | { type: 'update-check-now' }
+  | { type: 'relays-in-use' };
 
 /** Port name for creating a free burner inbox; the open port keeps the worker busy during the proof of work. */
 export const BURNER_CREATE_PORT = 'burner-create';
@@ -199,7 +202,7 @@ export type BgResponse<T extends BgRequest['type']> = T extends 'fetch-image'
   : T extends 'upload-image'
     ? { url: string }
     : T extends 'publish'
-      ? { results: RelayResult[]; nevent: string; naddr?: string }
+      ? { results: RelayResult[]; nevent: string; naddr?: string; skipped: string[]; overridden: boolean; source: PostRelaySource }
       : T extends 'republish'
         ? { results: RelayResult[] }
       : T extends 'check-duplicate'
@@ -278,6 +281,10 @@ export type BgResponse<T extends BgRequest['type']> = T extends 'fetch-image'
                                                             ? { dataUrl: string }
                                                           : T extends 'xap-inbox-check' | 'xap-inbox-read'
                                                             ? null
+                                                          : T extends 'update-check-now'
+                                                            ? { latest: string | null; error?: string }
+                                                          : T extends 'relays-in-use'
+                                                            ? PostRelays & { hasPubkey: boolean }
                                                             : never;
 
 /** Every response is wrapped so errors survive the message boundary. */

@@ -49,7 +49,9 @@
                 <button id="load-nip65">Load from NIP-65</button>
               </div>
               <span id="relay-error" data-relays="error" class="error row-hint" role="alert"></span>
-              <p class="hint">Leave empty to use your NIP-65 write relays, falling back to defaults. <span data-relays="saved" class="saved"></span></p>
+              <p data-relays="in-use" class="hint" role="status" aria-live="polite"></p>
+              <p class="hint">Nothing to fill in: XMRadar picks relays for you. Add relays here only to choose your own. <span data-relays="saved" class="saved"></span></p>
+              <label><input id="use-nip65" type="checkbox" /> Post to my NIP-65 relay list when the box above is empty. Off: only XMRadar's picks.</label>
             </div>
           </div>
 
@@ -361,9 +363,10 @@
               <div><span class="row-title">Check for updates once a day</span><span class="row-hint">A notification and a line in XMRadar's menu when a new version is out. Nothing is downloaded or installed.</span></div>
               <input id="update-check" type="checkbox" role="switch" class="switch" />
             </label>
+            <div class="row"><button id="update-now" type="button">Check now</button><span id="update-status" class="row-hint" role="status" aria-live="polite"></span></div>
           </div>
           <p class="row-hint">
-            Once a day, XMRadar asks xmradar.app for the latest version number. The request carries no version, ID or page; like visiting the site, it shows your IP address and browser, and that XMRadar is in use. It follows your browser's proxy or Tor settings.
+            Once a day, or when you click Check now, XMRadar asks xmradar.app for the latest version number. The request carries no version, ID or page; like visiting the site, it shows your IP address and browser, and that XMRadar is in use. It follows your browser's proxy or Tor settings.
           </p>
         </section>
       </main>

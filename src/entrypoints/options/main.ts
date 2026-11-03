@@ -2,12 +2,12 @@ import { npubEncode } from 'nostr-tools/nip19';
 import { currentBuild } from '../../build-info';
 import { mountUpdatePanel } from '../../ui/update-notice';
 import { sendToBackground } from '../../messaging';
-import { cleanXLinksOn, patchSettings, pubkeyItem, settingsItem, shareMenuOn, type Settings } from '../../settings';
+import { cleanXLinksOn, useNip65On, patchSettings, pubkeyItem, settingsItem, shareMenuOn, type Settings } from '../../settings';
 import { mountBadgeLook } from '../../ui/badge-look-controls';
 import { mountBurnerPanel } from '../../ui/burner-panel';
 import { mountReceiptsPanel } from '../../ui/receipts-panel';
 import { setStatus } from '../../ui/dom';
-import { mountBlossomField, mountRelayEditor } from '../../ui/posting-fields';
+import { mountBlossomField, mountRelayEditor, mountRelaysInUse } from '../../ui/posting-fields';
 import { mountAiTagsPanel, mountTagsField } from '../../ui/ai-tags-panel';
 import { mountSections } from '../../ui/sections';
 import { mountXmrToggles } from '../../ui/xmr-toggles';
@@ -21,6 +21,7 @@ const appendEl = $<HTMLInputElement>('append-source');
 const debugEl = $<HTMLInputElement>('debug');
 const shareMenuEl = $<HTMLInputElement>('share-menu-x');
 const cleanLinksEl = $<HTMLInputElement>('clean-x-links');
+const useNip65El = $<HTMLInputElement>('use-nip65');
 const signerStatus = $('signer-status');
 
 const ALL_SITES = { origins: ['<all_urls>'] };
@@ -53,6 +54,20 @@ void settingsItem.getValue().then((s) => {
   cleanLinksEl.checked = cleanXLinksOn(s);
   for (const [el] of boxes) el.disabled = false;
 });
+// the relay switch saves like the boxes, but says so next to the relays (PLAN-NIP65SWITCH)
+useNip65El.disabled = true;
+void settingsItem.getValue().then((s) => {
+  useNip65El.checked = useNip65On(s);
+  useNip65El.disabled = false;
+});
+useNip65El.addEventListener('change', async () => {
+  await patchSettings({ useNip65: useNip65El.checked });
+  const saved = document.querySelector<HTMLElement>('[data-relays="saved"]');
+  if (saved) {
+    saved.textContent = 'Saved';
+    setTimeout(() => (saved.textContent = ''), 1500);
+  }
+});
 for (const [el, patch] of boxes) {
   el.addEventListener('change', async () => {
     await patchSettings(patch(el.checked));
@@ -62,6 +77,7 @@ for (const [el, patch] of boxes) {
 }
 
 const relays = mountRelayEditor($('relay-editor'));
+mountRelaysInUse($('relay-editor'));
 void mountBlossomField($('blossom-field'));
 void mountTagsField(document);
 void mountAiTagsPanel(document);

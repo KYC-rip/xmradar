@@ -355,8 +355,9 @@ describe('the build: openpgp.js in the background only', () => {
       for (const f of readdirSync(join(dir, 'chunks'))) expect(has(`chunks/${f}`)).toBe(false);
       // size budgets (PLAN-LOG Round 3): openpgp.js is about 240 KB, so a leak into the page script shows here
       expect(read('content-scripts/content.js').length).toBeLessThan(250_000);
-      // + the public suffix list (tldts, ~130 KB) and Unicode confusables (~30 KB) for lookalike warnings
-      expect(read('background.js').length).toBeLessThan(900_000);
+      // + the public suffix list (tldts, ~130 KB) and Unicode confusables (~30 KB) for lookalike warnings;
+      // grown by features since (900 KB reached at 0.6.6)
+      expect(read('background.js').length).toBeLessThan(950_000);
     });
   }
 });
