@@ -18,7 +18,9 @@ footer { display: flex; align-items: center; justify-content: space-between; gap
 
 #this-site { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
 #this-site.hidden { display: none; }
-#update { width: 100%; margin-bottom: 10px; }
+#update,
+#xap-new,
+#chat-open { width: 100%; margin-bottom: 10px; }
 #this-site .site-row { display: flex; flex-direction: column; gap: 1px; padding-top: 6px; border-top: 1px solid var(--border); }
 #this-site .site-row:first-of-type { border-top: 0; padding-top: 0; }
 #this-site .grade { font-weight: 400; color: var(--muted); }
