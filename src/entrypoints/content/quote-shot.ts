@@ -1,3 +1,4 @@
+import { pngBlob } from '../../capture/quote-shot';
 import type { ExtractedImage } from '../../extractors/types';
 import { hideForShot, quoteAlt, quoteBox } from '../../extractors/x-quote';
 import { sendToBackground } from '../../messaging';
@@ -70,8 +71,8 @@ export async function takeQuoteShot(article: Element, sessionId: string): Promis
     const { dataUrl } = await Promise.race([answer, late]).finally(() => clearTimeout(timer));
     // the tab left the screen during the capture: the picture may show something else
     if (switched || document.visibilityState !== 'visible') return { error: 'the tab was switched during the capture' };
-    if (!dataUrl.startsWith('data:image/png;base64,')) return { error: 'not a picture' };
-    const blob = await (await fetch(dataUrl)).blob();
+    const blob = pngBlob(dataUrl);
+    if (!blob) return { error: 'not a picture' };
     return { image: { url: URL.createObjectURL(blob), alt }, size: blob.size };
   } catch (e) {
     return { error: (e as Error).message };

@@ -151,6 +151,15 @@ The list also names xmr.club's logo pack (small WebP logos of every listing, one
 - **Trust:** the list must be signed with xmr.club's pinned key, unexpired and newer than the copy kept; an older or expired one is refused and the menu says when the list is out of date. The key comes from xmr.club itself: there's no independent second source for it yet. xmr.club is run by the same team as XMRadar.
 - Switch it off under **Options → Swaps and sites**: no download, no badge, no warnings.
 
+## Chat (chat.xmr.club)
+
+**Menu → Chat** opens chat.xmr.club in the browser's side panel (Chrome) or sidebar (Firefox: also *View → Sidebar → XMRadar chat*), so you can chat while you browse. XMRadar only shows the page; the chat itself, and where its messages go (Nostr relays), is chat.xmr.club's.
+
+- **Rooms:** the panel starts in the lobby (or the room you were in last). On X it offers the **X room**; on a site listed on xmr.club, that site's room. A room changes only when you click: XMRadar never moves you by itself as you switch tabs, so the chat and its relays only learn a site's name when you choose its room. The tab's address is read inside the browser and never sent.
+- **Identity:** browsers keep a framed page's storage apart, so without a signer the chat in the panel has its own anonymous name, separate from chat.xmr.club in a tab. With a NIP-07 signer, the chat can sign as you if your signer works inside the panel.
+- **Isolation:** the chat runs in a sandboxed frame (no top navigation, no pop-up dialogs). XMRadar sends it nothing but the room in its address and reads nothing from it.
+- ↗ opens the current room in a normal tab.
+
 ## Warnings before a copy loads
 
 Built from xmr.club's signed list, inside the browser; the address you open is never sent anywhere.

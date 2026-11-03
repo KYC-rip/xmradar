@@ -102,6 +102,23 @@ export async function shootQuote(tab: { id: number; windowId: number }, req: Sho
   }
 }
 
+const PNG_DATA_URL = /^data:image\/png;base64,([A-Za-z0-9+/]+={0,2})$/;
+
+/**
+ * The crop `shootQuote` returns (exactly `data:image/png;base64,…`, at most MAX_SHOT_BYTES) as a Blob, or
+ * null. Decoded here, not with fetch: Firefox applies the page's CSP to a content script's fetch, and
+ * x.com's connect-src has no `data:` (PLAN-QUOTESHOT-FIREFOX).
+ */
+export function pngBlob(dataUrl: string): Blob | null {
+  const b64 = PNG_DATA_URL.exec(dataUrl)?.[1];
+  if (!b64 || b64.length * 0.75 > MAX_SHOT_BYTES) return null;
+  try {
+    return new Blob([Uint8Array.from(atob(b64), (c) => c.charCodeAt(0))], { type: 'image/png' });
+  } catch {
+    return null;
+  }
+}
+
 /**
  * One picture per composer session: claimed synchronously (two asks can't both pass) and kept in its own
  * stored list, written one at a time, so a restarted worker refuses too and no other record is rewritten.

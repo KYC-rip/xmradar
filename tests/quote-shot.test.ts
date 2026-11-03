@@ -1,5 +1,7 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
-import { cropRect, shootQuote, shotGate, validRequest, type ShotDeps } from '../src/capture/quote-shot';
+import { cropRect, MAX_SHOT_BYTES, pngBlob, shootQuote, shotGate, validRequest, type ShotDeps } from '../src/capture/quote-shot';
 import { hideForShot, quoteAlt, quoteBox } from '../src/extractors/x-quote';
 import { makeDoc } from './helpers';
 
@@ -186,5 +188,25 @@ describe('shotGate', () => {
     const st = store();
     await shotGate(st).claim('s1');
     expect(await shotGate(st).claim('s1')).toBe(false);
+  });
+});
+
+describe('pngBlob', () => {
+  // a 1x1 PNG
+  const b64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+  it('decodes the crop to the exact PNG bytes, without fetch', async () => {
+    const blob = pngBlob(`data:image/png;base64,${b64}`)!;
+    expect(blob.type).toBe('image/png');
+    expect([...new Uint8Array(await blob.arrayBuffer())]).toEqual([...Buffer.from(b64, 'base64')]);
+  });
+  it('refuses anything else', () => {
+    for (const s of [`data:image/jpeg;base64,${b64}`, 'data:image/png;base64,', 'data:image/png;base64,ab!c', 'data:image/png;base64,abcde', b64, ''])
+      expect(pngBlob(s)).toBeNull();
+    expect(pngBlob(`data:image/png;base64,${'A'.repeat(Math.ceil((MAX_SHOT_BYTES + 3) / 3) * 4)}`)).toBeNull();
+  });
+  it("the content script never fetches the crop (Firefox applies x.com's CSP to it)", () => {
+    const src = readFileSync(join(process.cwd(), 'src/entrypoints/content/quote-shot.ts'), 'utf8');
+    expect(src).toMatch(/pngBlob\(dataUrl\)/);
+    expect(src).not.toMatch(/fetch\(/);
   });
 });

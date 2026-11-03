@@ -9,6 +9,8 @@ import { mountTabs, popupTabItem } from '../../ui/tabs';
 import { renderSiteCard } from '../../ui/site-card';
 import { sendToBackground } from '../../messaging';
 import { mountPopupUpdate } from '../../ui/update-notice';
+import { openChat } from '../../chat/open';
+import { CHAT_ORIGIN } from '../../chat/rooms';
 
 const $ = (id: string) => document.getElementById(id)!;
 
@@ -48,6 +50,28 @@ async function renderHeader() {
 }
 
 void renderHeader();
+
+// the chat in the side panel (PLAN-CHATPANEL); the window is read now so the click awaits nothing first
+const panelApis = browser as unknown as {
+  sidePanel?: { open(o: { windowId: number }): Promise<void> };
+  sidebarAction?: { open(): Promise<void> };
+};
+let windowId: number | undefined;
+// enabled once the window is known, so Chrome's side panel isn't skipped for a tab by a quick click
+($('chat-open') as HTMLButtonElement).disabled = true;
+void browser.windows
+  .getCurrent()
+  .then((w) => (windowId = w.id))
+  .finally(() => (($('chat-open') as HTMLButtonElement).disabled = false));
+$('chat-open').addEventListener('click', () => {
+  void openChat({
+    sidePanelOpen: panelApis.sidePanel?.open.bind(panelApis.sidePanel),
+    sidebarOpen: panelApis.sidebarAction?.open.bind(panelApis.sidebarAction),
+    windowId,
+    openTab: () => browser.tabs.create({ url: `${CHAT_ORIGIN}/` }),
+    close: () => window.close(),
+  });
+});
 
 // a newer XMRadar, from the daily check: its release page in a tab
 mountPopupUpdate($('update') as HTMLButtonElement, async (url) => {

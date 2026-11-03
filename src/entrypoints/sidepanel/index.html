@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>XMRadar chat</title>
+  </head>
+  <body>
+    <header>
+      <span id="room" class="room"></span>
+      <span class="actions">
+        <button id="site" type="button" class="soft" hidden></button>
+        <button id="lobby" type="button">Lobby</button>
+        <a id="new-tab" target="_blank" rel="noopener noreferrer" title="Open this room in a tab">↗</a>
+      </span>
+    </header>
+    <iframe id="chat" title="chat.xmr.club"></iframe>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>
