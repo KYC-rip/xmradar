@@ -21,6 +21,8 @@ import { allRelaysFrom, fetchWriteRelays, publishToRelays, readEach, readRelay }
 import { assertFetchableImageUrl } from '../nostr/url-guard';
 import { checkSessionSender, checkShareMenuSender, isExtensionPageSender, isSignerPage, isXUrl, SIGNER_PAGE, shareMenuRateLimit, withoutTab } from '../sender';
 import { setAuto, suggestFor, tagsReady } from '../ai/requests';
+import { syncedPostsItem } from '../settings';
+import { recordSynced, type SyncedPost } from '../nostr/synced';
 import { DEFAULT_RELAYS, directoryStatusItem, nip65CacheItem, siwmHelperOn, useNip65On, INDEX_RELAYS, withoutIndex, myHandleItem, postedItem, pubkeyItem, receiptsOn, settingsItem, siteInfoOn, updateCheckOn, updateStateItem, logoPackItem, xapInboxItem, xapNotifyOn, siteWarningsOn, copyReportsOn, swapRecordDaysItem, swapRecordsCleanedItem, xapMarksItem, xClaimsChangedItem, xClaimsOn, xmrSettingsItem } from '../settings';
 import { storage } from 'wxt/utils/storage';
 import { activeInbox, burnerCreatingItem, burnerInboxItem, burnerLastErrorItem, burnFreeInbox, createFreeInbox, forgetImportedInbox, importInbox, type BurnerDeps } from '../burner/service';
@@ -439,6 +441,30 @@ async function requireSession(sessionId: string, sender: Browser.runtime.Message
   checkSessionSender(await sessionsItem.getValue(), sessionId, sender, browser.runtime.id);
 }
 
+/**
+ * The X post a copy came from, with the copy's reference, for the mark on X (PLAN-SYNCEDMARK). Never
+ * fails the publish: the event is out on the relays whatever happens to this note of it.
+ */
+let syncedWrites: Promise<void> = Promise.resolve();
+function rememberSynced(sourceUrl: string, event: { id: string; pubkey: string; kind: number; tags: string[][] }, okRelays: string[]) {
+  // one write at a time, so two publishes finishing together both keep their mark
+  syncedWrites = syncedWrites.then(() => writeSynced(sourceUrl, event, okRelays));
+  return syncedWrites;
+}
+async function writeSynced(sourceUrl: string, event: { id: string; pubkey: string; kind: number; tags: string[][] }, okRelays: string[]) {
+  try {
+    const id = statusIdFromUrl(sourceUrl);
+    if (!id) return;
+    const relays = okRelays.slice(0, 3);
+    const d = event.tags.find((t) => t[0] === 'd')?.[1];
+    const entry: SyncedPost =
+      event.kind === KIND_ARTICLE && d !== undefined
+        ? { ref: naddrEncode({ kind: KIND_ARTICLE, pubkey: event.pubkey, identifier: d, relays }), kind: 'article', at: Date.now() }
+        : { ref: neventEncode({ id: event.id, author: event.pubkey, relays }), kind: 'note', at: Date.now() };
+    await syncedPostsItem.setValue(recordSynced(await syncedPostsItem.getValue(), id, entry));
+  } catch {}
+}
+
 const isExtensionPage = (sender: Browser.runtime.MessageSender) => isExtensionPageSender(sender, browser.runtime.id, browser.runtime.getURL('/'));
 
 // the tab URL covers the popup opening inside an embedded frame on x.com
@@ -551,6 +577,7 @@ async function handle(msg: BgRequest, sender: Browser.runtime.MessageSender): Pr
       if (okRelays.length) {
         const posted = await postedItem.getValue();
         await postedItem.setValue([...posted.filter((k) => k !== key), key].slice(-1000));
+        await rememberSynced(msg.sourceUrl, msg.event, okRelays);
       }
       const nevent = neventEncode({ id: msg.event.id, author: msg.event.pubkey, relays: okRelays.slice(0, 3) });
       if (msg.event.kind !== KIND_ARTICLE) return { results, nevent, ...notes };
@@ -566,6 +593,9 @@ async function handle(msg: BgRequest, sender: Browser.runtime.MessageSender): Pr
       if (!relays.length) throw new Error('No relays to retry');
       const results = await publishToRelays(relays, msg.event);
       await recordHealth(results);
+      const okRelays = results.filter((r) => r.ok).map((r) => r.relay);
+      // the event is the one signed for this session's post; a source that isn't an X post marks nothing
+      if (okRelays.length && typeof msg.sourceUrl === 'string') await rememberSynced(msg.sourceUrl, msg.event, okRelays);
       return { results };
     }
     case 'check-duplicate': {

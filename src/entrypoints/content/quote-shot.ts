@@ -4,7 +4,7 @@ import { hideForShot, quoteAlt, quoteBox } from '../../extractors/x-quote';
 import { sendToBackground } from '../../messaging';
 
 /** XMRadar's own overlays, hidden while the tab is captured so none ends up in the picture */
-const OVERLAYS = 'xmradar-ui, xmradar-tip, xmradar-site, xmradar-receipt';
+const OVERLAYS = 'xmradar-ui, xmradar-tip, xmradar-site, xmradar-receipt, xmradar-synced';
 const ANSWER_MS = 3000;
 
 const frame = () => new Promise<void>((r) => requestAnimationFrame(() => r()));

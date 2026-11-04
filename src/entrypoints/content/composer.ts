@@ -427,7 +427,7 @@ async function mountComposer(ctx: ContentScriptContext, msg: OpenComposerMsg, ta
         retryBtn.textContent = 'Retrying…';
         step({ kind: 'retrying', count: again.length });
         try {
-          renderResults((await sendToBackground({ type: 'republish', sessionId: msg.sessionId, event: published, relays: again })).results);
+          renderResults((await sendToBackground({ type: 'republish', sessionId: msg.sessionId, event: published, relays: again, sourceUrl: post.sourceUrl })).results);
           // the status line said "Retrying…"
           if (shown.some((r) => r.ok)) showPublished();
           else setStatus(`No relay accepted the ${art ? 'article' : 'note'}.`, 'error');

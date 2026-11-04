@@ -149,7 +149,8 @@ export type BgRequest =
   | { type: 'fetch-image'; sessionId: string; url: string }
   | { type: 'upload-image'; sessionId: string; url: string; sha256: string; auth: string }
   | { type: 'publish'; sessionId: string; event: Event; sourceUrl: string; text: string }
-  | { type: 'republish'; sessionId: string; event: Event; relays: string[] }
+  /** `sourceUrl`: the post copied, so a retry that is the first to succeed still marks it (PLAN-SYNCEDMARK) */
+  | { type: 'republish'; sessionId: string; event: Event; relays: string[]; sourceUrl?: string }
   | { type: 'check-duplicate'; sessionId: string; sourceUrl: string; text: string }
   | { type: 'close-session'; sessionId: string }
   /** AI tag suggestions (PLAN-TAGS): whether Suggest can show, and one request on a trusted click */

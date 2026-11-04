@@ -1,3 +1,4 @@
+import type { SyncedPosts } from './nostr/synced';
 import type { DirectoryStatus } from './identity/directory';
 import type { InboxState } from './xap/inbox';
 import { storage, type WxtStorageItem } from 'wxt/utils/storage';
@@ -37,6 +38,8 @@ export interface Settings {
   logFetch?: boolean;
   /** "Remove X's share tracking from links"; read with `cleanXLinksOn`, on unless switched off */
   cleanXLinks?: boolean;
+  /** "Mark posts on X that you copied to Nostr" (PLAN-SYNCEDMARK); read with `syncedMarkOn`, on unless switched off */
+  syncedMark?: boolean;
   /** Tags every copy starts with (PLAN-TAGS) */
   defaultTags?: string[];
   /** "Also add tags as #hashtags at the end of the note"; read with `hashtagLineOn`, on unless switched off */
@@ -52,6 +55,7 @@ export interface Settings {
 export const shareMenuOn = (s: Partial<Settings> | null | undefined) => s?.shareMenuX !== false;
 export const receiptsOn = (s: Partial<Settings> | null | undefined) => s?.receiptsCheck !== false;
 export const cleanXLinksOn = (s: Partial<Settings> | null | undefined) => s?.cleanXLinks !== false;
+export const syncedMarkOn = (s: Partial<Settings> | null | undefined) => s?.syncedMark !== false;
 export const hashtagLineOn = (s: Partial<Settings> | null | undefined) => s?.hashtagLine !== false;
 export const useNip65On = (s: Partial<Settings> | null | undefined) => s?.useNip65 !== false;
 export const siwmHelperOn = (s: Partial<Settings> | null | undefined) => s?.siwmHelper !== false;
@@ -109,6 +113,9 @@ export const pubkeyItem = storage.defineItem<string | null>('local:pubkey', { fa
 
 /** Hashes of already-published (normalized source URL + content). */
 export const postedItem = storage.defineItem<string[]>('local:posted', { fallback: [] });
+
+/** X posts copied to Nostr, by status id (PLAN-SYNCEDMARK); recorded whatever the mark switch says, shown only when it's on. */
+export const syncedPostsItem = storage.defineItem<SyncedPosts>('local:syncedPosts', { fallback: {} });
 
 export function parseRelayList(text: string): string[] {
   const out = new Set<string>();

@@ -9,6 +9,7 @@ import { startReceipts } from './receipt';
 import { startSiteInfo } from './site';
 import { startBadges } from './x-badges';
 import { startCopyLinks } from './x-copy-links';
+import { startSyncedMarks } from './x-synced';
 import { shareMenu, type ShareMenu } from './x-share';
 import './style.css';
 
@@ -23,6 +24,8 @@ export default defineContentScript({
 
     const onX = window === window.top && isXHost(location.hostname);
     if (onX) startBadges(ctx);
+    // posts copied to Nostr get a small mark; switched live from the options page
+    if (onX) startSyncedMarks(ctx);
     // swap receipts (NKIP-0001) on any other site's top frame
     startReceipts(ctx);
     // site info from the xmr.club feed (badge, popup card, warnings)

@@ -2,7 +2,7 @@ import { npubEncode } from 'nostr-tools/nip19';
 import { currentBuild } from '../../build-info';
 import { mountUpdatePanel } from '../../ui/update-notice';
 import { sendToBackground } from '../../messaging';
-import { cleanXLinksOn, siwmHelperOn, useNip65On, patchSettings, pubkeyItem, settingsItem, shareMenuOn, type Settings } from '../../settings';
+import { cleanXLinksOn, syncedMarkOn, siwmHelperOn, useNip65On, patchSettings, pubkeyItem, settingsItem, shareMenuOn, type Settings } from '../../settings';
 import { mountBadgeLook } from '../../ui/badge-look-controls';
 import { mountBurnerPanel } from '../../ui/burner-panel';
 import { mountReceiptsPanel } from '../../ui/receipts-panel';
@@ -21,6 +21,7 @@ const appendEl = $<HTMLInputElement>('append-source');
 const debugEl = $<HTMLInputElement>('debug');
 const shareMenuEl = $<HTMLInputElement>('share-menu-x');
 const cleanLinksEl = $<HTMLInputElement>('clean-x-links');
+const syncedMarkEl = $<HTMLInputElement>('synced-mark');
 const useNip65El = $<HTMLInputElement>('use-nip65');
 const siwmEl = $<HTMLInputElement>('siwm-helper');
 const signerStatus = $('signer-status');
@@ -59,6 +60,7 @@ const boxes: [HTMLInputElement, (on: boolean) => Partial<Settings>][] = [
   [debugEl, (on) => ({ debug: on })],
   [shareMenuEl, (on) => ({ shareMenuX: on })],
   [cleanLinksEl, (on) => ({ cleanXLinks: on })],
+  [syncedMarkEl, (on) => ({ syncedMark: on })],
 ];
 for (const [el] of boxes) el.disabled = true;
 void settingsItem.getValue().then((s) => {
@@ -66,6 +68,7 @@ void settingsItem.getValue().then((s) => {
   debugEl.checked = s.debug;
   shareMenuEl.checked = shareMenuOn(s);
   cleanLinksEl.checked = cleanXLinksOn(s);
+  syncedMarkEl.checked = syncedMarkOn(s);
   for (const [el] of boxes) el.disabled = false;
 });
 // the relay switch saves like the boxes, but says so next to the relays (PLAN-NIP65SWITCH)

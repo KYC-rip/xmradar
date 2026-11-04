@@ -17,6 +17,8 @@ Website: https://xmradar.app (source in `site/`; `python3 -I site/build.py` fill
 
 Right-click a post → **Copy post to Nostr** → edit in the composer → **Publish**. You can also hover a post and press `Alt+Shift+N`, or on X pick **Copy to Nostr** in a tweet's share menu (turn it off under Options → Posting to Nostr → Behaviour). Publishing runs in a small pill in the corner (Retry, View, Open); several copies can run at once, and a draft is kept until you publish or close it.
 
+On X, a post you copied gets a small **Nostr ✓** at its top right, in front of Grok's button; it opens the copy (notes on ros.rip, articles on njump). Kept in this browser only: the post's id and the copy's reference, for the last 1,000 copies. Posts copied before 0.6.10 aren't marked. A copied thread is marked on its first tweet. Turn it off under Options → Posting to Nostr → Behaviour.
+
 - Signing goes through your NIP-07 extension (Alby, nos2x…), so your key never touches this extension.
 - Images are re-uploaded to a Blossom server (default `https://blossom.primal.net`) and tagged with NIP-92 `imeta`.
 - Relays: whatever is set in the options page; there's nothing you have to fill in. If none are set, your NIP-65 write relays are used, and if you have no relay list, XMRadar's picks: damus, nos.lol, primal, nostr.mom and relay.ditto.pub (popular and free to write to, so a post still lands when one is down). Options shows which relays a post goes to. Switch off **Post to my NIP-65 relay list** to post only to XMRadar's picks (for a relay list full of dead relays you don't want to fix now); it changes where posts go only, and lookups still read your list. Only posts use the last two; every lookup (Xaps, badges, relay lists) stays on damus, nos.lol and primal. A retry of failed relays goes only to relays that post was first sent to. A relay that failed on 3 posts in a row (gone, or members-only) is skipped for a day, then tried once again; the results say so, and where to remove it (your Nostr client's relay settings for a NIP-65 list). If every relay is failing, all are tried. The copy's pill closes itself once at least 2 relays have the post, even if others failed.
@@ -68,7 +70,7 @@ Until XMRadar is in the stores, install a release zip (or build it yourself):
 
 ## Options
 
-- **Posting to Nostr:** **Test signer** (opens xmradar.app/signer, asks your NIP-07 signer for your pubkey, shows your npub); relays, by hand or **Load from NIP-65**; Blossom server; default tags and the hashtag line; tag suggestions; append a link to the original (off); X's share menu entry; remove X's share tracking; show the event JSON before signing (debug).
+- **Posting to Nostr:** **Test signer** (opens xmradar.app/signer, asks your NIP-07 signer for your pubkey, shows your npub); relays, by hand or **Load from NIP-65**; Blossom server; default tags and the hashtag line; tag suggestions; append a link to the original (off); X's share menu entry; the Nostr ✓ mark on copied posts; remove X's share tracking; show the event JSON before signing (debug).
 - **Monero identity:** the four steps below.
 - **Badges on X:** badges, addresses from X profiles, discovery via relays, the Xap receipt question, the badge's look.
 - **Burner email.**
