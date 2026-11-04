@@ -1,6 +1,7 @@
 import { handleFromTarget } from '../../identity/x-handle';
 import { sendToBackground, type OpenComposerMsg, type OpenTipMsg } from '../../messaging';
-import { cleanXLinksOn, settingsItem, shareMenuOn } from '../../settings';
+import { cleanXLinksOn, settingsItem, shareMenuOn, siwmHelperOn } from '../../settings';
+import { startSigninLinks } from '../../siwm/link-click';
 import { isXHost } from '../../sender';
 import { openComposer } from './composer';
 import { openTip } from './tip';
@@ -65,6 +66,22 @@ export default defineContentScript({
         setCopyLinks(false);
       });
     }
+
+    // Sign in with Monero links open XMRadar's consent window; the user's own wallet signs (PLAN-SIWM)
+    let siwmOn = true;
+    const readSiwm = (s: Parameters<typeof siwmHelperOn>[0]) => (siwmOn = siwmHelperOn(s));
+    void settingsItem.getValue().then(readSiwm);
+    const unwatchSiwm = settingsItem.watch(readSiwm);
+    // no consent window (helper switched off meanwhile, or it couldn't open): the link does what it would without XMRadar
+    const stopSignin = startSigninLinks(document, () => siwmOn, (uri) =>
+      void sendToBackground({ type: 'siwm-open', uri })
+        .then((r) => r ?? Promise.reject())
+        .catch(() => location.assign(uri)),
+    );
+    ctx.onInvalidated(() => {
+      unwatchSiwm();
+      stopSignin();
+    });
 
     let lastContextTarget: Element | null = null;
     let lastHover: Element | null = null;

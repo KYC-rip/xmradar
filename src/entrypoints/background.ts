@@ -21,7 +21,7 @@ import { allRelaysFrom, fetchWriteRelays, publishToRelays, readEach, readRelay }
 import { assertFetchableImageUrl } from '../nostr/url-guard';
 import { checkSessionSender, checkShareMenuSender, isExtensionPageSender, isSignerPage, isXUrl, SIGNER_PAGE, shareMenuRateLimit, withoutTab } from '../sender';
 import { setAuto, suggestFor, tagsReady } from '../ai/requests';
-import { DEFAULT_RELAYS, directoryStatusItem, nip65CacheItem, useNip65On, INDEX_RELAYS, withoutIndex, myHandleItem, postedItem, pubkeyItem, receiptsOn, settingsItem, siteInfoOn, updateCheckOn, updateStateItem, logoPackItem, xapInboxItem, xapNotifyOn, siteWarningsOn, copyReportsOn, swapRecordDaysItem, swapRecordsCleanedItem, xapMarksItem, xClaimsChangedItem, xClaimsOn, xmrSettingsItem } from '../settings';
+import { DEFAULT_RELAYS, directoryStatusItem, nip65CacheItem, siwmHelperOn, useNip65On, INDEX_RELAYS, withoutIndex, myHandleItem, postedItem, pubkeyItem, receiptsOn, settingsItem, siteInfoOn, updateCheckOn, updateStateItem, logoPackItem, xapInboxItem, xapNotifyOn, siteWarningsOn, copyReportsOn, swapRecordDaysItem, swapRecordsCleanedItem, xapMarksItem, xClaimsChangedItem, xClaimsOn, xmrSettingsItem } from '../settings';
 import { storage } from 'wxt/utils/storage';
 import { activeInbox, burnerCreatingItem, burnerInboxItem, burnerLastErrorItem, burnFreeInbox, createFreeInbox, forgetImportedInbox, importInbox, type BurnerDeps } from '../burner/service';
 import { idbTokenStore } from '../burner/token-store';
@@ -54,6 +54,7 @@ import { releaseUrl, UPDATE_NOTICE_ID, updateFor, updateKeeper } from '../update
 import { logoKeeper } from '../sites/logos';
 import { INBOX_NOTICE_ID, inboxKeeper, MAX_RELAYS } from '../xap/inbox';
 import { shootQuote, shotGate, validRequest, type Crop, type ShotDeps } from '../capture/quote-shot';
+import { cappedText, siwmService, type SiwmStore } from '../siwm/service';
 
 const MENU_ID = 'xmradar';
 const TIP_MENU_ID = 'xmradar-tip';
@@ -88,6 +89,25 @@ const publishRelaysItem = storage.defineItem<Record<string, string[]>>('session:
 // relays that keep failing are skipped for a day (PLAN-DEADRELAYS)
 const relayHealth = healthStore(storage.defineItem<Health>('local:relayHealth', { fallback: {} }));
 // best effort: the post went out either way, so a storage error must not turn it into a failure
+// Sign in with Monero links waiting in a consent window (PLAN-SIWM); XMRadar holds no key, the user's wallet signs
+const siwm = siwmService({
+  store: storage.defineItem<SiwmStore>('session:siwm', { fallback: {} }),
+  now: Date.now,
+  randomId: () => crypto.randomUUID(),
+  openWindow: async (id) => (await browser.windows.create({ url: browser.runtime.getURL(`/siwm.html#${id}`), type: 'popup', width: 520, height: 720 }))?.id,
+  post: async (url, body) => {
+    const r = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body,
+      credentials: 'omit',
+      referrerPolicy: 'no-referrer',
+      redirect: 'error',
+      signal: AbortSignal.timeout(15_000),
+    });
+    return { status: r.status, text: await cappedText(r) };
+  },
+});
 const recordHealth = (results: Parameters<typeof relayHealth.record>[0]) => relayHealth.record(results).catch((e) => console.warn('[XMRadar] relay health', (e as Error).message));
 
 type CacheEntries<V> = [string, { v: V; at: number }][];
@@ -322,6 +342,8 @@ export default defineBackground(() => {
     tab ??= (await browser.tabs.query({ active: true, currentWindow: true }))[0];
     if (tab) void openComposer(tab, 0, { fromCommand: true });
   });
+
+  browser.windows.onRemoved.addListener((windowId) => void siwm.windowClosed(windowId).catch(() => {}));
 
   browser.tabs.onRemoved.addListener((tabId) => {
     buckets.delete(tabId);
@@ -564,6 +586,34 @@ async function handle(msg: BgRequest, sender: Browser.runtime.MessageSender): Pr
     case 'close-session': {
       await requireSession(msg.sessionId, sender);
       await endSession(msg.sessionId);
+      return null;
+    }
+    case 'siwm-open': {
+      // a link clicked in a page (the content script; the page's host comes from the browser, not the page) or pasted in the consent window
+      // pasted: the consent window is already open and shows it
+      if (isExtensionPage(sender)) return siwm.open(msg.uri, null, false);
+      if (sender.id !== browser.runtime.id || sender.tab?.id == null) throw new Error('Not allowed');
+      if (!siwmHelperOn(await settingsItem.getValue())) return null;
+      let host: string;
+      try {
+        host = new URL(sender.url ?? '').host;
+      } catch {
+        throw new Error('Not allowed');
+      }
+      if (!host) throw new Error('Not allowed');
+      return siwm.open(msg.uri, host);
+    }
+    case 'siwm-get': {
+      if (!isExtensionPage(sender)) throw new Error('Not allowed');
+      return siwm.get(msg.id);
+    }
+    case 'siwm-submit': {
+      if (!isExtensionPage(sender)) throw new Error('Not allowed');
+      return siwm.submit(msg.id, msg.signature);
+    }
+    case 'siwm-close': {
+      if (!isExtensionPage(sender)) throw new Error('Not allowed');
+      await siwm.close(msg.id);
       return null;
     }
     case 'relays-in-use': {

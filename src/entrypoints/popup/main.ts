@@ -63,6 +63,10 @@ void browser.windows
   .getCurrent()
   .then((w) => (windowId = w.id))
   .finally(() => (($('chat-open') as HTMLButtonElement).disabled = false));
+$('siwm-open').addEventListener('click', async () => {
+  await browser.windows.create({ url: browser.runtime.getURL('/siwm.html'), type: 'popup', width: 520, height: 720 });
+  window.close();
+});
 $('chat-open').addEventListener('click', () => {
   void openChat({
     sidePanelOpen: panelApis.sidePanel?.open.bind(panelApis.sidePanel),

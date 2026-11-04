@@ -9,13 +9,40 @@ const ANSWER_MS = 3000;
 
 const frame = () => new Promise<void>((r) => requestAnimationFrame(() => r()));
 
-function hideOverlays(doc: Document): () => void {
-  const undo = [...doc.querySelectorAll<HTMLElement>(OVERLAYS)].map((el) => {
-    const before = el.getAttribute('style');
-    el.style.setProperty('visibility', 'hidden', 'important');
-    return () => (before === null ? el.removeAttribute('style') : el.setAttribute('style', before));
-  });
-  return () => undo.forEach((f) => f());
+/**
+ * Hidden inline, and inside an open shadow root as well: WXT's UIs (the pill, the tip popup) reset their
+ * host with `:host{all:initial !important}`, which beats any style from the page (PLAN-SHOTOVERLAYS).
+ * A rule added after it in the same root wins. On a failure part-way, what was hidden is put back.
+ */
+export function hideOverlays(doc: Document): () => void {
+  const undo: (() => void)[] = [];
+  // each step on its own, so one that fails doesn't leave the rest hidden
+  const restore = () =>
+    undo
+      .splice(0)
+      .reverse()
+      .forEach((f) => {
+        try {
+          f();
+        } catch {}
+      });
+  try {
+    for (const el of doc.querySelectorAll<HTMLElement>(OVERLAYS)) {
+      const before = el.getAttribute('style');
+      undo.push(() => (before === null ? el.removeAttribute('style') : el.setAttribute('style', before)));
+      el.style.setProperty('visibility', 'hidden', 'important');
+      if (el.shadowRoot) {
+        const rule = doc.createElement('style');
+        rule.textContent = ':host{visibility:hidden !important}';
+        undo.push(() => rule.remove());
+        el.shadowRoot.append(rule);
+      }
+    }
+  } catch (e) {
+    restore();
+    throw e;
+  }
+  return restore;
 }
 
 const inView = (r: DOMRect) => r.top >= 0 && r.left >= 0 && r.bottom <= innerHeight && r.right <= innerWidth;

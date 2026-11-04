@@ -218,6 +218,15 @@
             <span data-status="message" class="row-hint" role="status" aria-live="polite"></span>
           </div>
           <p class="hint">Also on <a href="https://xmr.bio" target="_blank" rel="noopener noreferrer">xmr.bio</a>: claim your profile there and use its "Link with NIP-07" button.</p>
+
+          <div class="field" id="siwm-field">
+            <h2>Sign in with Monero</h2>
+            <div>
+              <label><input id="siwm-helper" type="checkbox" /> Help with “Sign in with Monero” links (NKIP-0003): a click shows what you'd sign, your own wallet signs</label>
+              <p class="hint indent">XMRadar holds no Monero key. It checks the link, refuses one that came from another site, checks your wallet's signature and sends it to the site. <button id="siwm-paste" type="button" class="link">Paste a link…</button></p>
+              <span id="siwm-saved" class="saved"></span>
+            </div>
+          </div>
         </section>
 
         <section id="badges" data-section="badges">

@@ -177,7 +177,7 @@ describe('built manifests', () => {
   });
   it.skipIf(!existsSync(join(process.cwd(), 'output/firefox-mv3/manifest.json')))('Firefox has the sidebar', () => {
     const m = read('firefox-mv3');
-    expect(m.sidebar_action).toMatchObject({ default_panel: 'sidepanel.html', default_title: 'XMRadar chat' });
+    expect(m.sidebar_action).toMatchObject({ default_panel: 'sidepanel.html', default_title: 'XMRadar chat', open_at_install: false });
     expect(m.host_permissions).toEqual(['<all_urls>']);
   });
 });

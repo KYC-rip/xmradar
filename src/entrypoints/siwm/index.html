@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Sign in with Monero · XMRadar</title>
+  </head>
+  <body>
+    <main>
+      <h1>Sign in with Monero</h1>
+
+      <section id="paste" hidden>
+        <p class="hint">Paste a <code>monero-signin:</code> link from a site's sign-in page. XMRadar checks it and shows what you'd sign; your own wallet signs.</p>
+        <textarea id="paste-uri" rows="5" spellcheck="false" aria-label="Sign-in link"></textarea>
+        <button id="paste-check" type="button" class="primary">Check link</button>
+      </section>
+
+      <section id="refused" class="card pad refused" hidden>
+        <strong>XMRadar won't help sign this.</strong>
+        <span id="refused-why"></span>
+      </section>
+
+      <section id="consent" hidden>
+        <div class="card pad warn" role="note">
+          <strong>Approve only a sign-in you started yourself, just now, on <span data-f="origin"></span>.</strong>
+          <span>That is the site in your browser's address bar. If you didn't just click "Sign in with Monero" there, close this window.</span>
+        </div>
+        <dl class="card pad facts">
+          <dt>Site</dt>
+          <dd class="mono" data-f="origin"></dd>
+          <dt>Signing in as</dt>
+          <dd data-f="handle"></dd>
+          <dt>Address</dt>
+          <dd class="mono wrap" data-f="address"></dd>
+          <dt>Signature goes to</dt>
+          <dd><span class="mono" data-f="callback"></span> <span data-f="callback-site" class="tag"></span></dd>
+          <dt>Link came from</dt>
+          <dd data-f="page"></dd>
+          <dt>Expires</dt>
+          <dd data-f="expires"></dd>
+        </dl>
+
+        <h2>1. Sign this message in your wallet</h2>
+        <pre class="card pad message" data-f="message"></pre>
+        <div class="row">
+          <button id="copy" type="button" class="soft">Copy message</button>
+          <button id="copy-address" type="button" class="soft">Copy address</button>
+          <button id="save-file" type="button" class="soft">Save message as file</button>
+        </div>
+        <div class="row">
+          <a id="ripley" class="button-link">Open in Ripley Terminal</a>
+          <a id="wallet-app" class="button-link">Open in my wallet app</a>
+        </div>
+        <p class="hint">No wallet opens for these links? Sign the message by hand:</p>
+        <div id="guide" class="guide"></div>
+        <p id="guide-note" class="hint"></p>
+
+        <h2>2. Paste the signature</h2>
+        <textarea id="signature" rows="3" spellcheck="false" placeholder="SigV2…" aria-label="Signature"></textarea>
+        <div class="row">
+          <button id="send" type="button" class="primary">Send to <span data-f="callback"></span></button>
+          <span id="status" class="row-hint" role="status" aria-live="polite"></span>
+        </div>
+      </section>
+
+      <section id="done" class="card pad ok" hidden>
+        <strong>Signed in.</strong>
+        <span>Go back to <span data-f="origin"></span>.</span>
+      </section>
+    </main>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

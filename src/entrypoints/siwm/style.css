@@ -1,0 +1,30 @@
+body { background: var(--bg); color: var(--fg); }
+main { max-width: 640px; margin: 0 auto; padding: 18px 18px 28px; display: flex; flex-direction: column; gap: 12px; }
+h1 { font-size: 18px; margin: 0; }
+h2 { font-size: 14px; margin: 8px 0 0; }
+section { display: flex; flex-direction: column; gap: 10px; }
+/* `display` above would otherwise show hidden sections */
+[hidden] { display: none !important; }
+.card.pad { display: flex; flex-direction: column; gap: 4px; padding: 12px 14px; }
+.warn { border-color: var(--warn); }
+.refused { border-color: var(--danger); }
+.ok { border-color: var(--ok); }
+.card.pad.facts { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 14px; margin: 0; }
+.facts dt { color: var(--muted); }
+.facts dd { margin: 0; min-width: 0; }
+.mono { font-family: var(--mono); font-size: 12px; }
+.wrap { overflow-wrap: anywhere; word-break: break-all; }
+/* words stay whole; only a line too long for the window (the address) breaks */
+.message { overflow-wrap: anywhere; }
+.message { white-space: pre-wrap; font-family: var(--mono); font-size: 12px; margin: 0; }
+.tag { font-size: 12px; font-weight: 600; padding: 1px 6px; border-radius: 6px; background: var(--chip); }
+.tag.other { background: var(--danger); color: var(--on-accent); }
+.row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.guide { display: flex; flex-direction: column; gap: 6px; }
+.guide details { padding: 8px 12px; }
+.guide summary { cursor: pointer; font-weight: 600; }
+.guide ol { margin: 6px 0 0; padding-left: 20px; display: flex; flex-direction: column; gap: 4px; }
+.guide .warn-line { margin: 6px 0 0; color: var(--danger); font-weight: 600; }
+.guide code { font-family: var(--mono); font-size: 12px; overflow-wrap: break-word; }
+textarea { width: 100%; box-sizing: border-box; font-family: var(--mono); font-size: 12px; }
+.button-link { color: var(--accent); font-weight: 600; text-decoration: none; padding: 6px 4px; }

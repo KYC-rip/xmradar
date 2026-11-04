@@ -45,6 +45,8 @@ export interface Settings {
   updateCheck?: boolean;
   /** "Post to my NIP-65 relay list when the box above is empty" (PLAN-NIP65SWITCH); read with `useNip65On`, on unless switched off */
   useNip65?: boolean;
+  /** "Help with Sign in with Monero links" (PLAN-SIWM); read with `siwmHelperOn`, on unless switched off */
+  siwmHelper?: boolean;
 }
 
 export const shareMenuOn = (s: Partial<Settings> | null | undefined) => s?.shareMenuX !== false;
@@ -52,6 +54,7 @@ export const receiptsOn = (s: Partial<Settings> | null | undefined) => s?.receip
 export const cleanXLinksOn = (s: Partial<Settings> | null | undefined) => s?.cleanXLinks !== false;
 export const hashtagLineOn = (s: Partial<Settings> | null | undefined) => s?.hashtagLine !== false;
 export const useNip65On = (s: Partial<Settings> | null | undefined) => s?.useNip65 !== false;
+export const siwmHelperOn = (s: Partial<Settings> | null | undefined) => s?.siwmHelper !== false;
 export const updateCheckOn = (s: Partial<Settings> | null | undefined) => s?.updateCheck !== false;
 export const logFetchOn = (s: Partial<Settings> | null | undefined) => receiptsOn(s) && s?.logFetch !== false;
 

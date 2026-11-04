@@ -2,7 +2,7 @@ import { npubEncode } from 'nostr-tools/nip19';
 import { currentBuild } from '../../build-info';
 import { mountUpdatePanel } from '../../ui/update-notice';
 import { sendToBackground } from '../../messaging';
-import { cleanXLinksOn, useNip65On, patchSettings, pubkeyItem, settingsItem, shareMenuOn, type Settings } from '../../settings';
+import { cleanXLinksOn, siwmHelperOn, useNip65On, patchSettings, pubkeyItem, settingsItem, shareMenuOn, type Settings } from '../../settings';
 import { mountBadgeLook } from '../../ui/badge-look-controls';
 import { mountBurnerPanel } from '../../ui/burner-panel';
 import { mountReceiptsPanel } from '../../ui/receipts-panel';
@@ -22,6 +22,7 @@ const debugEl = $<HTMLInputElement>('debug');
 const shareMenuEl = $<HTMLInputElement>('share-menu-x');
 const cleanLinksEl = $<HTMLInputElement>('clean-x-links');
 const useNip65El = $<HTMLInputElement>('use-nip65');
+const siwmEl = $<HTMLInputElement>('siwm-helper');
 const signerStatus = $('signer-status');
 
 const ALL_SITES = { origins: ['<all_urls>'] };
@@ -38,6 +39,19 @@ void browser.permissions.contains(ALL_SITES).then((ok) => $('perm').classList.to
 $('grant').addEventListener('click', async () => {
   if (await browser.permissions.request(ALL_SITES)) $('perm').classList.add('hidden');
 });
+
+// Sign in with Monero (PLAN-SIWM): the link helper's switch, and a window to paste a link into
+siwmEl.disabled = true;
+void settingsItem.getValue().then((s) => {
+  siwmEl.checked = siwmHelperOn(s);
+  siwmEl.disabled = false;
+});
+siwmEl.addEventListener('change', async () => {
+  await patchSettings({ siwmHelper: siwmEl.checked });
+  setStatus($('siwm-saved'), 'Saved', 'ok');
+  setTimeout(() => setStatus($('siwm-saved'), ''), 1500);
+});
+$('siwm-paste').addEventListener('click', () => void browser.windows.create({ url: browser.runtime.getURL('/siwm.html'), type: 'popup', width: 520, height: 720 }));
 
 // Behaviour: saved on change, each box its own field; disabled until the saved values load
 const boxes: [HTMLInputElement, (on: boolean) => Partial<Settings>][] = [

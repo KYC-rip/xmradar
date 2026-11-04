@@ -1,0 +1,177 @@
+{
+  "nkip": 3,
+  "version": "1",
+  "note": "TEST KEYS ONLY. Mainnet-format addresses of a throwaway offline wallet whose private keys are published here; never send funds to them. Signatures are randomized: implementations check that these verify, not that they reproduce them.",
+  "test_wallet": {
+    "primary_address": "497raTyHwdNFVqt247QKVoPWgCLCDRj22CBY6zgP6Xoh6xuqR3Nncv4ejV819yTvzScMopZz65fmBc5abGkpKAkxDUs5zvf",
+    "subaddress_0_1": "89oGX4G9ydvdiegCper9ULee5tUjzqrrhKApwoac2tgDPBzJCW8nt5bRRcFV4E1i4c6JCrjurGy9UQZXxSdVr9yq1g7ya56",
+    "private_spend_key": "048b6263a32d7f03b7630797bb74d877570d5ba371fddf2ed69e04be8d832e0a",
+    "private_view_key": "01ba78a651365d1c9245fea64df6eea73c899d18922df6918a556be589181c01"
+  },
+  "valid": [
+    {
+      "name": "primary address; callback on a different site (allowed, shown)",
+      "uri": "monero-signin:?address=497raTyHwdNFVqt247QKVoPWgCLCDRj22CBY6zgP6Xoh6xuqR3Nncv4ejV819yTvzScMopZz65fmBc5abGkpKAkxDUs5zvf&nonce=9f86d081884c7d659a2feaa0c55ad015&session=0b7e5c2a-6c1e-4f0e-9d4a-2f3b8a1c5d6e&origin=example.org&purpose=login&handle=alice&dk=9ee202a85da63321&issued_at=2026-10-27T12%3A00%3A00.000Z&expires_at=2026-10-27T12%3A03%3A00.000Z&return_url=https%3A%2F%2Fauth.example.net%2Fsignin%2Fcallback&v=1",
+      "device_pubkey": "3d4017c3e843895a92b70aa74d1b7ebc9c982ccf2ec4968cc0cd55f12af4660c",
+      "message": "example.org wants you to sign in with your Monero address:\n497raTyHwdNFVqt247QKVoPWgCLCDRj22CBY6zgP6Xoh6xuqR3Nncv4ejV819yTvzScMopZz65fmBc5abGkpKAkxDUs5zvf\n\nSign in to example.org as @alice. This proves you control this address. No funds move.\n\nPurpose: login\nHandle: alice\nNonce: 9f86d081884c7d659a2feaa0c55ad015\nDevice-Key: 9ee202a85da63321\nIssued-At: 2026-10-27T12:00:00.000Z\nExpiration-Time: 2026-10-27T12:03:00.000Z\nVersion: 1",
+      "message_sha256": "eb5ebfc3d974c0043ff45f4f9af6c425745b62de1d462214f3c9c92104c47083",
+      "callback_same_site": false,
+      "signatures": [
+        "SigV2AHz7AcpLYkKS7L5zY75TMQPfk4dQdrwty7o9i6vCH3CpBfDc49FqMmQ4kNWo8V8kysaSNfDnLKWbwJPPWr8ytfEX",
+        "SigV1XQ9BkcMCp1BWExrV8UT68t1dgSnQNTnhc1dRTdJdgSj4X3fEGWq5VxzEonm59La9TZRdDPL9Ks8vVK1gReZTgAu5"
+      ]
+    },
+    {
+      "name": "subaddress; callback on a subdomain of origin (same site)",
+      "uri": "monero-signin:?address=89oGX4G9ydvdiegCper9ULee5tUjzqrrhKApwoac2tgDPBzJCW8nt5bRRcFV4E1i4c6JCrjurGy9UQZXxSdVr9yq1g7ya56&nonce=9f86d081884c7d659a2feaa0c55ad015&session=0b7e5c2a-6c1e-4f0e-9d4a-2f3b8a1c5d6e&origin=example.org&purpose=login&handle=alice&dk=9ee202a85da63321&issued_at=2026-10-27T12%3A00%3A00.000Z&expires_at=2026-10-27T12%3A03%3A00.000Z&return_url=https%3A%2F%2Fauth.example.org%2Fsignin%2Fcallback&v=1",
+      "device_pubkey": "3d4017c3e843895a92b70aa74d1b7ebc9c982ccf2ec4968cc0cd55f12af4660c",
+      "message": "example.org wants you to sign in with your Monero address:\n89oGX4G9ydvdiegCper9ULee5tUjzqrrhKApwoac2tgDPBzJCW8nt5bRRcFV4E1i4c6JCrjurGy9UQZXxSdVr9yq1g7ya56\n\nSign in to example.org as @alice. This proves you control this address. No funds move.\n\nPurpose: login\nHandle: alice\nNonce: 9f86d081884c7d659a2feaa0c55ad015\nDevice-Key: 9ee202a85da63321\nIssued-At: 2026-10-27T12:00:00.000Z\nExpiration-Time: 2026-10-27T12:03:00.000Z\nVersion: 1",
+      "message_sha256": "0be5beaa35fac62b4962170ed833ae6576f86b4b2020a27d23950f135fa92820",
+      "callback_same_site": true,
+      "signatures": [
+        "SigV2ikkj6E9skqvDRun6ALjMh4WxFvs45bszk5esz9rzsrtPhtbG31TcmnZAyH4rLfYvFLFRq1oTuREHRBfZ6SZtnADG"
+      ]
+    }
+  ],
+  "invalid": [
+    {
+      "name": "line break in handle",
+      "uri": "monero-signin:?address=497raTyHwdNFVqt247QKVoPWgCLCDRj22CBY6zgP6Xoh6xuqR3Nncv4ejV819yTvzScMopZz65fmBc5abGkpKAkxDUs5zvf&nonce=9f86d081884c7d659a2feaa0c55ad015&session=0b7e5c2a-6c1e-4f0e-9d4a-2f3b8a1c5d6e&origin=example.org&purpose=login&handle=alice%0ANonce%3A+00&dk=9ee202a85da63321&issued_at=2026-10-27T12%3A00%3A00.000Z&expires_at=2026-10-27T12%3A03%3A00.000Z&return_url=https%3A%2F%2Fauth.example.net%2Fsignin%2Fcallback&v=1",
+      "reason": "control character in handle"
+    },
+    {
+      "name": "carriage return in purpose",
+      "uri": "monero-signin:?address=497raTyHwdNFVqt247QKVoPWgCLCDRj22CBY6zgP6Xoh6xuqR3Nncv4ejV819yTvzScMopZz65fmBc5abGkpKAkxDUs5zvf&nonce=9f86d081884c7d659a2feaa0c55ad015&session=0b7e5c2a-6c1e-4f0e-9d4a-2f3b8a1c5d6e&origin=example.org&purpose=login%0D&handle=alice&dk=9ee202a85da63321&issued_at=2026-10-27T12%3A00%3A00.000Z&expires_at=2026-10-27T12%3A03%3A00.000Z&return_url=https%3A%2F%2Fauth.example.net%2Fsignin%2Fcallback&v=1",
+      "reason": "control character in purpose"
+    },
+    {
+      "name": "unknown version",
+      "uri": "monero-signin:?address=497raTyHwdNFVqt247QKVoPWgCLCDRj22CBY6zgP6Xoh6xuqR3Nncv4ejV819yTvzScMopZz65fmBc5abGkpKAkxDUs5zvf&nonce=9f86d081884c7d659a2feaa0c55ad015&session=0b7e5c2a-6c1e-4f0e-9d4a-2f3b8a1c5d6e&origin=example.org&purpose=login&handle=alice&dk=9ee202a85da63321&issued_at=2026-10-27T12%3A00%3A00.000Z&expires_at=2026-10-27T12%3A03%3A00.000Z&return_url=https%3A%2F%2Fauth.example.net%2Fsignin%2Fcallback&v=2",
+      "reason": "unsupported version"
+    },
+    {
+      "name": "no version",
+      "uri": "monero-signin:?address=497raTyHwdNFVqt247QKVoPWgCLCDRj22CBY6zgP6Xoh6xuqR3Nncv4ejV819yTvzScMopZz65fmBc5abGkpKAkxDUs5zvf&nonce=9f86d081884c7d659a2feaa0c55ad015&session=0b7e5c2a-6c1e-4f0e-9d4a-2f3b8a1c5d6e&origin=example.org&purpose=login&handle=alice&dk=9ee202a85da63321&issued_at=2026-10-27T12%3A00%3A00.000Z&expires_at=2026-10-27T12%3A03%3A00.000Z&return_url=https%3A%2F%2Fauth.example.net%2Fsignin%2Fcallback",
+      "reason": "unsupported version"
+    },
+    {
+      "name": "missing return_url",
+      "uri": "monero-signin:?address=497raTyHwdNFVqt247QKVoPWgCLCDRj22CBY6zgP6Xoh6xuqR3Nncv4ejV819yTvzScMopZz65fmBc5abGkpKAkxDUs5zvf&nonce=9f86d081884c7d659a2feaa0c55ad015&session=0b7e5c2a-6c1e-4f0e-9d4a-2f3b8a1c5d6e&origin=example.org&purpose=login&handle=alice&dk=9ee202a85da63321&issued_at=2026-10-27T12%3A00%3A00.000Z&expires_at=2026-10-27T12%3A03%3A00.000Z&v=1",
+      "reason": "missing return_url"
+    },
+    {
+      "name": "missing origin",
+      "uri": "monero-signin:?address=497raTyHwdNFVqt247QKVoPWgCLCDRj22CBY6zgP6Xoh6xuqR3Nncv4ejV819yTvzScMopZz65fmBc5abGkpKAkxDUs5zvf&nonce=9f86d081884c7d659a2feaa0c55ad015&session=0b7e5c2a-6c1e-4f0e-9d4a-2f3b8a1c5d6e&purpose=login&handle=alice&dk=9ee202a85da63321&issued_at=2026-10-27T12%3A00%3A00.000Z&expires_at=2026-10-27T12%3A03%3A00.000Z&return_url=https%3A%2F%2Fauth.example.net%2Fsignin%2Fcallback&v=1",
+      "reason": "missing origin"
+    },
+    {
+      "name": "missing dk",
+      "uri": "monero-signin:?address=497raTyHwdNFVqt247QKVoPWgCLCDRj22CBY6zgP6Xoh6xuqR3Nncv4ejV819yTvzScMopZz65fmBc5abGkpKAkxDUs5zvf&nonce=9f86d081884c7d659a2feaa0c55ad015&session=0b7e5c2a-6c1e-4f0e-9d4a-2f3b8a1c5d6e&origin=example.org&purpose=login&handle=alice&issued_at=2026-10-27T12%3A00%3A00.000Z&expires_at=2026-10-27T12%3A03%3A00.000Z&return_url=https%3A%2F%2Fauth.example.net%2Fsignin%2Fcallback&v=1",
+      "reason": "missing dk"
+    },
+    {
+      "name": "origin with scheme",
+      "uri": "monero-signin:?address=497raTyHwdNFVqt247QKVoPWgCLCDRj22CBY6zgP6Xoh6xuqR3Nncv4ejV819yTvzScMopZz65fmBc5abGkpKAkxDUs5zvf&nonce=9f86d081884c7d659a2feaa0c55ad015&session=0b7e5c2a-6c1e-4f0e-9d4a-2f3b8a1c5d6e&origin=https%3A%2F%2Fexample.org&purpose=login&handle=alice&dk=9ee202a85da63321&issued_at=2026-10-27T12%3A00%3A00.000Z&expires_at=2026-10-27T12%3A03%3A00.000Z&return_url=https%3A%2F%2Fauth.example.net%2Fsignin%2Fcallback&v=1",
+      "reason": "origin is not a bare host"
+    },
+    {
+      "name": "dk uppercase",
+      "uri": "monero-signin:?address=497raTyHwdNFVqt247QKVoPWgCLCDRj22CBY6zgP6Xoh6xuqR3Nncv4ejV819yTvzScMopZz65fmBc5abGkpKAkxDUs5zvf&nonce=9f86d081884c7d659a2feaa0c55ad015&session=0b7e5c2a-6c1e-4f0e-9d4a-2f3b8a1c5d6e&origin=example.org&purpose=login&handle=alice&dk=9EE202A85DA63321&issued_at=2026-10-27T12%3A00%3A00.000Z&expires_at=2026-10-27T12%3A03%3A00.000Z&return_url=https%3A%2F%2Fauth.example.net%2Fsignin%2Fcallback&v=1",
+      "reason": "dk is not 16 lowercase hex"
+    },
+    {
+      "name": "plain http callback",
+      "uri": "monero-signin:?address=497raTyHwdNFVqt247QKVoPWgCLCDRj22CBY6zgP6Xoh6xuqR3Nncv4ejV819yTvzScMopZz65fmBc5abGkpKAkxDUs5zvf&nonce=9f86d081884c7d659a2feaa0c55ad015&session=0b7e5c2a-6c1e-4f0e-9d4a-2f3b8a1c5d6e&origin=example.org&purpose=login&handle=alice&dk=9ee202a85da63321&issued_at=2026-10-27T12%3A00%3A00.000Z&expires_at=2026-10-27T12%3A03%3A00.000Z&return_url=http%3A%2F%2Fauth.example.net%2Fcb&v=1",
+      "reason": "return_url must be https"
+    },
+    {
+      "name": "non-web callback",
+      "uri": "monero-signin:?address=497raTyHwdNFVqt247QKVoPWgCLCDRj22CBY6zgP6Xoh6xuqR3Nncv4ejV819yTvzScMopZz65fmBc5abGkpKAkxDUs5zvf&nonce=9f86d081884c7d659a2feaa0c55ad015&session=0b7e5c2a-6c1e-4f0e-9d4a-2f3b8a1c5d6e&origin=example.org&purpose=login&handle=alice&dk=9ee202a85da63321&issued_at=2026-10-27T12%3A00%3A00.000Z&expires_at=2026-10-27T12%3A03%3A00.000Z&return_url=monero%3A497raTyHwdNFVqt247QKVoPWgCLCDRj22CBY6zgP6Xoh6xuqR3Nncv4ejV819yTvzScMopZz65fmBc5abGkpKAkxDUs5zvf&v=1",
+      "reason": "return_url must be https"
+    },
+    {
+      "name": "window over 15 minutes",
+      "uri": "monero-signin:?address=497raTyHwdNFVqt247QKVoPWgCLCDRj22CBY6zgP6Xoh6xuqR3Nncv4ejV819yTvzScMopZz65fmBc5abGkpKAkxDUs5zvf&nonce=9f86d081884c7d659a2feaa0c55ad015&session=0b7e5c2a-6c1e-4f0e-9d4a-2f3b8a1c5d6e&origin=example.org&purpose=login&handle=alice&dk=9ee202a85da63321&issued_at=2026-10-27T12%3A00%3A00.000Z&expires_at=2026-10-27T12%3A15%3A00.001Z&return_url=https%3A%2F%2Fauth.example.net%2Fsignin%2Fcallback&v=1",
+      "reason": "time window"
+    },
+    {
+      "name": "expiry before issue",
+      "uri": "monero-signin:?address=497raTyHwdNFVqt247QKVoPWgCLCDRj22CBY6zgP6Xoh6xuqR3Nncv4ejV819yTvzScMopZz65fmBc5abGkpKAkxDUs5zvf&nonce=9f86d081884c7d659a2feaa0c55ad015&session=0b7e5c2a-6c1e-4f0e-9d4a-2f3b8a1c5d6e&origin=example.org&purpose=login&handle=alice&dk=9ee202a85da63321&issued_at=2026-10-27T12%3A00%3A00.000Z&expires_at=2026-10-27T11%3A59%3A00.000Z&return_url=https%3A%2F%2Fauth.example.net%2Fsignin%2Fcallback&v=1",
+      "reason": "time window"
+    },
+    {
+      "name": "integrated address",
+      "uri": "monero-signin:?address=4AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA&nonce=9f86d081884c7d659a2feaa0c55ad015&session=0b7e5c2a-6c1e-4f0e-9d4a-2f3b8a1c5d6e&origin=example.org&purpose=login&handle=alice&dk=9ee202a85da63321&issued_at=2026-10-27T12%3A00%3A00.000Z&expires_at=2026-10-27T12%3A03%3A00.000Z&return_url=https%3A%2F%2Fauth.example.net%2Fsignin%2Fcallback&v=1",
+      "reason": "address is not"
+    },
+    {
+      "name": "duplicate parameter",
+      "uri": "monero-signin:?address=497raTyHwdNFVqt247QKVoPWgCLCDRj22CBY6zgP6Xoh6xuqR3Nncv4ejV819yTvzScMopZz65fmBc5abGkpKAkxDUs5zvf&nonce=9f86d081884c7d659a2feaa0c55ad015&session=0b7e5c2a-6c1e-4f0e-9d4a-2f3b8a1c5d6e&origin=example.org&purpose=login&handle=alice&dk=9ee202a85da63321&issued_at=2026-10-27T12%3A00%3A00.000Z&expires_at=2026-10-27T12%3A03%3A00.000Z&return_url=https%3A%2F%2Fauth.example.net%2Fsignin%2Fcallback&v=1&nonce=00",
+      "reason": "duplicate parameter"
+    },
+    {
+      "name": "short nonce",
+      "uri": "monero-signin:?address=497raTyHwdNFVqt247QKVoPWgCLCDRj22CBY6zgP6Xoh6xuqR3Nncv4ejV819yTvzScMopZz65fmBc5abGkpKAkxDUs5zvf&nonce=abc123&session=0b7e5c2a-6c1e-4f0e-9d4a-2f3b8a1c5d6e&origin=example.org&purpose=login&handle=alice&dk=9ee202a85da63321&issued_at=2026-10-27T12%3A00%3A00.000Z&expires_at=2026-10-27T12%3A03%3A00.000Z&return_url=https%3A%2F%2Fauth.example.net%2Fsignin%2Fcallback&v=1",
+      "reason": "nonce shorter than 22 characters"
+    },
+    {
+      "name": "credentials in callback",
+      "uri": "monero-signin:?address=497raTyHwdNFVqt247QKVoPWgCLCDRj22CBY6zgP6Xoh6xuqR3Nncv4ejV819yTvzScMopZz65fmBc5abGkpKAkxDUs5zvf&nonce=9f86d081884c7d659a2feaa0c55ad015&session=0b7e5c2a-6c1e-4f0e-9d4a-2f3b8a1c5d6e&origin=example.org&purpose=login&handle=alice&dk=9ee202a85da63321&issued_at=2026-10-27T12%3A00%3A00.000Z&expires_at=2026-10-27T12%3A03%3A00.000Z&return_url=https%3A%2F%2Fuser%3Apw%40auth.example.net%2Fcb&v=1",
+      "reason": "credentials or a fragment"
+    },
+    {
+      "name": "fragment in callback",
+      "uri": "monero-signin:?address=497raTyHwdNFVqt247QKVoPWgCLCDRj22CBY6zgP6Xoh6xuqR3Nncv4ejV819yTvzScMopZz65fmBc5abGkpKAkxDUs5zvf&nonce=9f86d081884c7d659a2feaa0c55ad015&session=0b7e5c2a-6c1e-4f0e-9d4a-2f3b8a1c5d6e&origin=example.org&purpose=login&handle=alice&dk=9ee202a85da63321&issued_at=2026-10-27T12%3A00%3A00.000Z&expires_at=2026-10-27T12%3A03%3A00.000Z&return_url=https%3A%2F%2Fauth.example.net%2Fcb%23x&v=1",
+      "reason": "credentials or a fragment"
+    },
+    {
+      "name": "right-to-left override in handle",
+      "uri": "monero-signin:?address=497raTyHwdNFVqt247QKVoPWgCLCDRj22CBY6zgP6Xoh6xuqR3Nncv4ejV819yTvzScMopZz65fmBc5abGkpKAkxDUs5zvf&nonce=9f86d081884c7d659a2feaa0c55ad015&session=0b7e5c2a-6c1e-4f0e-9d4a-2f3b8a1c5d6e&origin=example.org&purpose=login&handle=ali%E2%80%AEce&dk=9ee202a85da63321&issued_at=2026-10-27T12%3A00%3A00.000Z&expires_at=2026-10-27T12%3A03%3A00.000Z&return_url=https%3A%2F%2Fauth.example.net%2Fsignin%2Fcallback&v=1",
+      "reason": "handle has invisible"
+    },
+    {
+      "name": "zero-width space in handle",
+      "uri": "monero-signin:?address=497raTyHwdNFVqt247QKVoPWgCLCDRj22CBY6zgP6Xoh6xuqR3Nncv4ejV819yTvzScMopZz65fmBc5abGkpKAkxDUs5zvf&nonce=9f86d081884c7d659a2feaa0c55ad015&session=0b7e5c2a-6c1e-4f0e-9d4a-2f3b8a1c5d6e&origin=example.org&purpose=login&handle=ali%E2%80%8Bce&dk=9ee202a85da63321&issued_at=2026-10-27T12%3A00%3A00.000Z&expires_at=2026-10-27T12%3A03%3A00.000Z&return_url=https%3A%2F%2Fauth.example.net%2Fsignin%2Fcallback&v=1",
+      "reason": "handle has invisible"
+    },
+    {
+      "name": "plus in nonce decodes to a space",
+      "uri": "monero-signin:?address=497raTyHwdNFVqt247QKVoPWgCLCDRj22CBY6zgP6Xoh6xuqR3Nncv4ejV819yTvzScMopZz65fmBc5abGkpKAkxDUs5zvf&nonce=9f86d081884c7d65+9a2feaa0c55ad015&session=0b7e5c2a-6c1e-4f0e-9d4a-2f3b8a1c5d6e&origin=example.org&purpose=login&handle=alice&dk=9ee202a85da63321&issued_at=2026-10-27T12%3A00%3A00.000Z&expires_at=2026-10-27T12%3A03%3A00.000Z&return_url=https%3A%2F%2Fauth.example.net%2Fsignin%2Fcallback&v=1",
+      "reason": "nonce outside"
+    },
+    {
+      "name": "uppercase purpose",
+      "uri": "monero-signin:?address=497raTyHwdNFVqt247QKVoPWgCLCDRj22CBY6zgP6Xoh6xuqR3Nncv4ejV819yTvzScMopZz65fmBc5abGkpKAkxDUs5zvf&nonce=9f86d081884c7d659a2feaa0c55ad015&session=0b7e5c2a-6c1e-4f0e-9d4a-2f3b8a1c5d6e&origin=example.org&purpose=Login&handle=alice&dk=9ee202a85da63321&issued_at=2026-10-27T12%3A00%3A00.000Z&expires_at=2026-10-27T12%3A03%3A00.000Z&return_url=https%3A%2F%2Fauth.example.net%2Fsignin%2Fcallback&v=1",
+      "reason": "purpose outside"
+    },
+    {
+      "name": "unknown parameter",
+      "uri": "monero-signin:?address=497raTyHwdNFVqt247QKVoPWgCLCDRj22CBY6zgP6Xoh6xuqR3Nncv4ejV819yTvzScMopZz65fmBc5abGkpKAkxDUs5zvf&nonce=9f86d081884c7d659a2feaa0c55ad015&session=0b7e5c2a-6c1e-4f0e-9d4a-2f3b8a1c5d6e&origin=example.org&purpose=login&handle=alice&dk=9ee202a85da63321&issued_at=2026-10-27T12%3A00%3A00.000Z&expires_at=2026-10-27T12%3A03%3A00.000Z&return_url=https%3A%2F%2Fauth.example.net%2Fsignin%2Fcallback&v=1&theme=dark",
+      "reason": "unknown parameter"
+    },
+    {
+      "name": "handle not in NFC (decomposed e + combining acute)",
+      "uri": "monero-signin:?address=497raTyHwdNFVqt247QKVoPWgCLCDRj22CBY6zgP6Xoh6xuqR3Nncv4ejV819yTvzScMopZz65fmBc5abGkpKAkxDUs5zvf&nonce=9f86d081884c7d659a2feaa0c55ad015&session=0b7e5c2a-6c1e-4f0e-9d4a-2f3b8a1c5d6e&origin=example.org&purpose=login&handle=jose%CC%81&dk=9ee202a85da63321&issued_at=2026-10-27T12%3A00%3A00.000Z&expires_at=2026-10-27T12%3A03%3A00.000Z&return_url=https%3A%2F%2Fauth.example.net%2Fsignin%2Fcallback&v=1",
+      "reason": "handle is not NFC"
+    },
+    {
+      "name": "Hangul filler in handle",
+      "uri": "monero-signin:?address=497raTyHwdNFVqt247QKVoPWgCLCDRj22CBY6zgP6Xoh6xuqR3Nncv4ejV819yTvzScMopZz65fmBc5abGkpKAkxDUs5zvf&nonce=9f86d081884c7d659a2feaa0c55ad015&session=0b7e5c2a-6c1e-4f0e-9d4a-2f3b8a1c5d6e&origin=example.org&purpose=login&handle=alice%E3%85%A4&dk=9ee202a85da63321&issued_at=2026-10-27T12%3A00%3A00.000Z&expires_at=2026-10-27T12%3A03%3A00.000Z&return_url=https%3A%2F%2Fauth.example.net%2Fsignin%2Fcallback&v=1",
+      "reason": "handle has invisible"
+    }
+  ],
+  "bad_signatures": [
+    {
+      "name": "view-key signature (wallet-rpc verify says good, signature_type view): not a sign-in",
+      "message": "example.org wants you to sign in with your Monero address:\n497raTyHwdNFVqt247QKVoPWgCLCDRj22CBY6zgP6Xoh6xuqR3Nncv4ejV819yTvzScMopZz65fmBc5abGkpKAkxDUs5zvf\n\nSign in to example.org as @alice. This proves you control this address. No funds move.\n\nPurpose: login\nHandle: alice\nNonce: 9f86d081884c7d659a2feaa0c55ad015\nDevice-Key: 9ee202a85da63321\nIssued-At: 2026-10-27T12:00:00.000Z\nExpiration-Time: 2026-10-27T12:03:00.000Z\nVersion: 1",
+      "address": "497raTyHwdNFVqt247QKVoPWgCLCDRj22CBY6zgP6Xoh6xuqR3Nncv4ejV819yTvzScMopZz65fmBc5abGkpKAkxDUs5zvf",
+      "signature": "SigV2624UZJ6oLAtgRcFjUxzzCMWj253hQ1gJWbcnwhXg4AvLXLdhhWTMNBMQSXvX2i3J3a1MKhgBfb9H35Rmy1K6XeW9"
+    },
+    {
+      "name": "primary-address signature checked against the subaddress",
+      "message": "example.org wants you to sign in with your Monero address:\n497raTyHwdNFVqt247QKVoPWgCLCDRj22CBY6zgP6Xoh6xuqR3Nncv4ejV819yTvzScMopZz65fmBc5abGkpKAkxDUs5zvf\n\nSign in to example.org as @alice. This proves you control this address. No funds move.\n\nPurpose: login\nHandle: alice\nNonce: 9f86d081884c7d659a2feaa0c55ad015\nDevice-Key: 9ee202a85da63321\nIssued-At: 2026-10-27T12:00:00.000Z\nExpiration-Time: 2026-10-27T12:03:00.000Z\nVersion: 1",
+      "address": "89oGX4G9ydvdiegCper9ULee5tUjzqrrhKApwoac2tgDPBzJCW8nt5bRRcFV4E1i4c6JCrjurGy9UQZXxSdVr9yq1g7ya56",
+      "signature": "SigV2AHz7AcpLYkKS7L5zY75TMQPfk4dQdrwty7o9i6vCH3CpBfDc49FqMmQ4kNWo8V8kysaSNfDnLKWbwJPPWr8ytfEX"
+    }
+  ]
+}

@@ -15,6 +15,7 @@ import type { GuardAnswer } from './sites/guard-rules';
 import type { ReportStatus } from './sites/report';
 import type { Lookalike } from './sites/lookalike-text';
 import type { AddressCheck } from './xmr/address';
+import type { SiwmView, SubmitResult } from './siwm/service';
 
 /** background → content */
 export interface OpenComposerMsg {
@@ -189,7 +190,11 @@ export type BgRequest =
   | { type: 'xap-inbox-check' }
   | { type: 'xap-inbox-read' }
   | { type: 'update-check-now' }
-  | { type: 'relays-in-use' };
+  | { type: 'relays-in-use' }
+  | { type: 'siwm-open'; uri: string }
+  | { type: 'siwm-get'; id: string }
+  | { type: 'siwm-submit'; id: string; signature: string }
+  | { type: 'siwm-close'; id: string };
 
 /** Port name for creating a free burner inbox; the open port keeps the worker busy during the proof of work. */
 export const BURNER_CREATE_PORT = 'burner-create';
@@ -285,7 +290,15 @@ export type BgResponse<T extends BgRequest['type']> = T extends 'fetch-image'
                                                             ? { latest: string | null; error?: string }
                                                           : T extends 'relays-in-use'
                                                             ? PostRelays & { hasPubkey: boolean }
-                                                            : never;
+                                                            : T extends 'siwm-open'
+                                                              ? { id: string } | null
+                                                              : T extends 'siwm-get'
+                                                                ? SiwmView | null
+                                                                : T extends 'siwm-submit'
+                                                                  ? SubmitResult
+                                                                  : T extends 'siwm-close'
+                                                                    ? null
+                                                                    : never;
 
 /** Every response is wrapped so errors survive the message boundary. */
 export type Wrapped<T> = { ok: true; data: T } | { ok: false; error: string };

@@ -210,3 +210,49 @@ describe('pngBlob', () => {
     expect(src).not.toMatch(/fetch\(/);
   });
 });
+
+describe('hideOverlays', () => {
+  it('hides every overlay inline, and inside an open shadow root last; puts all back exactly', async () => {
+    const { hideOverlays } = await import('../src/entrypoints/content/quote-shot');
+    document.body.innerHTML = '';
+    // WXT's UI: an open root with its reset first
+    const ui = document.createElement('xmradar-ui');
+    ui.attachShadow({ mode: 'open' }).innerHTML = '<style>:host{all:initial !important;}</style><div>pill</div>';
+    // our own card: a closed root, reachable only by the inline style
+    const site = document.createElement('xmradar-site');
+    site.setAttribute('style', 'top: 4px');
+    site.attachShadow({ mode: 'closed' });
+    const tip = document.createElement('xmradar-tip');
+    const other = document.createElement('div');
+    document.body.append(ui, site, tip, other);
+
+    const undo = hideOverlays(document);
+    for (const el of [ui, site, tip]) expect(el.style.getPropertyPriority('visibility')).toBe('important');
+    expect(ui.shadowRoot!.lastElementChild!.textContent).toBe(':host{visibility:hidden !important}');
+    expect(other.getAttribute('style')).toBeNull();
+
+    undo();
+    expect(ui.getAttribute('style')).toBeNull();
+    expect(ui.shadowRoot!.querySelectorAll('style')).toHaveLength(1);
+    expect(site.getAttribute('style')).toBe('top: 4px');
+    expect(tip.getAttribute('style')).toBeNull();
+    undo();
+    expect(site.getAttribute('style')).toBe('top: 4px');
+  });
+
+  it('a failure part-way puts back what was already hidden', async () => {
+    const { hideOverlays } = await import('../src/entrypoints/content/quote-shot');
+    document.body.innerHTML = '';
+    const a = document.createElement('xmradar-ui');
+    a.attachShadow({ mode: 'open' });
+    const b = document.createElement('xmradar-tip');
+    const root = b.attachShadow({ mode: 'open' });
+    vi.spyOn(root, 'append').mockImplementation(() => {
+      throw new Error('boom');
+    });
+    document.body.append(a, b);
+    expect(() => hideOverlays(document)).toThrow('boom');
+    for (const el of [a, b]) expect(el.getAttribute('style')).toBeNull();
+    expect(a.shadowRoot!.querySelectorAll('style')).toHaveLength(0);
+  });
+});

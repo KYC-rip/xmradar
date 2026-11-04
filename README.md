@@ -151,6 +151,18 @@ The list also names xmr.club's logo pack (small WebP logos of every listing, one
 - **Trust:** the list must be signed with xmr.club's pinned key, unexpired and newer than the copy kept; an older or expired one is refused and the menu says when the list is out of date. The key comes from xmr.club itself: there's no independent second source for it yet. xmr.club is run by the same team as XMRadar.
 - Switch it off under **Options → Swaps and sites**: no download, no badge, no warnings.
 
+## Sign in with Monero (NKIP-0003)
+
+Sites such as xmr.bio let you sign in by proving you control your Monero address: your wallet signs a short message ([NKIP-0003](https://nkips.org/nkip-0003/)). In a browser, a `monero-signin:` link does nothing unless a wallet app registered it. XMRadar helps with the browser half; **it holds no Monero key and signs nothing**.
+
+- **Click** a `monero-signin:` link (on xmr.bio: *Open in wallet*). XMRadar opens its own window, which the page can't draw over or click in, and shows what you'd sign: the site, the account, the address, where the signature goes (flagged when that's a different site), when it expires, the full message, and a warning to approve only a sign-in you started yourself, just now.
+- **Refused before anything is shown to sign:** a link that breaks any NKIP-0003 rule (hidden or direction-changing characters, an unknown parameter, a window over 15 minutes, …), an expired one, and a link clicked on a page that isn't the site it signs in to (a common phishing relay).
+- **Sign** the message in your wallet and paste the `SigV2…`/`SigV1…` signature. The window has step-by-step instructions for Feather, the Monero GUI, Cake Wallet, `monero-wallet-cli` and `monero-wallet-rpc`, adjusted to the address (the GUI can't sign for a subaddress), plus *Copy address* and *Save message as file* (the exact bytes, for the CLI or the GUI's file mode). Or hand the link to Ripley Terminal, or to a wallet app registered for `monero-signin:`.
+- XMRadar checks the signature itself (spend key of that address only; a view-only wallet's signature is refused) and only then sends it to the site's callback: `{session, address, signature}`, without cookies. The callback sees your IP address.
+- **Paste a link** from *Menu → Sign in with Monero* (for links shown as text or QR codes elsewhere). Then XMRadar can't tell which page it came from, and says so.
+- Kept only while the window is open (at most 20 minutes), in session storage: the link and the page's host name. Nothing is logged.
+- Switch it off under *Options → Monero identity → Sign in with Monero*: links then behave as without XMRadar.
+
 ## Chat (chat.xmr.club)
 
 **Menu → Chat** opens chat.xmr.club in the browser's side panel (Chrome) or sidebar (Firefox: also *View → Sidebar → XMRadar chat*), so you can chat while you browse. XMRadar only shows the page; the chat itself, and where its messages go (Nostr relays), is chat.xmr.club's.
