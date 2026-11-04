@@ -39,13 +39,14 @@ export function parseTweetProof(proof: string | undefined, handle: string): stri
 }
 
 /** `twitter:` claims in one kind-10011 event, limited to the given (normalized) handles. */
-export function twitterClaims(event: Event, wanted: ReadonlySet<string>): TwitterClaim[] {
+/** `wanted` null: claims of any handle (a key's own claims, PLAN-MONEROLIKE). */
+export function twitterClaims(event: Event, wanted: ReadonlySet<string> | null): TwitterClaim[] {
   if (event.kind !== KIND_IDENTITIES && event.kind !== 0) return [];
   const out: TwitterClaim[] = [];
   for (const t of event.tags) {
     if (t[0] !== 'i' || !t[1]?.toLowerCase().startsWith('twitter:')) continue;
     const handle = normalizeHandle(t[1].slice('twitter:'.length));
-    if (!HANDLE_RE.test(handle) || !wanted.has(handle)) continue;
+    if (!HANDLE_RE.test(handle) || (wanted && !wanted.has(handle))) continue;
     const tweetId = parseTweetProof(t[2], handle);
     if (tweetId) out.push({ pubkey: event.pubkey, handle, tweetId, createdAt: event.created_at });
   }
@@ -57,7 +58,7 @@ export const validEvent = (e: Event) =>
   verifyEvent({ id: e.id, pubkey: e.pubkey, created_at: e.created_at, kind: e.kind, tags: e.tags, content: e.content, sig: e.sig });
 
 /** Newest valid event per pubkey. */
-function newestPerPubkey(events: Event[], kind: number): Map<string, Event> {
+export function newestPerPubkey(events: Event[], kind: number): Map<string, Event> {
   const out = new Map<string, Event>();
   for (const e of events) {
     if (e.kind !== kind || !validEvent(e)) continue;

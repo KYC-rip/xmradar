@@ -174,6 +174,9 @@ export type BgRequest =
   | { type: 'burner-forget' }
   | { type: 'share-menu-copy' }
   | { type: 'xap-totals'; recipients: string[]; fresh?: boolean }
+  /** xo (PLAN-MONEROLIKE): send or take back the user's xo on an X post */
+  | { type: 'xo-send'; post: string; author: string }
+  | { type: 'xo-undo'; post: string }
   | { type: 'xap-post-totals'; posts: { id: string; pubkey: string }[]; fresh?: boolean }
   | { type: 'xap-publish'; recipient: string; address: string; amount: string; post?: string }
   | { type: 'xmr-price' }
@@ -253,6 +256,8 @@ export type BgResponse<T extends BgRequest['type']> = T extends 'fetch-image'
                                 ? null
                                 : T extends 'xap-totals'
                                   ? XapTotalsResult
+                                  : T extends 'xo-send' | 'xo-undo'
+                                    ? { ok: boolean; id?: string; error?: string }
                                   : T extends 'xap-post-totals'
                                     ? XapPostTotalsResult
                                   : T extends 'xap-publish'

@@ -17,19 +17,22 @@ const scriptTexts = (doc: Document) => [...doc.querySelectorAll(RECEIPT_SELECTOR
 /**
  * kyc.rip also puts an unsigned pointer to its witness event ({event_id, commitment, …}, no `sig`) in a
  * receipt script. It isn't a receipt: its event id is read like one the page shows, and checked the same way.
+ * Anything of that shape (an object with `event_id` and no `sig`) is page metadata, never a receipt, even
+ * when its id is unusable: nkips.org's own example, rendered as a real script, has `"event_id":"<64 hex>"`.
  */
-function eventPointer(text: string): string | undefined {
+function pointerOf(text: string): { id?: string } | null {
   try {
     const v: unknown = JSON.parse(text);
-    if (!v || typeof v !== 'object' || 'sig' in v) return undefined;
+    if (!v || typeof v !== 'object' || Array.isArray(v) || 'sig' in v || !('event_id' in v)) return null;
     const id = (v as { event_id?: unknown }).event_id;
-    return typeof id === 'string' && /^[0-9a-f]{64}$/.test(id) ? id : undefined;
+    return typeof id === 'string' && /^[0-9a-f]{64}$/.test(id) ? { id } : {};
   } catch {
-    return undefined;
+    return null;
   }
 }
+const eventPointer = (text: string) => pointerOf(text)?.id;
 
-export const receiptTexts = (doc: Document) => scriptTexts(doc).filter((t) => !eventPointer(t)).slice(0, MAX_RECEIPTS_PER_PAGE);
+export const receiptTexts = (doc: Document) => scriptTexts(doc).filter((t) => !pointerOf(t)).slice(0, MAX_RECEIPTS_PER_PAGE);
 
 export type Role = 'deposit' | 'payout' | null;
 const DEPOSIT_LABEL = /\b(deposit|send (?:exactly )?(?:to|the)|pay to|payment address|send)\b/i;

@@ -252,16 +252,27 @@
               <div><span class="row-title">Ask to publish a Xap receipt after a tip</span><span class="row-hint">A public Nostr receipt (NKIP-0002), never your transaction id</span></div>
               <input data-xmr="receipts" type="checkbox" role="switch" class="switch" />
             </label>
+            <label class="setting">
+              <div><span class="row-title">Show the xo button on X</span><span class="row-hint">xo is a Monero like: next to the Xap button, it sends the post's author a public Nostr reaction they can see. Your signer asks each time</span></div>
+              <input data-xmr="xo" type="checkbox" role="switch" class="switch" />
+            </label>
+            <label class="setting">
+              <div><span class="row-title">Also like on X when I send an xo</span><span class="row-hint">Holding the heart (or Shift+Enter) always sends an xo and likes the post on X; this makes a plain click do both too. Taking an xo back never un-likes</span></div>
+              <input data-xmr="xo-like" type="checkbox" role="switch" class="switch" />
+            </label>
           </div>
           <div id="xap-inbox" class="card pad">
             <label class="setting">
-              <div><span class="row-title">Tell me when I get a Xap</span><span class="row-hint">Every 30 minutes, asks your relays and 3 public relays (damus, nos.lol, primal) for Xaps to your npub. They can see that this browser watches your npub.</span><span data-inbox="why" class="row-hint"></span></div>
+              <div><span class="row-title">Tell me when I get a Xap or an xo</span><span class="row-hint">Every 30 minutes, asks your relays and 3 public relays (damus, nos.lol, primal) for Xaps and xos to your npub. They can see that this browser watches your npub. The xo counts on your own posts come from this check.</span><span data-inbox="why" class="row-hint"></span></div>
               <input data-inbox="switch" type="checkbox" role="switch" class="switch" />
             </label>
             <div data-inbox="body" class="hidden">
               <h2 class="card-head">Xaps received</h2>
               <p class="row-hint">A Xap is the tipper's word that they sent it. It shows as verified once your wallet confirms it; check your wallet before you thank anyone.</p>
               <ul data-inbox="list" class="xap-list"></ul>
+              <h2 class="card-head">xos received</h2>
+              <p class="row-hint">Counted only from Monero people: a key with a Monero address and an X account its proof tweet confirms. One per person per post.</p>
+              <ul data-inbox="xo-list" class="xap-list"></ul>
               <div class="row"><button data-inbox="check" type="button">Check now</button><span data-inbox="status" class="row-hint" role="status" aria-live="polite"></span></div>
               <details><summary class="row-hint" data-inbox="relays-summary"></summary><p data-inbox="relays" class="row-hint"></p></details>
             </div>

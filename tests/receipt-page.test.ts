@@ -20,6 +20,19 @@ describe('order page (§4.3, §11)', () => {
     const d = doc(`<script type="application/nkip01+json">{"a":1}</script><script type="application/json">{}</script>`);
     expect(receiptTexts(d)).toEqual(['{"a":1}']);
   });
+  it('a page hint is never read as a receipt, even with placeholders (nkips.org’s example); a signed one still is', () => {
+    const hint = '{"v":"nkip01/2","issuer":"example.swap","order_id":"…","event_id":"<64 hex>","commitment":"<64 hex>","deposit_address":"…"}';
+    const signed = '{"event_id":"x","sig":"y"}';
+    const d = doc(`<script type="application/nkip01+json">${hint}</script><script type="application/nkip01+json">${signed}</script><script type="application/nkip01+json">["event_id"]</script>`);
+    expect(receiptTexts(d)).toEqual([signed, '["event_id"]']);
+    expect(pageEventId(d)).toBeUndefined();
+  });
+  it('a usable pointer gives the page’s event id and is still no receipt', () => {
+    const id = 'a'.repeat(64);
+    const d = doc(`<script type="application/nkip01+json">{"event_id":"${id}","commitment":"c"}</script>`);
+    expect(receiptTexts(d)).toEqual([]);
+    expect(pageEventId(d)).toBe(id);
+  });
   it('the signed deposit address under a deposit label, the payout under its own: ✓', () => {
     const lines = addressLines(doc(`<div><div><label>Send exactly to</label> <code>${DEP}</code></div><div><label>You receive at</label> <code>${PAY}</code></div></div>`), r);
     expect(lines).toEqual([{ level: 'ok', text: 'The deposit and payout addresses on this page are the ones the exchange signed.' }]);

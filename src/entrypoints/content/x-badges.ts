@@ -2,11 +2,13 @@ import type { ContentScriptContext } from 'wxt/utils/content-script-context';
 import { badgeLook, mountBadge, type BadgeLook } from '../../identity/badge-look';
 import { PendingQueue } from '../../identity/bucket';
 import { normalizeHandle } from '../../identity/envelope';
-import { xapEntry, type Badge } from '../../identity/resolve';
+import { xapEntry, xoKey, type Badge } from '../../identity/resolve';
 import { articleViewSlot, hoverCardSlot, pinnedPost, profileClaimScope, profileHeader, profileSlot, tweetSlot, userCellSlot, type BadgeSlot } from '../../identity/x-handle';
 import { emptyClaim, parseClaim, type ClaimPlace } from '../../identity/xclaims';
 import { sendToBackground, type XapTotals } from '../../messaging';
-import { directoryStatusItem, xClaimsChangedItem, xClaimsOn, xmrSettingsItem } from '../../settings';
+import { directoryStatusItem, myHandleItem, xClaimsChangedItem, xClaimsOn, xmrSettingsItem, xoButtonOn, xoCountsItem, xoSentItem } from '../../settings';
+import { storage } from 'wxt/utils/storage';
+import { XO_SELECTOR, xoManager } from './x-xo';
 import { openTip } from './tip';
 import { XAP_SELECTOR, actionBars, insertXap, ownXaps, setXapCount, xapSummary } from './x-xap';
 import { parsePostKey, postKey } from '../../xap/post';
@@ -43,11 +45,33 @@ export function startBadges(ctx: ContentScriptContext) {
   let look: BadgeLook = badgeLook(null);
   let discovery = false;
   const removeAll = () => {
-    for (const host of document.querySelectorAll(`${HOST_TAG}, ${XAP_SELECTOR}`)) host.remove();
+    for (const host of document.querySelectorAll(`${HOST_TAG}, ${XAP_SELECTOR}, ${XO_SELECTOR}`)) host.remove();
   };
+
+  // xo (PLAN-MONEROLIKE): the buttons follow the switch, the user's sent xos and their own posts' counts
+  const xoSeenItem = storage.defineItem<Record<string, number>>('local:xoSeen', { fallback: {} });
+  const xo = xoManager({ on: false, me: null, sent: {}, counts: {}, seen: {} }, (seen) => void xoSeenItem.setValue(seen).catch(() => {}));
+  void Promise.all([xmrSettingsItem.getValue(), myHandleItem.getValue(), xoSentItem.getValue(), xoCountsItem.getValue(), xoSeenItem.getValue()]).then(([s, me, sent, counts, seen]) =>
+    xo.update({ on: xoButtonOn(s), alsoLike: s.xoAlsoLike === true, me, sent, counts, seen }),
+  );
+  const unwatchXo = [
+    xmrSettingsItem.watch((s, old) => {
+      xo.update({ on: xoButtonOn(s), alsoLike: s.xoAlsoLike === true });
+      // switched back on: the posts already on screen get their buttons now, not at the next redraw
+      if (xoButtonOn(s) && !xoButtonOn(old) && observer) scan(document);
+    }),
+    myHandleItem.watch((me) => xo.update({ me })),
+    xoSentItem.watch((sent) => xo.update({ sent: sent ?? {} })),
+    xoCountsItem.watch((counts) => xo.update({ counts: counts ?? {} })),
+  ];
+  ctx.onInvalidated(() => {
+    unwatchXo.forEach((u) => u());
+    xo.stop();
+  });
   /** one handle's badges and Xap buttons; slot keys end in `:<handle>` */
   const removeFor = (handle: string) => {
     for (const el of document.querySelectorAll<HTMLElement>(`${HOST_TAG}, ${XAP_SELECTOR}`)) if (el.dataset.key?.endsWith(`:${handle}`)) el.remove();
+    for (const el of document.querySelectorAll<HTMLElement>(XO_SELECTOR)) if (el.dataset.handle?.toLowerCase() === handle.toLowerCase()) el.remove();
   };
 
   // X self-claims (PLAN-XCLAIMS): what the profile you're on shows in its bio, Website field and pinned
@@ -98,7 +122,7 @@ export function startBadges(ctx: ContentScriptContext) {
     } else if (Date.now() - pinnedSeen.at >= PINNED_STAY_MS) report(scope.handle, 'pinned', pin.text, pin.tweetId);
   }
 
-  const isOurs = (n: Node) => n instanceof Element && (n.localName === HOST_TAG || n.matches(XAP_SELECTOR));
+  const isOurs = (n: Node) => n instanceof Element && (n.localName === HOST_TAG || n.matches(XAP_SELECTOR) || n.matches(XO_SELECTOR));
 
   // Xap totals for the action-bar counts: asked for in batches, only with relay discovery on
   const totals = new Map<string, { t: XapTotals; at: number }>();
@@ -167,13 +191,16 @@ export function startBadges(ctx: ContentScriptContext) {
   /** The Xap button: in the action bar, for tweets by an author with a badge. */
   function applyXap(slot: BadgeSlot & { article: Element }, badge: Badge) {
     // every bar of the post has this post's button (an X Article page has two), or they're redrawn
-    const existing = ownXaps(slot.article);
-    if (existing.length && existing.length === actionBars(slot.article).length && existing.every((e) => e.dataset.key === slot.key)) return;
-    for (const e of existing) e.remove();
     const entry = xapEntry(badge);
     const pk = entry?.pubkey;
     // a tweet with a status id gets a post Xap (R15), bound to its author's proven key (R14)
     const post = pk && slot.statusId ? slot.statusId : undefined;
+    const existing = ownXaps(slot.article);
+    if (existing.length && existing.length === actionBars(slot.article).length && existing.every((e) => e.dataset.key === slot.key)) {
+      if (slot.statusId) xo.place(slot.article, slot.statusId, xoKey(badge), slot.handle);
+      return;
+    }
+    for (const e of existing) e.remove();
     const key = pk ? (post ? postKey(pk, post) : pk) : undefined;
     const el = insertXap(slot.article, {
       handle: slot.handle,
@@ -201,6 +228,8 @@ export function startBadges(ctx: ContentScriptContext) {
       },
     });
     if (!el) return;
+    // the xo goes right after the Xap: to the author's key when one is known, else a faded like-only heart
+    if (slot.statusId) xo.place(slot.article, slot.statusId, xoKey(badge), slot.handle);
     if (key) wantTotals(key);
   }
 
@@ -230,7 +259,7 @@ export function startBadges(ctx: ContentScriptContext) {
       const pill = slot.pill ? slot.anchor.querySelector<HTMLElement>(`:scope > ${HOST_TAG}`) : null;
       // a recycled tweet node may still hold another author's button and pill
       if (!badge?.primary) {
-        for (const e of ownXaps(slot.article)) e.remove();
+        for (const e of [...ownXaps(slot.article), ...slot.article.querySelectorAll(XO_SELECTOR)]) e.remove();
         pill?.remove();
       } else {
         // the pill after the name, as X puts its check there; the Xap stays in the action bar

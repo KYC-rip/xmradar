@@ -1,5 +1,5 @@
 import type { DirectoryStatus } from '../identity/directory';
-import { directoryStatusItem, patchXmrSettings, xmrSettingsItem, type XmrSettings } from '../settings';
+import { directoryStatusItem, patchXmrSettings, xmrSettingsItem, type XmrSettings, xoButtonOn } from '../settings';
 import { optionalPart, part } from './dom';
 
 /**
@@ -30,6 +30,8 @@ export async function mountXmrToggles(root: HTMLElement) {
   // only on the options page; the popup's switches have no status line
   const dirLine = optionalPart<HTMLElement>(root, 'xmr', 'directory');
   const claims = optionalPart<HTMLInputElement>(root, 'xmr', 'claims');
+  const xo = optionalPart<HTMLInputElement>(root, 'xmr', 'xo');
+  const xoLike = optionalPart<HTMLInputElement>(root, 'xmr', 'xo-like');
   const showDirectory = async () => {
     if (dirLine) dirLine.textContent = directoryText(await directoryStatusItem.getValue(), (await xmrSettingsItem.getValue()).badgesX);
   };
@@ -43,6 +45,11 @@ export async function mountXmrToggles(root: HTMLElement) {
     }
     discovery.checked = x.nostrDiscovery;
     receipts.checked = x.tipReceipts;
+    if (xo) xo.checked = xoButtonOn(x);
+    if (xoLike) {
+      xoLike.checked = x.xoAlsoLike === true;
+      xoLike.disabled = !xoButtonOn(x);
+    }
   };
   // each switch saves only its own field; a failed save puts the switches back to what's stored
   const save = (patch: Partial<XmrSettings>) =>
@@ -54,6 +61,8 @@ export async function mountXmrToggles(root: HTMLElement) {
   claims?.addEventListener('change', () => void save({ xClaims: claims.checked }));
   discovery.addEventListener('change', () => void save({ nostrDiscovery: discovery.checked }));
   receipts.addEventListener('change', () => void save({ tipReceipts: receipts.checked }));
+  xo?.addEventListener('change', () => void save({ xoButton: xo.checked }));
+  xoLike?.addEventListener('change', () => void save({ xoAlsoLike: xoLike.checked }));
   xmrSettingsItem.watch((x) => show(x));
   if (dirLine) directoryStatusItem.watch(() => void showDirectory());
   show(await xmrSettingsItem.getValue());

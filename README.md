@@ -81,6 +81,8 @@ Until XMRadar is in the stores, install a release zip (or build it yourself):
 
 A browser never updates an extension installed from a zip, so XMRadar checks for you. Once a day it asks `https://xmradar.app/latest.json` for the latest version number, with no cookies or referrer, and no version, ID or page in the request. Like visiting the site, the request shows your IP address and browser, and that XMRadar is in use; it follows your browser's proxy or Tor settings. When a newer version is out, you get one notification for it, a line in XMRadar's menu and a link under **Options → Updates**, all pointing to that version's GitHub release page. Nothing is downloaded or installed: get the zip there and check it against `SHA256SUMS`. Switch it off with **Check for updates once a day**. **Check now** under the switch asks at once and says whether you're on the latest version; with the daily check off, the answer is only shown, never kept, and no notification follows.
 
+While a newer version is out, XMRadar's toolbar icon shows a green **↑** (its tooltip names the version) on every tab that has no receipt or site badge of its own; it goes once you're on the latest version or switch the check off.
+
 ## X Articles (long-form)
 
 Open an X Article on its own page (it has a normal `/status/<id>` link), right-click anywhere in it → **Copy to Nostr**. XMRadar turns the article into Markdown (headings, bold and italic, lists, links, images, separators) and publishes it as a NIP-23 long-form article (kind 30023) with its title, summary, cover image and original date. The cover and inline images are re-uploaded to your Blossom server unless you untick them; an unticked image is removed from the text. The article's ID on Nostr is the tweet ID, so publishing it again replaces the earlier version instead of making a copy. Selecting text first shares just that selection as a normal note. A tweet that only shares an article card still becomes a note, with a hint to open the article.
@@ -116,6 +118,16 @@ A Xap is a Monero tip recorded on Nostr the way [NKIP-0002](https://github.com/n
 - The action-bar number is the tweet's verified total (the person's, for a tweet without a status link); with none, the claimed total marked "~" (what tippers say they sent, not confirmed). The two are never added. The popup shows all three.
 - XMRadar doesn't send payment proofs (kind 9043) yet, so its Xaps are confirmed when the recipient's wallet matches the unique amount.
 - **Xap notifications** (off by default, **Options → Badges on X → Tell me when I get a Xap**): every 30 minutes XMRadar asks your relays and 3 public ones (damus, nos.lol, primal) for Xap receipts to your npub, and shows one notification for the new ones and a "new Xaps" line in its menu. The list under the switch shows each one as the tipper's word ("says they sent it") until your wallet confirms it (verified). Only receipts paying your current address count; you're told about the same tipper and post (or profile) at most once a day; the first check lists the Xaps you already have without notifying; a notification never links anywhere but that list. It needs your signer connected and your Monero address published. **Privacy:** those relays can see that this browser watches your npub, which ties your IP address to your Nostr identity for them; the check follows your browser's proxy or Tor settings.
+
+## xo: a Monero like
+
+Next to the Xap button on X posts, a heart sends **xo**: a Monero like, as a public Nostr reaction (NIP-25 kind 17, naming the post the way Xaps do) to the author's key. Your signer signs it from xmradar.app/signer, opened behind the X tab.
+
+- **Click:** an xo. Click again to take it back (a NIP-09 deletion). **Hold** the heart half a second, or press **Shift+Enter**: an xo and X's own ♥ on that post, at once. *Options → Badges on X → Also like on X when I send an xo* makes a plain click do both. Taking an xo back never un-likes on X.
+- **Who gets it:** the author's Nostr-verified key, or the key they linked on xmr.bio (carried in xmr.bio's signed directory). Where no key is known the heart is faded: it can't reach them, and holding it only likes on X.
+- **Where it goes:** the author's NIP-65 read relays (public `wss` relays only), the 3 default relays and your own.
+- **Receiving:** with *Tell me when I get a Xap or an xo* on, every 30 minutes XMRadar asks your relays and the defaults for xos to your key. Only xos from Monero people count (a key with a valid Monero address and an X account its proof tweet confirms), one per person per post; forged events and other people's deletions don't. One notification per check, an *xos received* list in Options, and on your own posts the count, with a few hearts floating up once when new ones arrive. Your own xo on your post counts as one, as on X.
+- With reduced motion, the hearts change state without animating.
 
 ## Swap receipts (NKIP-0001)
 

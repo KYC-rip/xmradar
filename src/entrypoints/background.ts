@@ -4,7 +4,7 @@ import { installBridge } from '../bridge';
 import { TokenBucket } from '../identity/bucket';
 import { EntryCache } from '../identity/cache';
 import { HANDLE_RE, normalizeHandle } from '../identity/envelope';
-import { KIND_IDENTITIES, KIND_PAYTO, moneroPayto, parseTweetProof, twitterClaims, verifyTwitterProof, type ProofResult } from '../identity/nostr';
+import { KIND_IDENTITIES, KIND_PAYTO, moneroPayto, parseTweetProof, twitterClaims, verifyTwitterProof, type ProofResult, validEvent } from '../identity/nostr';
 import { buildMerged, kindFor, newestOwn, setupTargets, tweetUrl, type SetupAction } from '../identity/setup';
 import { validateMoneroAddress } from '../xmr/address';
 import { directoryKeeper, type StoredDirectory } from '../identity/directory';
@@ -54,8 +54,14 @@ import { reportCopy, reportFlags } from '../sites/report';
 import { healthStore, type Health } from '../nostr/relay-health';
 import { readRelaysOf, republishAllowed, resolvePostRelays } from '../nostr/post-relays';
 import { releaseUrl, UPDATE_NOTICE_ID, updateFor, updateKeeper } from '../update/check';
+import { setGlobalBadge, setTabBadge, updateBadge, type BadgeAction } from '../update/badge';
 import { logoKeeper } from '../sites/logos';
 import { INBOX_NOTICE_ID, inboxKeeper, MAX_RELAYS } from '../xap/inbox';
+import { readRelaysFrom, undoTemplate, xoRelayOrder, xoTemplate } from '../xo/event';
+import { rememberSent } from '../xo/sent';
+import { XO_NOTICE_ID, xoKeeper } from '../xo/inbox';
+import { knownLiker, rememberLiker, verifyLiker } from '../xo/verify';
+import { xoButtonOn, xoCountsItem, xoInboxItem, xoLikersItem, xoSentItem } from '../settings';
 import { shootQuote, shotGate, validRequest, type Crop, type ShotDeps } from '../capture/quote-shot';
 import { cappedText, siwmService, type SiwmStore } from '../siwm/service';
 
@@ -223,6 +229,45 @@ const xapInbox = inboxKeeper({
   clearNotice: () => browser.notifications.clear(INBOX_NOTICE_ID).then(() => {}, () => {}),
 });
 
+// xo (PLAN-MONEROLIKE): a key's read relays (NIP-65), where its owner looks for xos; an hour in memory
+const readRelayCache = new Map<string, { relays: string[]; at: number }>();
+async function nip65ReadRelays(pubkey: string): Promise<string[]> {
+  const hit = readRelayCache.get(pubkey);
+  if (hit && Date.now() - hit.at < 3600_000) return hit.relays;
+  const lists = await xapPoolQuery(await xapDeps.lookupRelays(), { kinds: [10002], authors: [pubkey] }).catch(() => []);
+  // only a list the key really signed
+  const newest = lists.filter((e) => e.pubkey === pubkey && e.kind === 10002 && validEvent(e)).sort((a, b) => b.created_at - a.created_at)[0] ?? null;
+  const relays = readRelaysFrom(newest).slice(0, 4);
+  readRelayCache.set(pubkey, { relays, at: Date.now() });
+  return relays;
+}
+/** Where an xo goes: the sender's post relays, the author's read relays and the defaults (the shared floor). */
+const xoRelays = async (me: string, author: string) => xoRelayOrder(withoutIndex(await nip65ReadRelays(author)), DEFAULT_RELAYS, withoutIndex(await resolveRelays(me).catch(() => [])));
+
+const xoInbox = xoKeeper({
+  held: xoInboxItem,
+  counts: xoCountsItem,
+  // with the Xap notifications: one switch for "tell me what Monero people send me"
+  enabled: async () => xapNotifyOn(await xmrSettingsItem.getValue()),
+  pubkey: () => pubkeyItem.getValue(),
+  // its own read relays and the defaults first: that's where senders put xos
+  relays: async (pubkey) => xoRelayOrder(withoutIndex(await nip65ReadRelays(pubkey)), DEFAULT_RELAYS, withoutIndex(await resolveRelays(pubkey).catch(() => [])), MAX_RELAYS),
+  read: (relays, filter) => readEach(relays, filter, 6000),
+  query: xapPoolQuery,
+  known: async (pk) => knownLiker(await xoLikersItem.getValue(), pk, Date.now()),
+  verify: async (pk) => {
+    const liker = await verifyLiker(pk, { query: xapPoolQuery, relays: await xapDeps.lookupRelays(), proof: (h, t, key) => verifyTwitterProof(h, t, key) });
+    if (liker) await xoLikersItem.setValue(rememberLiker(await xoLikersItem.getValue(), pk, liker, Date.now()));
+    return liker;
+  },
+  alarms: browser.alarms,
+  notify: async (message) => {
+    await browser.notifications.create(XO_NOTICE_ID, { type: 'basic', iconUrl: browser.runtime.getURL('/icon/128.png'), title: 'XMRadar', message });
+  },
+  clearNotice: () => browser.notifications.clear(XO_NOTICE_ID).then(() => {}, () => {}),
+});
+const xoLastItem = storage.defineItem<Record<number, number>>('session:xoLast', { fallback: {} });
+
 // a quoted post's picture (PLAN-QUOTESHOT): capture, decode and crop stay here; only the crop goes back
 const bitmapOf = async (dataUrl: string) => createImageBitmap(await (await fetch(dataUrl)).blob());
 async function pngDataUrl(blob: Blob): Promise<string> {
@@ -265,19 +310,38 @@ export default defineBackground(() => {
     void swapRecords.onAlarm(a.name);
     void updates.onAlarm(a.name);
     void xapInbox.onAlarm(a.name);
+    void xoInbox.onAlarm(a.name);
   });
   void xapInbox.apply();
+  void xoInbox.apply();
   xmrSettingsItem.watch((s, old) => {
-    if (xapNotifyOn(s) !== xapNotifyOn(old)) void xapInbox.apply();
+    if (xapNotifyOn(s) !== xapNotifyOn(old)) {
+      void xapInbox.apply();
+      void xoInbox.apply();
+    }
   });
-  pubkeyItem.watch(() => void xapInbox.apply());
+  pubkeyItem.watch(() => {
+    void xapInbox.apply();
+    void xoInbox.apply();
+  });
   void settingsItem.getValue().then((s) => updates.apply(updateCheckOn(s)));
   settingsItem.watch((s, old) => {
-    if (updateCheckOn(s) !== updateCheckOn(old)) void updates.apply(updateCheckOn(s));
+    if (updateCheckOn(s) !== updateCheckOn(old)) {
+      void updates.apply(updateCheckOn(s));
+      void syncUpdateBadge();
+    }
   });
+  // the icon says when a newer version is out, on every tab without a badge of its own (PLAN-UPDATEBADGE)
+  void syncUpdateBadge();
+  updateStateItem.watch(() => void syncUpdateBadge());
   // the update notification opens the release page of the version it names, built from the checked number
   browser.notifications.onClicked.addListener(async (id) => {
     // a Xap notification opens the list in Options, never a post a tipper named
+    if (id === XO_NOTICE_ID) {
+      await xoInbox.markRead();
+      await browser.tabs.create({ url: browser.runtime.getURL('/options.html?xaps#badges') });
+      return;
+    }
     if (id === INBOX_NOTICE_ID) {
       await xapInbox.markRead();
       await browser.tabs.create({ url: browser.runtime.getURL('/options.html?xaps#badges') });
@@ -713,6 +777,40 @@ async function handle(msg: BgRequest, sender: Browser.runtime.MessageSender): Pr
           .catch(() => {});
       return res;
     }
+    case 'xo-send':
+    case 'xo-undo': {
+      // a real click on an X post's xo button, in the top frame of an x.com tab
+      const xoTab = checkShareMenuSender(sender, browser.runtime.id);
+      if (!xoButtonOn(await xmrSettingsItem.getValue())) throw new Error('xo is turned off in XMRadar’s options');
+      if (typeof msg.post !== 'string' || !/^[1-9]\d{0,19}$/.test(msg.post)) throw new Error('Bad post');
+      // one a second per tab
+      const allowed = shareMenuRateLimit(await xoLastItem.getValue(), xoTab, Date.now(), 1000);
+      if (!allowed) throw new Error('RATE_LIMITED');
+      await xoLastItem.setValue(allowed);
+      const sent = await xoSentItem.getValue();
+      const nowSecs = Math.floor(Date.now() / 1000);
+      if (msg.type === 'xo-send') {
+        if (typeof msg.author !== 'string' || !/^[0-9a-f]{64}$/.test(msg.author)) throw new Error('Bad author');
+        // your own post too, as on X: it counts as one, shown from the sent record, never notified
+        if (sent[msg.post]) return { ok: true, id: sent[msg.post]!.id };
+        // one quiet visit to the signer page: its key and the signature together
+        const { pubkey: me, event } = await signQuietly(xoTemplate(msg.post, msg.author, nowSecs));
+        const results = await publishToRelays(await xoRelays(me, msg.author), event);
+        if (!results.some((r) => r.ok)) return { ok: false, error: 'No relay took it' };
+        await xoSentItem.setValue(rememberSent(await xoSentItem.getValue(), msg.post, { id: event.id, at: Date.now(), author: msg.author })).catch(() => {});
+        return { ok: true, id: event.id };
+      }
+      const mine = sent[msg.post];
+      if (!mine) return { ok: true };
+      const { pubkey: me, event } = await signQuietly(undoTemplate(mine.id, nowSecs));
+      const results = await publishToRelays(await xoRelays(me, mine.author ?? me), event);
+      // forgotten only once a relay took the deletion, so the button never says undone when it isn't
+      if (!results.some((r) => r.ok)) return { ok: false, error: 'Couldn’t undo: no relay took it' };
+      const rest = { ...(await xoSentItem.getValue()) };
+      delete rest[msg.post];
+      await xoSentItem.setValue(rest).catch(() => {});
+      return { ok: true };
+    }
     case 'xap-post-totals': {
       if (!isXContentScript(sender) || sender.tab?.id == null) throw new Error('Not allowed');
       return xapPostTotals(msg.posts, !!msg.fresh, sender.tab.id);
@@ -883,7 +981,7 @@ async function handle(msg: BgRequest, sender: Browser.runtime.MessageSender): Pr
     }
     case 'xap-inbox-check': {
       if (!isExtensionPage(sender)) throw new Error('Not allowed');
-      await xapInbox.checkNow();
+      await Promise.all([xapInbox.checkNow(), xoInbox.check()]);
       return null;
     }
     case 'update-check-now': {
@@ -892,7 +990,7 @@ async function handle(msg: BgRequest, sender: Browser.runtime.MessageSender): Pr
     }
     case 'xap-inbox-read': {
       if (!isExtensionPage(sender)) throw new Error('Not allowed');
-      await xapInbox.markRead();
+      await Promise.all([xapInbox.markRead(), xoInbox.markRead()]);
       return null;
     }
     case 'letters-list': {
@@ -977,7 +1075,22 @@ async function dropTabState(tabId: number) {
   tabStates.delete(tabId);
   siteInfoByTab.delete(tabId);
   persistTabState();
-  await browser.action.setBadgeText({ tabId, text: '' }).catch(() => {});
+  await clearTabBadge(tabId);
+}
+
+// both browsers take `text: null` for a tab (fall back to the global badge); the types don't say so
+const badgeAction = browser.action as unknown as BadgeAction;
+const clearTabBadge = (tabId: number) => setTabBadge(badgeAction, tabId, { text: '', color: '' });
+
+/** The global badge and the icon's title, from the update state; cleared when up to date or switched off. */
+async function syncUpdateBadge() {
+  try {
+    const b = updateBadge(await updateStateItem.getValue(), browser.runtime.getManifest().version, updateCheckOn(await settingsItem.getValue()));
+    await setGlobalBadge(badgeAction, b);
+  } catch (e) {
+    // a storage hiccup only costs the ↑ until the next change
+    console.warn('[XMRadar] update badge', (e as Error).message);
+  }
 }
 // the brands of the feed in hand, rebuilt only when a newer feed arrives
 let lookalikeCache: { issuedAt: number; index: LookalikeIndex } | null = null;
@@ -1060,8 +1173,7 @@ let siteFeedGeneration = 0;
 /** The toolbar badge for a tab, from its receipt and site state together (one owner, no flicker). */
 async function applyBadge(tabId: number) {
   const { text, color } = badgeFor(tabStates.get(tabId) ?? {});
-  await browser.action.setBadgeText({ tabId, text }).catch(() => {});
-  if (text) await browser.action.setBadgeBackgroundColor({ tabId, color }).catch(() => {});
+  await setTabBadge(badgeAction, tabId, { text, color });
 }
 
 /** Download the feed: no cookies or referrer, no redirects, JSON, 2 MB, 15 s; one at a time; kept only if it verifies and is newer. */
@@ -1332,8 +1444,8 @@ async function xapPostTotals(posts: unknown, fresh: boolean, tabId: number): Pro
 }
 
 /** Extension pages have no window.nostr, so signer calls run in a throwaway tab on our own page (no script of its own). */
-async function withSignerTab<T>(run: (tabId: number) => Promise<T>): Promise<T> {
-  const tab = await browser.tabs.create({ url: SIGNER_PAGE, active: true });
+async function withSignerTab<T>(run: (tabId: number) => Promise<T>, active = true): Promise<T> {
+  const tab = await browser.tabs.create({ url: SIGNER_PAGE, active });
   const tabId = tab.id!;
   try {
     await new Promise<void>((resolve, reject) => {
@@ -1382,6 +1494,38 @@ async function testSigner(): Promise<string> {
   });
   await pubkeyItem.setValue(pubkey);
   return pubkey;
+}
+
+/**
+ * The signer's key and its signature of exactly this event, in one visit to the signer page, opened behind
+ * the current tab (PLAN-MONEROLIKE: an xo shouldn't take the user away from X). The signer still shows its
+ * own prompt when it asks. Checked against the template and the key it named.
+ */
+async function signQuietly(template: EventTemplate): Promise<{ pubkey: string; event: Event }> {
+  const out = await withSignerTab(async (tabId) => {
+    const [res] = await browser.scripting.executeScript({
+      target: { tabId },
+      world: 'MAIN',
+      args: [template],
+      func: async (ev: EventTemplate) => {
+        const w = window as unknown as { nostr?: { getPublicKey(): Promise<string>; signEvent(e: EventTemplate): Promise<unknown> } };
+        for (let i = 0; i < 30 && !w.nostr; i++) await new Promise((r) => setTimeout(r, 100));
+        if (!w.nostr) return { error: 'No NIP-07 signer found (install Alby or nos2x, or unlock it)' };
+        try {
+          const pubkey = await w.nostr.getPublicKey();
+          return { pubkey, event: await w.nostr.signEvent(ev) };
+        } catch (e) {
+          return { error: String((e as Error)?.message ?? e) };
+        }
+      },
+    });
+    const r = res?.result as { pubkey?: string; event?: Event; error?: string } | undefined;
+    if (!r?.pubkey || !r.event) throw new Error(r?.error ?? 'The signer did not sign');
+    return { pubkey: r.pubkey, event: r.event };
+  }, false);
+  checkSigned(template, out.event, out.pubkey);
+  await pubkeyItem.setValue(out.pubkey);
+  return out;
 }
 
 /**

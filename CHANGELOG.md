@@ -3,6 +3,12 @@
 What changed in each XMRadar release. Downloads, checksums and build provenance are on the
 [releases page](https://github.com/KYC-rip/xmradar/releases).
 
+## 0.6.11
+
+- **xo: a Monero like.** A heart next to the Xap button on X posts sends the author a Monero like over Nostr. Hold it (or Shift+Enter) to also like the post on X; an option makes a plain click do both. Received xos count only from Monero people, notify you with the Xaps, and show on your own posts with a few floating hearts. Where an account has linked no Nostr key, the heart is faded and can only like on X.
+- **Update badge.** The toolbar icon shows a green ↑ while a newer XMRadar is out.
+- XMRadar no longer flags the example on nkips.org's NKIP-0001 page as an unreadable receipt.
+
 ## 0.6.10
 
 - **Nostr ✓ on copied posts.** On X, a post you copied to Nostr gets a small *Nostr ✓* at its top right, in front of Grok's button. It opens the copy (notes on ros.rip, articles on njump). XMRadar keeps the post's id and the copy's reference for the last 1,000 copies, in this browser only. A thread is marked on its first tweet; posts copied before 0.6.10 aren't marked. Switch: Options → Posting to Nostr → Behaviour.

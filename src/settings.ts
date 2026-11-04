@@ -1,3 +1,5 @@
+import type { XoInbox } from './xo/inbox';
+import type { LikerCache } from './xo/verify';
 import type { SyncedPosts } from './nostr/synced';
 import type { DirectoryStatus } from './identity/directory';
 import type { InboxState } from './xap/inbox';
@@ -156,8 +158,12 @@ export interface XmrSettings extends XmrSettingsV2 {
   xClaims?: boolean;
   /** "Report button on the warning page" (PLAN-NAMEPILL-REPORT); read with `copyReportsOn`, on unless switched off */
   copyReports?: boolean;
-  /** "Tell me when I get a Xap" (PLAN-XAPINBOX); read with `xapNotifyOn`, off unless switched on */
+  /** "Tell me when I get a Xap" (PLAN-XAPINBOX); read with `xapNotifyOn`, off unless switched on. Also covers xos. */
   xapNotify?: boolean;
+  /** the xo button on X posts (PLAN-MONEROLIKE); read with `xoButtonOn`, on unless switched off */
+  xoButton?: boolean;
+  /** a plain click on xo also likes the post on X (PLAN-XOLIKE); off unless switched on (a hold always does) */
+  xoAlsoLike?: boolean;
 }
 
 export const siteInfoOn = (s: Partial<XmrSettings> | null | undefined) => s?.siteInfo !== false;
@@ -167,6 +173,7 @@ export const siteWarningsOn = (s: Partial<XmrSettings> | null | undefined) => si
 export const copyReportsOn = (s: Partial<XmrSettings> | null | undefined) => siteWarningsOn(s) && s?.copyReports !== false;
 /** asking relays for Xaps to the user's key links this browser to it, so it's off unless switched on */
 export const xapNotifyOn = (s: Partial<XmrSettings> | null | undefined) => s?.xapNotify === true;
+export const xoButtonOn = (s: Partial<XmrSettings> | null | undefined) => s?.xoButton !== false;
 
 /** v1, before the redesign: one switch for X badges. */
 export interface XmrSettingsV1 {
@@ -199,6 +206,12 @@ export const patchXmrSettings = patcher(xmrSettingsItem);
 /** The user's own X handle; `proven` once their NIP-39 proof tweet passed. Used by the identity setup and status. */
 /** the marks that make each Xap's amount unique, kept per recipient (src/xap/marks.ts) */
 export const xapMarksItem = storage.defineItem<Marks>('local:xapMarks', { fallback: [] });
+
+/** xo (PLAN-MONEROLIKE): the user's own xos by post, received xos, their counts, and senders already checked */
+export const xoSentItem = storage.defineItem<Record<string, { id: string; at: number; author?: string }>>('local:xoSent', { fallback: {} });
+export const xoInboxItem = storage.defineItem<XoInbox | null>('local:xoInbox', { fallback: null });
+export const xoCountsItem = storage.defineItem<Record<string, number>>('local:xoCounts', { fallback: {} });
+export const xoLikersItem = storage.defineItem<LikerCache>('local:xoLikers', { fallback: {} });
 export const myHandleItem = storage.defineItem<{ handle: string; proven: boolean } | null>('local:myHandle', { fallback: null });
 
 /** The xmr.bio directory (2d) as the options page shows it; the directory itself is kept by the background. */

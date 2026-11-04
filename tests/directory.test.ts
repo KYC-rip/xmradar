@@ -248,3 +248,17 @@ describe('keeping it (background lifecycle)', () => {
     expect(t.fetchFn).not.toHaveBeenCalled();
   });
 });
+
+describe('linked Nostr keys in the directory (PLAN-XOKEYS)', () => {
+  it('kept on the entry and its badge only in exact hex form; a bad one drops the key, not the entry', () => {
+    const K = 'ab'.repeat(32);
+    const d = readDirectory(
+      dir('2026-11-03T11:50:00Z', [{ ...entry('alice'), nostr_pubkey: K }, { ...entry('bob'), nostr_pubkey: 'npub1nothex' }, { ...entry('carol'), nostr_pubkey: K.toUpperCase() }]),
+      null,
+      { now: NOW, keys: KEYS },
+    )!;
+    expect(d.entries.map((e) => [e.handle, e.pubkey])).toEqual([['alice', K], ['bob', undefined], ['carol', undefined]]);
+    expect(directoryIndex(d)('Alice')[0]).toMatchObject({ source: 'xmrbio', pubkey: K });
+    expect(directoryIndex(d)('bob')[0]!.pubkey).toBeUndefined();
+  });
+});

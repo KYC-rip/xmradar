@@ -20,6 +20,8 @@ export interface DirectoryEntry {
   handle: string;
   address: string;
   verifiedAt: string;
+  /** the Nostr key the account linked on xmr.bio, while its signed proof holds there (PLAN-XOKEYS) */
+  pubkey?: string;
 }
 
 /** What's kept in storage: plain JSON, rebuilt into a Map on load. */
@@ -65,7 +67,9 @@ export function readDirectory(
       continue;
     }
     seen.add(e.handle as string);
-    entries.push({ handle: e.handle as string, address: e.address as string, verifiedAt: e.verified_at as string });
+    // an optional linked key, kept only in its exact form; a bad one is dropped, not the entry
+    const pubkey = typeof e.nostr_pubkey === 'string' && /^[0-9a-f]{64}$/.test(e.nostr_pubkey) ? e.nostr_pubkey : undefined;
+    entries.push({ handle: e.handle as string, address: e.address as string, verifiedAt: e.verified_at as string, ...(pubkey ? { pubkey } : {}) });
   }
   if (dropped) console.warn(`[XMRadar] xmr.bio directory: ${dropped} entries dropped`);
   return { generatedAt, keyId: key, fetchedAt: now, stale: !!opts.stale, entries };
@@ -75,7 +79,7 @@ export function readDirectory(
 export function directoryIndex(d: StoredDirectory | null): (handle: string) => BadgeEntry[] {
   const map = new Map<string, BadgeEntry>();
   for (const e of d?.entries ?? []) {
-    map.set(e.handle, { source: 'xmrbio', address: e.address, check: validateMoneroAddress(e.address), verified: true, method: 'xmrbio:directory' });
+    map.set(e.handle, { source: 'xmrbio', address: e.address, check: validateMoneroAddress(e.address), verified: true, method: 'xmrbio:directory', ...(e.pubkey ? { pubkey: e.pubkey } : {}) });
   }
   return (handle) => {
     const hit = map.get(handle.toLowerCase());

@@ -71,6 +71,14 @@ export function xapEntry(b: Badge): BadgeEntry | null {
 const fromRelays = (e: BadgeEntry) => e.source === 'nostr' || (e.source === 'xself' && !!e.pubkey);
 
 /** The badge as it would be without X self-claims (switched off). */
+/**
+ * The key an xo goes to (PLAN-XOKEYS): the Nostr-verified one Xap uses, else the key the account linked on
+ * xmr.bio (carried in the signed directory, one entry per handle). Xap keeps `xapEntry` alone.
+ */
+export function xoKey(b: Badge): string | null {
+  return xapEntry(b)?.pubkey ?? b.entries.find((e) => e.source === 'xmrbio' && e.verified && e.pubkey)?.pubkey ?? null;
+}
+
 export const withoutSelf = (b: Badge): Badge => (b.entries.some((e) => e.source === 'xself') ? mergeBadge(b.handle, b.entries.filter((e) => e.source !== 'xself')) : b);
 
 /** The badge as it would be without Nostr sources (discovery turned off). */
