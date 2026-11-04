@@ -3,6 +3,10 @@
 What changed in each XMRadar release. Downloads, checksums and build provenance are on the
 [releases page](https://github.com/KYC-rip/xmradar/releases).
 
+## Unreleased
+
+- **XMRadar identity.** No Nostr signer? XMRadar makes a Nostr key for you, kept in this browser only and announced with a notification, so xo, Xap receipts and the Monero identity steps work without one. Options → Monero identity chooses automatic, only your signer, or the XMRadar identity, and can export or delete it.
+
 ## 0.6.11
 
 - **xo: a Monero like.** A heart next to the Xap button on X posts sends the author a Monero like over Nostr. Hold it (or Shift+Enter) to also like the post on X; an option makes a plain click do both. Received xos count only from Monero people, notify you with the Xaps, and show on your own posts with a few floating hearts. Where an account has linked no Nostr key, the heart is faded and can only like on X.

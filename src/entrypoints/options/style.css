@@ -121,3 +121,10 @@ div.rec-view { display: flex; flex-direction: column; gap: 6px; }
 .rec-view .sig-warn { color: var(--danger); font-weight: 600; }
 .letter-text { white-space: pre-wrap; overflow-wrap: anywhere; font-family: var(--mono); font-size: 12px; margin: 0; max-height: 360px; overflow: auto; }
 .row .button-link { color: var(--accent); font-weight: 600; text-decoration: none; padding: 6px 4px; }
+
+/* Your Nostr identity (PLAN-MANAGEDID) */
+.radio-row { display: flex; flex-direction: column; gap: 6px; margin: 8px 0; }
+.radio-row label { display: flex; gap: 8px; align-items: baseline; }
+#nostr-identity input[data-id="nsec"] { width: 100%; box-sizing: border-box; font-family: var(--mono); font-size: 12px; margin: 6px 0; }
+#nostr-identity .row { gap: 8px; }
+#nostr-identity { padding: 14px 18px; margin-bottom: 18px; display: flex; flex-direction: column; gap: 4px; }

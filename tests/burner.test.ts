@@ -298,11 +298,12 @@ describe('token boundary', () => {
     expect(files.filter((f) => f.endsWith('burner/token-store.ts'))).toEqual([]);
   });
 
-  it('only token-store.ts names the burner database; only the two background stores open IndexedDB', () => {
+  it('only token-store.ts names the burner database; only the background stores open IndexedDB', () => {
     const src = resolve(__dirname, '../src');
     const files = readdirSync(src, { recursive: true, encoding: 'utf8' }).filter((f) => /\.(ts|html)$/.test(f));
     const using = (re: RegExp) => files.filter((f) => re.test(readFileSync(resolve(src, f), 'utf8'))).sort();
     expect(using(/xmradar-burner/)).toEqual(['burner/token-store.ts']);
-    expect(using(/indexedDB/)).toEqual(['burner/token-store.ts', 'receipts/store.ts']);
+    // the XMRadar identity's key store too (PLAN-MANAGEDID), background-only like the others
+    expect(using(/indexedDB/)).toEqual(['burner/token-store.ts', 'identity/managed.ts', 'receipts/store.ts']);
   });
 });

@@ -212,6 +212,9 @@ export const xoSentItem = storage.defineItem<Record<string, { id: string; at: nu
 export const xoInboxItem = storage.defineItem<XoInbox | null>('local:xoInbox', { fallback: null });
 export const xoCountsItem = storage.defineItem<Record<string, number>>('local:xoCounts', { fallback: {} });
 export const xoLikersItem = storage.defineItem<LikerCache>('local:xoLikers', { fallback: {} });
+/** Which key signs (PLAN-MANAGEDID): the user's signer, else the XMRadar identity when none is found (`auto`). */
+export type SignerMode = 'auto' | 'signer' | 'managed';
+export const signerModeItem = storage.defineItem<SignerMode>('local:signerMode', { fallback: 'auto' });
 export const myHandleItem = storage.defineItem<{ handle: string; proven: boolean } | null>('local:myHandle', { fallback: null });
 
 /** The xmr.bio directory (2d) as the options page shows it; the directory itself is kept by the background. */

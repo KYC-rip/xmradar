@@ -153,13 +153,33 @@
             Each change is signed in a temporary tab, and your signer shows the event before you approve it.
           </p>
 
+          <div id="nostr-identity" class="card pad">
+            <h2 class="card-head">Your Nostr identity</h2>
+            <p data-id="now" class="row-hint"></p>
+            <div class="radio-row" role="radiogroup" aria-label="Which key signs">
+              <label><input type="radio" name="signer-mode" value="auto" /> Automatic: my signer, or an XMRadar identity if there's none</label>
+              <label><input type="radio" name="signer-mode" value="signer" /> Only my signer (Alby, nos2x…)</label>
+              <label><input type="radio" name="signer-mode" value="managed" /> The XMRadar identity</label>
+            </div>
+            <div data-id="managed" class="hidden">
+              <p class="row-hint">The XMRadar identity is a Nostr key kept in this browser profile only, without a password. It signs only what XMRadar publishes: xos, Xap receipts, your Monero address and X proof. A signer is safer for your main identity. Switching keys clears what the other key sent from XMRadar's lists, and your X handle is proven again for the new key.</p>
+              <div class="row"><button data-id="export" type="button">Export key</button><button data-id="delete" type="button" class="danger">Delete XMRadar identity</button></div>
+              <div data-id="export-box" class="hidden">
+                <p class="warn row-hint">Anyone with this key can post and sign as this identity. Keep it private.</p>
+                <input data-id="nsec" type="text" readonly spellcheck="false" aria-label="XMRadar identity key (nsec)" />
+                <div class="row"><button data-id="hide" type="button">Hide</button></div>
+              </div>
+            </div>
+            <span data-id="status" class="row-hint" role="status" aria-live="polite"></span>
+          </div>
+
           <ol class="steps">
             <li class="step" data-step="signer">
               <span class="marker">1</span>
               <div class="step-main">
                 <div class="step-line"><span class="step-title">Connect your signer</span><code data-value></code><button class="link" data-act="test-signer" data-when="done">Test again</button></div>
                 <div class="step-body">
-                  <p class="hint">XMRadar asks your NIP-07 extension (Alby, nos2x…) for your public key in a temporary tab.</p>
+                  <p class="hint">XMRadar asks your NIP-07 extension (Alby, nos2x…) for your public key in a temporary tab. No signer? XMRadar makes a Nostr identity for you instead (see below).</p>
                   <div class="row"><button class="primary" data-act="test-signer">Connect signer</button></div>
                 </div>
               </div>

@@ -21,7 +21,7 @@ import { allRelaysFrom, fetchWriteRelays, publishToRelays, readEach, readRelay }
 import { assertFetchableImageUrl } from '../nostr/url-guard';
 import { checkSessionSender, checkShareMenuSender, isExtensionPageSender, isSignerPage, isXUrl, SIGNER_PAGE, shareMenuRateLimit, withoutTab } from '../sender';
 import { setAuto, suggestFor, tagsReady } from '../ai/requests';
-import { syncedPostsItem } from '../settings';
+import { signerModeItem, syncedPostsItem } from '../settings';
 import { recordSynced, type SyncedPost } from '../nostr/synced';
 import { DEFAULT_RELAYS, directoryStatusItem, nip65CacheItem, siwmHelperOn, useNip65On, INDEX_RELAYS, withoutIndex, myHandleItem, postedItem, pubkeyItem, receiptsOn, settingsItem, siteInfoOn, updateCheckOn, updateStateItem, logoPackItem, xapInboxItem, xapNotifyOn, siteWarningsOn, copyReportsOn, swapRecordDaysItem, swapRecordsCleanedItem, xapMarksItem, xClaimsChangedItem, xClaimsOn, xmrSettingsItem } from '../settings';
 import { storage } from 'wxt/utils/storage';
@@ -58,6 +58,8 @@ import { setGlobalBadge, setTabBadge, updateBadge, type BadgeAction } from '../u
 import { logoKeeper } from '../sites/logos';
 import { INBOX_NOTICE_ID, inboxKeeper, MAX_RELAYS } from '../xap/inbox';
 import { readRelaysFrom, undoTemplate, xoRelayOrder, xoTemplate } from '../xo/event';
+import { idbKeyStore, managedIdentity } from '../identity/managed';
+import { bySignerMode, NoSignerError } from '../identity/signer-mode';
 import { rememberSent } from '../xo/sent';
 import { XO_NOTICE_ID, xoKeeper } from '../xo/inbox';
 import { knownLiker, rememberLiker, verifyLiker } from '../xo/verify';
@@ -320,9 +322,12 @@ export default defineBackground(() => {
       void xoInbox.apply();
     }
   });
-  pubkeyItem.watch(() => {
+  pubkeyItem.watch((pk, old) => {
     void xapInbox.apply();
     void xoInbox.apply();
+    // another key now signs (switching between the signer and the XMRadar identity, PLAN-MANAGEDID): what
+    // the old key sent can't be taken back by this one, and the handle must be proven again for it
+    if (old && pk && old !== pk) void rebindToKey();
   });
   void settingsItem.getValue().then((s) => updates.apply(updateCheckOn(s)));
   settingsItem.watch((s, old) => {
@@ -727,6 +732,39 @@ async function handle(msg: BgRequest, sender: Browser.runtime.MessageSender): Pr
     case 'test-signer': {
       if (!isExtensionPage(sender)) throw new Error('Not allowed');
       return { pubkey: await testSigner() };
+    }
+    // the identity card in Options (PLAN-MANAGEDID); extension pages only, the key never leaves for a page
+    case 'identity-state': {
+      if (!isExtensionPage(sender)) throw new Error('Not allowed');
+      return { mode: await signerModeItem.getValue(), managed: await managed.pubkey(), current: await pubkeyItem.getValue() };
+    }
+    case 'identity-mode': {
+      if (!isExtensionPage(sender)) throw new Error('Not allowed');
+      if (msg.mode !== 'auto' && msg.mode !== 'signer' && msg.mode !== 'managed') throw new Error('Bad mode');
+      // "only my signer" needs a signer that answers: the choice isn't taken (and the key in use doesn't
+      // change) until one does
+      if (msg.mode === 'signer') {
+        const pubkey = await signerPubkey();
+        await signerModeItem.setValue('signer');
+        await pubkeyItem.setValue(pubkey);
+        return null;
+      }
+      await signerModeItem.setValue(msg.mode);
+      // the key now in use, so everything keyed to it follows
+      if (msg.mode === 'managed') await pubkeyItem.setValue((await managed.ensure()).pubkey);
+      return null;
+    }
+    case 'identity-export': {
+      if (!isExtensionPage(sender) || !sender.url?.startsWith(browser.runtime.getURL('/options.html'))) throw new Error('Not allowed');
+      return { nsec: await managed.exportNsec() };
+    }
+    case 'identity-delete': {
+      if (!isExtensionPage(sender)) throw new Error('Not allowed');
+      const was = await managed.pubkey();
+      await managed.forget();
+      if ((await signerModeItem.getValue()) === 'managed') await signerModeItem.setValue('auto');
+      if (was && (await pubkeyItem.getValue()) === was) await pubkeyItem.setValue(null);
+      return null;
     }
     case 'share-menu-copy': {
       const tabId = checkShareMenuSender(sender, browser.runtime.id);
@@ -1443,6 +1481,72 @@ async function xapPostTotals(posts: unknown, fresh: boolean, tabId: number): Pro
   return { totals: out, pending: misses.slice(granted) };
 }
 
+// ---- which key signs (PLAN-MANAGEDID) ----
+
+/** Key-bound state goes when the signing key changes; the inboxes already restart per key. */
+async function rebindToKey() {
+  await Promise.all([
+    xoSentItem.setValue({}),
+    xapSentItem.setValue([]),
+    myHandleItem.getValue().then((m) => (m?.proven ? myHandleItem.setValue({ ...m, proven: false }) : undefined)),
+  ]).catch((e) => console.warn('[XMRadar] identity rebind', (e as Error).message));
+}
+
+
+const managed = managedIdentity(idbKeyStore);
+
+/**
+ * `auto` (default): the user's signer; when the signer page finds none at all, the XMRadar identity, made
+ * on first use and announced, and the mode becomes `managed` so later signatures skip the tab. A signer
+ * that refuses or fails is never replaced. `signer` never uses the XMRadar identity; `managed` always does.
+ */
+async function managedFallback(): Promise<void> {
+  const { created } = await managed.ensure();
+  await signerModeItem.setValue('managed');
+  if (created)
+    await browser.notifications
+      .create('xmradar-identity', {
+        type: 'basic',
+        iconUrl: browser.runtime.getURL('/icon/128.png'),
+        title: 'XMRadar',
+        message: 'No Nostr signer was found, so XMRadar made a Nostr identity for you. It’s kept in this browser only, without a password. See Options → Monero identity.',
+      })
+      .catch(() => {});
+}
+
+async function testSigner(): Promise<string> {
+  const pubkey = await bySignerMode(await signerModeItem.getValue(), signerPubkey, async () => (await managed.ensure()).pubkey, managedFallback);
+  await pubkeyItem.setValue(pubkey);
+  return pubkey;
+}
+
+/**
+ * Exactly this key signs this template. `pubkey` always comes from `testSigner`, which already chose the key
+ * (and made the XMRadar identity when there's no signer), so there's no fallback here: falling back would
+ * sign with a different key than the one asked for.
+ */
+async function signExact(template: EventTemplate, pubkey: string): Promise<Event> {
+  const mode = await signerModeItem.getValue();
+  if (mode === 'managed' || (await managed.pubkey()) === pubkey) {
+    const event = await managed.sign(template);
+    checkSigned(template, event, pubkey);
+    return event;
+  }
+  return signerSignExact(template, pubkey);
+}
+
+async function signQuietly(template: EventTemplate): Promise<{ pubkey: string; event: Event }> {
+  const out = await bySignerMode(
+    await signerModeItem.getValue(),
+    () => signerSignQuietly(template),
+    async () => ({ pubkey: (await managed.ensure()).pubkey, event: await managed.sign(template) }),
+    managedFallback,
+  );
+  checkSigned(template, out.event, out.pubkey);
+  await pubkeyItem.setValue(out.pubkey);
+  return out;
+}
+
 /** Extension pages have no window.nostr, so signer calls run in a throwaway tab on our own page (no script of its own). */
 async function withSignerTab<T>(run: (tabId: number) => Promise<T>, active = true): Promise<T> {
   const tab = await browser.tabs.create({ url: SIGNER_PAGE, active });
@@ -1472,7 +1576,7 @@ async function withSignerTab<T>(run: (tabId: number) => Promise<T>, active = tru
   }
 }
 
-async function testSigner(): Promise<string> {
+async function signerPubkey(): Promise<string> {
   const pubkey = await withSignerTab(async (tabId) => {
     const [res] = await browser.scripting.executeScript({
       target: { tabId },
@@ -1480,7 +1584,7 @@ async function testSigner(): Promise<string> {
       func: async () => {
         const w = window as unknown as { nostr?: { getPublicKey(): Promise<string> } };
         for (let i = 0; i < 30 && !w.nostr; i++) await new Promise((r) => setTimeout(r, 100));
-        if (!w.nostr) return { error: 'No NIP-07 signer found (install Alby or nos2x, or unlock it)' };
+        if (!w.nostr) return { noSigner: true, error: 'No NIP-07 signer found (install Alby or nos2x, or unlock it)' };
         try {
           return { pubkey: await w.nostr.getPublicKey() };
         } catch (e) {
@@ -1488,11 +1592,11 @@ async function testSigner(): Promise<string> {
         }
       },
     });
-    const out = res?.result as { pubkey?: string; error?: string } | undefined;
+    const out = res?.result as { pubkey?: string; error?: string; noSigner?: boolean } | undefined;
+    if (out?.noSigner) throw new NoSignerError(out.error);
     if (!out?.pubkey) throw new Error(out?.error ?? 'Signer test failed');
     return out.pubkey;
   });
-  await pubkeyItem.setValue(pubkey);
   return pubkey;
 }
 
@@ -1501,7 +1605,7 @@ async function testSigner(): Promise<string> {
  * the current tab (PLAN-MONEROLIKE: an xo shouldn't take the user away from X). The signer still shows its
  * own prompt when it asks. Checked against the template and the key it named.
  */
-async function signQuietly(template: EventTemplate): Promise<{ pubkey: string; event: Event }> {
+async function signerSignQuietly(template: EventTemplate): Promise<{ pubkey: string; event: Event }> {
   const out = await withSignerTab(async (tabId) => {
     const [res] = await browser.scripting.executeScript({
       target: { tabId },
@@ -1510,7 +1614,7 @@ async function signQuietly(template: EventTemplate): Promise<{ pubkey: string; e
       func: async (ev: EventTemplate) => {
         const w = window as unknown as { nostr?: { getPublicKey(): Promise<string>; signEvent(e: EventTemplate): Promise<unknown> } };
         for (let i = 0; i < 30 && !w.nostr; i++) await new Promise((r) => setTimeout(r, 100));
-        if (!w.nostr) return { error: 'No NIP-07 signer found (install Alby or nos2x, or unlock it)' };
+        if (!w.nostr) return { noSigner: true, error: 'No NIP-07 signer found (install Alby or nos2x, or unlock it)' };
         try {
           const pubkey = await w.nostr.getPublicKey();
           return { pubkey, event: await w.nostr.signEvent(ev) };
@@ -1519,12 +1623,12 @@ async function signQuietly(template: EventTemplate): Promise<{ pubkey: string; e
         }
       },
     });
-    const r = res?.result as { pubkey?: string; event?: Event; error?: string } | undefined;
+    const r = res?.result as { pubkey?: string; event?: Event; error?: string; noSigner?: boolean } | undefined;
+    if (r?.noSigner) throw new NoSignerError(r.error);
     if (!r?.pubkey || !r.event) throw new Error(r?.error ?? 'The signer did not sign');
     return { pubkey: r.pubkey, event: r.event };
   }, false);
   checkSigned(template, out.event, out.pubkey);
-  await pubkeyItem.setValue(out.pubkey);
   return out;
 }
 
@@ -1532,7 +1636,7 @@ async function signQuietly(template: EventTemplate): Promise<{ pubkey: string; e
  * One-shot signing of exactly this event (PLAN-PHASE2 §4.8). It doesn't go through the page
  * bridge, whose allowlist stays {1, 24242}; the result is checked against the template.
  */
-async function signExact(template: EventTemplate, pubkey: string): Promise<Event> {
+async function signerSignExact(template: EventTemplate, pubkey: string): Promise<Event> {
   const signed = await withSignerTab(async (tabId) => {
     const [res] = await browser.scripting.executeScript({
       target: { tabId },
@@ -1541,7 +1645,7 @@ async function signExact(template: EventTemplate, pubkey: string): Promise<Event
       func: async (ev: EventTemplate) => {
         const w = window as unknown as { nostr?: { signEvent(e: EventTemplate): Promise<unknown> } };
         for (let i = 0; i < 30 && !w.nostr; i++) await new Promise((r) => setTimeout(r, 100));
-        if (!w.nostr) return { error: 'No NIP-07 signer found (install Alby or nos2x, or unlock it)' };
+        if (!w.nostr) return { noSigner: true, error: 'No NIP-07 signer found (install Alby or nos2x, or unlock it)' };
         try {
           return { event: await w.nostr.signEvent(ev) };
         } catch (e) {
@@ -1549,7 +1653,8 @@ async function signExact(template: EventTemplate, pubkey: string): Promise<Event
         }
       },
     });
-    const out = res?.result as { event?: Event; error?: string } | undefined;
+    const out = res?.result as { event?: Event; error?: string; noSigner?: boolean } | undefined;
+    if (out?.noSigner) throw new NoSignerError(out.error);
     if (!out?.event) throw new Error(out?.error ?? 'The signer did not sign');
     return out.event;
   });

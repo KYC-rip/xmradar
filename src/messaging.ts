@@ -177,6 +177,11 @@ export type BgRequest =
   /** xo (PLAN-MONEROLIKE): send or take back the user's xo on an X post */
   | { type: 'xo-send'; post: string; author: string }
   | { type: 'xo-undo'; post: string }
+  /** the identity card in Options (PLAN-MANAGEDID) */
+  | { type: 'identity-state' }
+  | { type: 'identity-mode'; mode: 'auto' | 'signer' | 'managed' }
+  | { type: 'identity-export' }
+  | { type: 'identity-delete' }
   | { type: 'xap-post-totals'; posts: { id: string; pubkey: string }[]; fresh?: boolean }
   | { type: 'xap-publish'; recipient: string; address: string; amount: string; post?: string }
   | { type: 'xmr-price' }
@@ -256,6 +261,12 @@ export type BgResponse<T extends BgRequest['type']> = T extends 'fetch-image'
                                 ? null
                                 : T extends 'xap-totals'
                                   ? XapTotalsResult
+                                  : T extends 'identity-state'
+                                    ? { mode: 'auto' | 'signer' | 'managed'; managed: string | null; current: string | null }
+                                  : T extends 'identity-mode' | 'identity-delete'
+                                    ? null
+                                  : T extends 'identity-export'
+                                    ? { nsec: string | null }
                                   : T extends 'xo-send' | 'xo-undo'
                                     ? { ok: boolean; id?: string; error?: string }
                                   : T extends 'xap-post-totals'

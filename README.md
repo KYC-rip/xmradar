@@ -129,6 +129,12 @@ Next to the Xap button on X posts, a heart sends **xo**: a Monero like, as a pub
 - **Receiving:** with *Tell me when I get a Xap or an xo* on, every 30 minutes XMRadar asks your relays and the defaults for xos to your key. Only xos from Monero people count (a key with a valid Monero address and an X account its proof tweet confirms), one per person per post; forged events and other people's deletions don't. One notification per check, an *xos received* list in Options, and on your own posts the count, with a few hearts floating up once when new ones arrive. Your own xo on your post counts as one, as on X.
 - With reduced motion, the hearts change state without animating.
 
+## Your Nostr identity
+
+XMRadar signs with your NIP-07 signer (Alby, nos2x…). If it finds **no signer at all**, it makes an **XMRadar identity** instead: a Nostr key kept in this browser profile only (the extension's own IndexedDB, which pages and content scripts can't open), without a password, and tells you with a notification. It signs only what XMRadar publishes (xos, Xap receipts, your Monero address, X proof, profile name and relay list); never copies of your posts. A signer that refuses is never replaced by it.
+
+*Options → Monero identity → Your Nostr identity* chooses **Automatic** (default), **Only my signer** (needs a signer that answers) or **The XMRadar identity**, and can **Export key** (shown once) or **Delete** it. Switching keys clears what the other key sent from XMRadar's lists, and your X handle is proven again for the new key. A signer is safer for your main identity.
+
 ## Swap receipts (NKIP-0001)
 
 [NKIP-0001](https://github.com/nkips/nkips/blob/main/nkips/nkip-0001.md) (Verifiable Deposit Receipts) has exchanges sign a receipt for every order and witness a commitment to it on Nostr before showing the deposit address. XMRadar takes the spec's browser-extension role:
