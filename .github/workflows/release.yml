@@ -64,6 +64,15 @@ jobs:
         run: |
           V="${TAG#v}.${{ github.run_number }}"
           {
+            # this version's section of CHANGELOG.md, when there is one
+            awk -v h="## ${TAG#v}" '$0 == h { on = 1; next } on && /^## / { exit } on' CHANGELOG.md 2>/dev/null | sed -e '/./,$!d'
+            if awk -v h="## ${TAG#v}" '$0 == h { f = 1 } END { exit !f }' CHANGELOG.md 2>/dev/null; then
+              echo
+              echo "All changes: [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/$TAG/CHANGELOG.md)"
+              echo
+              echo '---'
+              echo
+            fi
             echo "Built by GitHub Actions run ${{ github.run_id }} (build ${{ github.run_number }}) from ${{ github.sha }}."
             echo
             echo '```'
