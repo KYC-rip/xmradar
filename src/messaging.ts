@@ -7,7 +7,7 @@ import type { ClaimPlace, ClaimValues } from './identity/xclaims';
 import type { LetterExport } from './log/export';
 import type { LetterReply, LogPage } from './log/service';
 import type { SavedLetter } from './log/store';
-import type { PageCheck } from './receipts/check';
+import type { Line, PageCheck } from './receipts/check';
 import type { ReceiptExport } from './receipts/export';
 import type { PublicRecord, SavedReceipt } from './receipts/store';
 import type { SiteEntry } from './sites/feed';
@@ -16,6 +16,12 @@ import type { ReportStatus } from './sites/report';
 import type { Lookalike } from './sites/lookalike-text';
 import type { AddressCheck } from './xmr/address';
 import type { SiwmView, SubmitResult } from './siwm/service';
+
+/** Order pages for saved records (PLAN-RECORDVIEW), by receipt commitment and by letter id. */
+export interface RecordLinks {
+  receipts: Record<string, string>;
+  letters: Record<string, string>;
+}
 
 /** background → content */
 export interface OpenComposerMsg {
@@ -181,6 +187,8 @@ export type BgRequest =
   | { type: 'receipt-delete'; commitment: string }
   | { type: 'receipt-export'; commitment: string }
   | { type: 'receipt-record'; commitment: string }
+  | { type: 'record-links' }
+  | { type: 'receipt-signature'; commitment: string }
   | { type: 'log-page' }
   | { type: 'log-found'; siteId: string; text: string }
   | { type: 'letters-list' }
@@ -272,6 +280,10 @@ export type BgResponse<T extends BgRequest['type']> = T extends 'fetch-image'
                                               ? ReceiptExport
                                               : T extends 'receipt-record'
                                                 ? PublicRecord
+                                              : T extends 'record-links'
+                                                ? RecordLinks
+                                              : T extends 'receipt-signature'
+                                                ? Line
                                                 : T extends 'log-page'
                                                   ? LogPage[]
                                                   : T extends 'log-found'

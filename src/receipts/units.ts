@@ -42,3 +42,13 @@ export function unitsOf(asset: string, address: string): { decimals: number; net
   if (solana(address)) return { decimals: 6, network: 'Solana' };
   return null;
 }
+
+/** Base units shown in coins when the decimals are known (for a token, from its address's network); otherwise raw, labelled. */
+export function amount(base: string, asset: string, address: string): string {
+  const units = unitsOf(asset, address);
+  if (!units) return `${base} base units of ${asset} (the network sets the decimals)`;
+  const { decimals, network } = units;
+  const s = base.padStart(decimals + 1, '0');
+  const frac = s.slice(-decimals).replace(/0+$/, '');
+  return `${s.slice(0, -decimals)}${frac ? `.${frac}` : ''} ${asset.trim().toUpperCase()}${network ? ` on ${network}` : ''}`;
+}

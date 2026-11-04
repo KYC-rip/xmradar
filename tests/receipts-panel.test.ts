@@ -103,3 +103,130 @@ describe('Options → Swaps and sites: letters', () => {
     expect(q('status').textContent).toBe('Deleted 2 old letters and receipts.');
   });
 });
+
+describe('Options → swap records: Open order and View (PLAN-RECORDVIEW)', () => {
+  const full = {
+    ...receipt,
+    receipt: { ...receipt.receipt, v: '2', deposit_amount: '12', deposit_address: 'addr1', payout_amount: '300000000000', payout_address: '<b>4x</b>', rate_type: 'fixed', policy_hash: 'ph', key_id: 'k1', sig: 'SIG', salt: 'SECRETSALT' },
+  } as unknown as SavedReceipt;
+  let links: unknown;
+  beforeEach(() => {
+    fakeBrowser.reset();
+    links = { receipts: { [full.commitment]: 'https://kyc.rip/track/EX-1' }, letters: {} };
+    send.mockReset().mockImplementation(async (m: { type: string }) => {
+      if (m.type === 'receipts-list') return [full];
+      if (m.type === 'letters-list') return [letter];
+      if (m.type === 'record-links') return links;
+      if (m.type === 'receipt-signature') return { level: 'ok', text: 'Signed by kyc.rip' };
+      return null;
+    });
+  });
+  const cardOf = (root: HTMLElement, title: string) => [...root.querySelectorAll('.card')].find((c) => c.querySelector('h2')!.textContent!.startsWith(title))!;
+
+  it('Open order only where the background gives a link, opened without a referrer', async () => {
+    const { q } = await mount();
+    const a = cardOf(q('list'), 'EX-1').querySelector('a')!;
+    expect(a.textContent).toBe('Open order');
+    expect(a.getAttribute('href')).toBe('https://kyc.rip/track/EX-1');
+    expect(a.rel).toBe('noopener noreferrer');
+    expect(a.target).toBe('_blank');
+    expect(cardOf(q('list'), 'STRRSXUE').querySelector('a')).toBeNull();
+  });
+
+  it('no links answer (old background) leaves the cards as they were', async () => {
+    links = null;
+    const { q } = await mount();
+    expect(q('list').querySelector('a')).toBeNull();
+    expect(q('list').querySelectorAll('.card').length).toBe(2);
+  });
+
+  it('View shows what was signed, as text, with the signature check; never the salt', async () => {
+    const { q, button } = await mount();
+    button(cardOf(q('list'), 'EX-1'), 'View').click();
+    await vi.waitFor(() => expect(cardOf(q('list'), 'EX-1').querySelector('.sig-ok')?.textContent).toBe('Signed by kyc.rip'));
+    const card = cardOf(q('list'), 'EX-1');
+    const text = card.querySelector('.rec-view')!.textContent!;
+    for (const s of ['0.00000012 BTC, to', 'addr1', '0.3 XMR, at', '<b>4x</b>', 'fixed', 'ph', 'k1', 'SIG', 'Kept, not shown']) expect(text).toContain(s);
+    expect(text).not.toContain('SECRETSALT');
+    expect(card.querySelector('.rec-view b')).toBeNull();
+    expect(button(card, 'Hide').getAttribute('aria-expanded')).toBe('true');
+    expect(send).toHaveBeenCalledWith({ type: 'receipt-signature', commitment: full.commitment });
+  });
+
+  it('a v1 receipt without a salt has no salt row; a letter shows its text', async () => {
+    const noSalt = { ...full, receipt: { ...full.receipt, salt: undefined } } as unknown as SavedReceipt;
+    send.mockImplementation(async (m: { type: string }) => (m.type === 'receipts-list' ? [noSalt] : m.type === 'letters-list' ? [{ ...letter, text: '-----BEGIN PGP SIGNED MESSAGE-----\nhi', fingerprint: 'FP' }] : m.type === 'record-links' ? links : { level: 'caution', text: 'Not checked when it was saved.' }));
+    const { q, button } = await mount();
+    button(cardOf(q('list'), 'EX-1'), 'View').click();
+    await vi.waitFor(() => expect(cardOf(q('list'), 'EX-1').querySelector('.sig-caution')).not.toBeNull());
+    expect(cardOf(q('list'), 'EX-1').textContent).not.toContain('Salt');
+    button(cardOf(q('list'), 'STRRSXUE'), 'View').click();
+    const pre = cardOf(q('list'), 'STRRSXUE').querySelector('pre')!;
+    expect(pre.textContent).toBe('-----BEGIN PGP SIGNED MESSAGE-----\nhi');
+    expect(cardOf(q('list'), 'STRRSXUE').textContent).toContain('FP');
+  });
+
+  it('a View stays open when the list is drawn again, and links follow the feed', async () => {
+    const { q, button } = await mount();
+    button(cardOf(q('list'), 'EX-1'), 'View').click();
+    links = { receipts: {}, letters: {} };
+    await fakeBrowser.storage.local.set({ siteFeed: { issuedAt: 2, expiresAt: 3, sites: [] } });
+    await vi.waitFor(() => expect(cardOf(q('list'), 'EX-1').querySelector('a')).toBeNull());
+    expect(cardOf(q('list'), 'EX-1').querySelector('.rec-view')).not.toBeNull();
+  });
+});
+
+describe('letter View: MistProof laid out', () => {
+  it('the signed payload is shown as indented JSON; anything else as it is', async () => {
+    const { mistproofPayload } = await import('../src/ui/receipts-panel');
+    const text = JSON.stringify({ alg: 'Ed25519', payload: JSON.stringify({ order: 'DX-1', send: { amount: '0.1', coin: 'XMR' } }), signature: 's' });
+    expect(mistproofPayload(text)).toBe(JSON.stringify({ order: 'DX-1', send: { amount: '0.1', coin: 'XMR' } }, null, 2));
+    expect(mistproofPayload('-----BEGIN PGP')).toBeNull();
+    expect(mistproofPayload(JSON.stringify({ payload: 'not json' }))).toBeNull();
+  });
+});
+
+describe('swap records: review fixes (PLAN-RECORDVIEW)', () => {
+  beforeEach(() => fakeBrowser.reset());
+  it('a malformed link is left out; the list still draws', async () => {
+    send.mockReset().mockImplementation(async (m: { type: string }) => (m.type === 'receipts-list' ? [receipt] : m.type === 'letters-list' ? [] : m.type === 'record-links' ? { receipts: { [receipt.commitment]: 'not a url' }, letters: {} } : null));
+    const { q } = await mount();
+    expect(q('list').querySelectorAll('.card').length).toBe(1);
+    expect(q('list').querySelector('a')).toBeNull();
+  });
+  it('an older links answer arriving last doesn’t replace a newer one', async () => {
+    const answers: ((v: unknown) => void)[] = [];
+    send.mockReset().mockImplementation((m: { type: string }) =>
+      m.type === 'record-links' ? new Promise((r) => answers.push(r)) : Promise.resolve(m.type === 'receipts-list' ? [receipt] : m.type === 'letters-list' ? [] : null),
+    );
+    const root = document.createElement('div');
+    root.innerHTML = HTML;
+    document.body.replaceChildren(root);
+    const mounted = mountReceiptsPanel(root);
+    await vi.waitFor(() => expect(answers.length).toBe(1));
+    await fakeBrowser.storage.local.set({ siteFeed: { issuedAt: 2, expiresAt: 3, sites: [] } });
+    await vi.waitFor(() => expect(answers.length).toBe(2));
+    answers[1]!({ receipts: { [receipt.commitment]: 'https://kyc.rip/track/NEW' }, letters: {} });
+    answers[0]!({ receipts: { [receipt.commitment]: 'https://kyc.rip/track/OLD' }, letters: {} });
+    await mounted;
+    await vi.waitFor(() => expect(root.querySelector('a')?.getAttribute('href')).toBe('https://kyc.rip/track/NEW'));
+  });
+  it('Check public record makes an open View check the signature again', async () => {
+    let n = 0;
+    send.mockReset().mockImplementation(async (m: { type: string }) => {
+      if (m.type === 'receipts-list') return [{ ...receipt, savedAt: 0, receipt: { ...receipt.receipt, deposit_amount: '1', deposit_address: 'a', payout_amount: '1', payout_address: 'b', rate_type: 'fixed', policy_hash: 'p', key_id: 'k', sig: 's' } }];
+      if (m.type === 'letters-list') return [];
+      if (m.type === 'receipt-signature') return { level: 'ok', text: `check ${++n}` };
+      if (m.type === 'receipt-record') return { asked: [], seen: [], checkedAt: 1 };
+      return null;
+    });
+    const { q, button } = await mount();
+    const card = () => q('list').querySelector('.card')!;
+    button(card(), 'View').click();
+    await vi.waitFor(() => expect(card().querySelector('.sig-ok')?.textContent).toBe('check 1'));
+    const check = button(card(), 'Check public record');
+    check.disabled = false;
+    check.click();
+    await vi.waitFor(() => expect(card().querySelector('.sig-ok')?.textContent).toBe('check 2'));
+  });
+});

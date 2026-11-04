@@ -1,6 +1,8 @@
 import type { LetterAddress } from '../../log/check';
 import type { Line } from '../../receipts/check';
-import { unitsOf } from '../../receipts/units';
+import { amount } from '../../receipts/units';
+
+export { amount };
 import type { Receipt } from '../../receipts/verify';
 import { h } from './dom';
 
@@ -74,16 +76,6 @@ dd button { font: 11px system-ui, sans-serif; border: 1px solid #d9d6e3; backgro
   dt, .note, .head .x { color: #a9a6b8; } .sep { border-color: #333; }
 }
 @media (prefers-reduced-motion: reduce) { .box, .box.enter { transition: none; transform: none; } }`;
-
-/** Base units shown in coins when the decimals are known (for a token, from its address's network); otherwise raw, labelled. */
-export function amount(base: string, asset: string, address: string): string {
-  const units = unitsOf(asset, address);
-  if (!units) return `${base} base units of ${asset} (the network sets the decimals)`;
-  const { decimals, network } = units;
-  const s = base.padStart(decimals + 1, '0');
-  const frac = s.slice(-decimals).replace(/0+$/, '');
-  return `${s.slice(0, -decimals)}${frac ? `.${frac}` : ''} ${asset.trim().toUpperCase()}${network ? ` on ${network}` : ''}`;
-}
 
 /** what the card is about: a receipt, or only letters */
 const noun = (entries: CardEntry[]) => (entries.some((e) => e.receipt || !e.letter) ? 'Receipt' : 'Letter');

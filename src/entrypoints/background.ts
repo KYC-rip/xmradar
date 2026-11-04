@@ -29,9 +29,10 @@ import { xapPoolQuery } from '../xap/fetch';
 import { FreshTotals, countFor, countPosts, publishXap, validPosts, withSent, type PostRef, type SentXap, type XapDeps } from '../xap/service';
 import { parsePostKey, postKey } from '../xap/post';
 import { xapTtl } from '../xap/ttl';
-import type { SiteInfo, XapPostTotalsResult, XapTotals, XapTotalsResult } from '../messaging';
+import type { RecordLinks, SiteInfo, XapPostTotalsResult, XapTotals, XapTotalsResult } from '../messaging';
 import { trackCreate } from '../burner/tracked';
-import { checkPageReceipt, type CheckDeps } from '../receipts/check';
+import { checkPageReceipt, savedSignatureLine, type CheckDeps } from '../receipts/check';
+import { letterOrderLink, receiptOrderLink } from '../receipts/order-link';
 import { lookalikeIndex, lookalikeOf, type LookalikeIndex } from '../sites/lookalike';
 import { badgeFor, FEED_READER_V, FEED_URL, leadSite, publicSite, readFeed, sitesFor, worstGrade, type SiteFeed, type TabState } from '../sites/feed';
 import { fetchManifest } from '../receipts/fetch';
@@ -826,6 +827,29 @@ async function handle(msg: BgRequest, sender: Browser.runtime.MessageSender): Pr
       const s = await idbReceiptStore.get(msg.commitment);
       if (!s) throw new Error('No such receipt');
       return buildExport(s, await idbReceiptStore.getPolicy(s.receipt.policy_hash), Date.now());
+    }
+    case 'record-links': {
+      // one answer for the whole list; nothing when site info is off or the kept feed is out of date
+      if (!isExtensionPage(sender)) throw new Error('Not allowed');
+      const links: RecordLinks = { receipts: {}, letters: {} };
+      if (!siteInfoOn(await xmrSettingsItem.getValue())) return links;
+      const [feed, saved, kept] = await Promise.all([siteFeedItem.getValue(), idbReceiptStore.list(), idbLetterStore.list()]);
+      const now = Date.now();
+      for (const s of saved) {
+        const l = receiptOrderLink(feed, s.receipt.issuer, s.receipt.order_id, now);
+        if (l) links.receipts[s.commitment] = l;
+      }
+      for (const k of kept) {
+        const l = letterOrderLink(feed, k.siteId, k.orderId, now);
+        if (l) links.letters[k.id] = l;
+      }
+      return links;
+    }
+    case 'receipt-signature': {
+      if (!isExtensionPage(sender)) throw new Error('Not allowed');
+      const s = await idbReceiptStore.get(msg.commitment);
+      if (!s) throw new Error('No such receipt');
+      return savedSignatureLine(s);
     }
     case 'xap-inbox-check': {
       if (!isExtensionPage(sender)) throw new Error('Not allowed');

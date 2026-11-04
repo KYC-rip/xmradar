@@ -108,3 +108,16 @@ dl.state dd { margin: 0; }
 .xap-list .state { font-size: 11px; padding: 1px 7px; border-radius: 999px; background: var(--chip); }
 .xap-list .state.verified { color: var(--ok); }
 [data-relays="in-use"]:empty { display: none; }
+
+/* a swap record's View (PLAN-RECORDVIEW) */
+.rec-view { margin: 8px 0 0; display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 12px; font-size: 13px; }
+div.rec-view { display: flex; flex-direction: column; gap: 6px; }
+.rec-view dt { color: var(--muted); }
+.rec-view dd { margin: 0; min-width: 0; }
+.rec-view .mono { font-family: var(--mono); font-size: 12px; }
+.rec-view .wrap { overflow-wrap: anywhere; }
+.rec-view .sig-ok { color: var(--ok); font-weight: 600; }
+.rec-view .sig-caution { color: var(--warn); font-weight: 600; }
+.rec-view .sig-warn { color: var(--danger); font-weight: 600; }
+.letter-text { white-space: pre-wrap; overflow-wrap: anywhere; font-family: var(--mono); font-size: 12px; margin: 0; max-height: 360px; overflow: auto; }
+.row .button-link { color: var(--accent); font-weight: 600; text-decoration: none; padding: 6px 4px; }

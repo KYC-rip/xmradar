@@ -4,6 +4,17 @@ import { saveReceipt, type ReceiptStore, type SavedReceipt } from './store';
 import { commitment, keyFor, linkableV1, readReceipt, receiptSigValid, unsaltedPublicDeposit, type Manifest, type Receipt } from './verify';
 
 /**
+ * A saved receipt's signature, checked again now against the manifest kept with it (PLAN-RECORDVIEW); no
+ * fetch. A receipt saved without a check says so, and one saved from another host than its issuer says that.
+ */
+export function savedSignatureLine(s: Pick<SavedReceipt, 'receipt' | 'manifest' | 'page'>): Line {
+  if (!s.page.startsWith('https://')) return { level: 'warn', text: 'Saved from a page that wasn’t secure (not https): not checked.' };
+  if (!issuerMatchesPage(s.receipt.issuer, s.page)) return { level: 'warn', text: `Saved from ${s.page}, which isn’t ${s.receipt.issuer}: not checked.` };
+  if (!s.manifest) return { level: 'caution', text: 'Not checked when it was saved.' };
+  return signedLine(s.receipt, s.manifest);
+}
+
+/**
  * The order-page check in the background (PLAN-NKIP01 §1.1, §2, §3, §12): from the receipt text a page
  * carries to the card's lines, saving the receipt locally. It contacts only the issuer's own host (the
  * page the user has open), never a relay (§12: no public-record lookup from the order page).
