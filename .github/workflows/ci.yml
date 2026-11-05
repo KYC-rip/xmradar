@@ -23,6 +23,8 @@ jobs:
       - run: pnpm compile
       # the build first, so the test of where openpgp.js lands has something to read
       - run: pnpm build
+      # the RipleyOS files (xmradar-x.js, xmradar-service.js): tests/ripley.test.ts runs the built ones
+      - run: pnpm build:ripley
       - run: pnpm test
         env:
           XMRADAR_REQUIRE_BUILD: '1'

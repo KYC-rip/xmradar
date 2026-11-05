@@ -1,18 +1,16 @@
 import { naddrEncode, neventEncode } from 'nostr-tools/nip19';
 import { verifyEvent, type Event, type EventTemplate } from 'nostr-tools/pure';
 import { installBridge } from '../bridge';
-import { TokenBucket } from '../identity/bucket';
-import { EntryCache } from '../identity/cache';
-import { HANDLE_RE, normalizeHandle } from '../identity/envelope';
-import { KIND_IDENTITIES, KIND_PAYTO, moneroPayto, parseTweetProof, twitterClaims, verifyTwitterProof, type ProofResult, validEvent } from '../identity/nostr';
+import { normalizeHandle } from '../identity/envelope';
+import { KIND_IDENTITIES, KIND_PAYTO, moneroPayto, parseTweetProof, poolQuery, twitterClaims, verifyTwitterProof, type ProofResult, validEvent } from '../identity/nostr';
 import { buildMerged, kindFor, newestOwn, setupTargets, tweetUrl, type SetupAction } from '../identity/setup';
 import { validateMoneroAddress } from '../xmr/address';
 import { directoryKeeper, type StoredDirectory } from '../identity/directory';
-import { mergeBadge, resolveHandles, withoutNostr, withoutSelf, type Badge } from '../identity/resolve';
-import { resolveXmrbio, type SeenEntries } from '../identity/xmrbio';
-import { claimKeeper, selfEntries, type XClaimStore } from '../identity/xclaims';
+import type { Badge } from '../identity/resolve';
+import type { SeenEntries } from '../identity/xmrbio';
+import { claimKeeper, type XClaimStore } from '../identity/xclaims';
 import { BURNER_CREATE_PORT, type BurnerCreateEvent } from '../messaging';
-import type { BgRequest, BgResponse, ImageInfo, OpenComposerMsg, OpenTipMsg, PreparedSetup, ResolveHandlesResult, SetupRequest, SetupStatus, Wrapped, XmrbioResult, XmrbioStatus } from '../messaging';
+import type { BgRequest, BgResponse, ImageInfo, OpenComposerMsg, OpenTipMsg, PreparedSetup, SetupRequest, SetupStatus, Wrapped, XmrbioStatus } from '../messaging';
 import { setupStatusLast, xmrbioLinked } from '../identity/status';
 import { uploadBlob } from '../nostr/blossom';
 import { statusIdFromUrl } from '../extractors/x-article';
@@ -28,10 +26,8 @@ import { storage } from 'wxt/utils/storage';
 import { activeInbox, burnerCreatingItem, burnerInboxItem, burnerLastErrorItem, burnFreeInbox, createFreeInbox, forgetImportedInbox, importInbox, type BurnerDeps } from '../burner/service';
 import { idbTokenStore } from '../burner/token-store';
 import { xapPoolQuery } from '../xap/fetch';
-import { FreshTotals, countFor, countPosts, publishXap, validPosts, withSent, type PostRef, type SentXap, type XapDeps } from '../xap/service';
-import { parsePostKey, postKey } from '../xap/post';
-import { xapTtl } from '../xap/ttl';
-import type { RecordLinks, SiteInfo, XapPostTotalsResult, XapTotals, XapTotalsResult } from '../messaging';
+import { publishXap, withSent, type SentXap } from '../xap/service';
+import type { RecordLinks, SiteInfo, XapTotals } from '../messaging';
 import { trackCreate } from '../burner/tracked';
 import { checkPageReceipt, savedSignatureLine, type CheckDeps } from '../receipts/check';
 import { letterOrderLink, receiptOrderLink } from '../receipts/order-link';
@@ -46,7 +42,6 @@ import { letterRequests } from '../log/service';
 import { idbLetterStore } from '../log/store';
 import { swapRecordsKeeper } from '../receipts/cleanup';
 import { checkPublicRecord } from '../receipts/witness';
-import { fetchXmrUsd, PRICE_RETRY_MS, PRICE_TTL_MS } from '../xap/price';
 import { markFor, withMark } from '../xap/marks';
 import { GUARD_PATH } from '../sites/guard-rules';
 import { guardKeeper, type DnrApi, type GuardTokens } from '../sites/guard-keeper';
@@ -66,18 +61,14 @@ import { knownLiker, rememberLiker, verifyLiker } from '../xo/verify';
 import { xoButtonOn, xoCountsItem, xoInboxItem, xoLikersItem, xoSentItem } from '../settings';
 import { shootQuote, shotGate, validRequest, type Crop, type ShotDeps } from '../capture/quote-shot';
 import { cappedText, siwmService, type SiwmStore } from '../siwm/service';
+import { xLookups } from '../service/x-lookups';
+import { boundedBody } from '../service/bounded-body';
 
 const MENU_ID = 'xmradar';
 const TIP_MENU_ID = 'xmradar-tip';
 const X_PATTERNS = ['https://x.com/*', 'https://twitter.com/*', 'https://mobile.x.com/*', 'https://mobile.twitter.com/*'];
 const SESSION_TTL_MS = 15 * 60_000;
 const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
-const BADGE_TTL_MS = 6 * 3600_000;
-// a "no badge" answer may come from relays that were briefly down, so it is rechecked sooner
-const NO_BADGE_TTL_MS = 3600_000;
-const PROOF_OK_TTL_MS = 7 * 86400_000;
-const PROOF_FAIL_TTL_MS = 86400_000;
-const MAX_HANDLES_PER_CALL = 200;
 
 interface Session {
   id: string;
@@ -93,8 +84,6 @@ const sessionsItem = storage.defineItem<Session[]>('session:composerSessions', {
 const shareMenuLast = storage.defineItem<Record<number, number>>('session:shareMenuLast', { fallback: {} });
 const SHARE_MENU_GAP_MS = 2000;
 const resolveSeen = storage.defineItem<SeenEntries>('local:xmrbioResolveSeen', { fallback: [] });
-// resolves run one at a time so concurrent lookups can't overwrite each other's replay guard entry
-let resolveQueue: Promise<unknown> = Promise.resolve();
 // the relays each composer session's publish went to: a retry may use only those (PLAN-RELAYDEFAULTS)
 const publishRelaysItem = storage.defineItem<Record<string, string[]>>('session:publishRelays', { fallback: {} });
 // relays that keep failing are skipped for a day (PLAN-DEADRELAYS)
@@ -124,10 +113,6 @@ const recordHealth = (results: Parameters<typeof relayHealth.record>[0]) => rela
 type CacheEntries<V> = [string, { v: V; at: number }][];
 const badgeCacheItem = storage.defineItem<CacheEntries<Badge>>('local:badgeCache', { fallback: [] });
 const proofCacheItem = storage.defineItem<CacheEntries<ProofResult>>('local:proofCache', { fallback: [] });
-let caches: Promise<{ badges: EntryCache<Badge>; proofs: EntryCache<ProofResult> }> | null = null;
-let persistTimer: ReturnType<typeof setTimeout> | undefined;
-// RATE-2: only relay (source B) lookups are throttled; burst 50, refill 2/s, per tab
-const buckets = new Map<number, TokenBucket>();
 
 // image bytes between fetch-image and upload-image; refetched if the worker was suspended
 const imageCache = new Map<string, { bytes: ArrayBuffer; mime: string }>();
@@ -137,54 +122,27 @@ const xapSentItem = storage.defineItem<SentXap[]>('local:xapsSent', { fallback: 
 const xapCacheItem = storage.defineItem<CacheEntries<XapTotals>>('local:xapTotalsCache', { fallback: [] });
 const xapLastItem = storage.defineItem<number>('session:xapLast', { fallback: 0 });
 const xmrUsdItem = storage.defineItem<{ usd: number; at: number } | null>('session:xmrUsd', { fallback: null });
-let xmrUsdInFlight: Promise<number> | null = null;
-let xmrUsdFailedAt = 0;
-
-/** USD per XMR, at most one fetch every 5 min (1 min after a failure), shared by every popup asking meanwhile. */
-async function xmrUsd(): Promise<number> {
-  const cached = await xmrUsdItem.getValue();
-  if (cached && Date.now() - cached.at < PRICE_TTL_MS) return cached.usd;
-  if (Date.now() - xmrUsdFailedAt < PRICE_RETRY_MS) throw new Error('Price unavailable');
-  xmrUsdInFlight ??= fetchXmrUsd()
-    .then(
-      async (usd) => {
-        await xmrUsdItem.setValue({ usd, at: Date.now() }).catch(() => {});
-        return usd;
-      },
-      (e) => {
-        xmrUsdFailedAt = Date.now();
-        throw e;
-      },
-    )
-    .finally(() => (xmrUsdInFlight = null));
-  return xmrUsdInFlight;
-}
 const XAP_GAP_MS = 10_000;
-const MAX_XAP_RECIPIENTS = 50;
-let xapCache: Promise<EntryCache<XapTotals>> | null = null;
-let xapPersistTimer: ReturnType<typeof setTimeout> | undefined;
-const xapBuckets = new Map<number, TokenBucket>();
-const xapDeps: XapDeps = {
-  query: xapPoolQuery,
-  lookupRelays: async () => {
-    const pubkey = await pubkeyItem.getValue();
-    const mine = pubkey ? await resolveRelays(pubkey).catch(() => []) : (await settingsItem.getValue()).relays;
-    return [...new Set([...DEFAULT_RELAYS, ...INDEX_RELAYS, ...mine])];
-  },
-  me: async () => ({ pubkey: await pubkeyItem.getValue(), sent: await xapSentItem.getValue() }),
+/** your relays for xap lookups: your NIP-65 list while a signer is known, else the manual ones */
+const myXapRelays = async () => {
+  const pubkey = await pubkeyItem.getValue();
+  return pubkey ? await resolveRelays(pubkey).catch(() => []) : (await settingsItem.getValue()).relays;
 };
-const freshTotals = new FreshTotals(async (pk) => {
-  const t = (await countFor([pk], xapDeps)).get(pk)!;
-  (await loadXapCache()).set(pk, t, Date.now());
-  persistXapCache();
-  return t;
-});
-// post figures share the cache under postKey(pubkey, id), which never looks like a bare pubkey
-const freshPostTotals = new FreshTotals(async (key) => {
-  const t = (await countPosts([parsePostKey(key)], xapDeps)).get(key)!;
-  (await loadXapCache()).set(key, t, Date.now());
-  persistXapCache();
-  return t;
+/** where profiles and receipts are looked up: defaults, index relays and yours */
+const xapLookupRelays = async () => [...new Set([...DEFAULT_RELAYS, ...INDEX_RELAYS, ...(await myXapRelays())])];
+
+// badges, proofs, xap totals, the price and xmr.bio lookups: shared with Ripley's X app (service/x-lookups.ts)
+const lookups = xLookups({
+  items: { badgeCache: badgeCacheItem, proofCache: proofCacheItem, xapCache: xapCacheItem, xmrUsd: xmrUsdItem, xmrbioSeen: resolveSeen },
+  fetch: (...args) => fetch(...args),
+  query: poolQuery,
+  xapQuery: xapPoolQuery,
+  settings: () => xmrSettingsItem.getValue(),
+  badgeRelays: async () => (await settingsItem.getValue()).relays,
+  xapRelays: myXapRelays,
+  me: async () => ({ pubkey: await pubkeyItem.getValue(), sent: await xapSentItem.getValue() }),
+  directory: () => directory.lookup(),
+  selfClaims: () => claims.lookup(),
 });
 
 // saved letters and receipts deleted after the chosen days (PLAN-AUTOCLEAN)
@@ -236,7 +194,7 @@ const readRelayCache = new Map<string, { relays: string[]; at: number }>();
 async function nip65ReadRelays(pubkey: string): Promise<string[]> {
   const hit = readRelayCache.get(pubkey);
   if (hit && Date.now() - hit.at < 3600_000) return hit.relays;
-  const lists = await xapPoolQuery(await xapDeps.lookupRelays(), { kinds: [10002], authors: [pubkey] }).catch(() => []);
+  const lists = await xapPoolQuery(await xapLookupRelays(), { kinds: [10002], authors: [pubkey] }).catch(() => []);
   // only a list the key really signed
   const newest = lists.filter((e) => e.pubkey === pubkey && e.kind === 10002 && validEvent(e)).sort((a, b) => b.created_at - a.created_at)[0] ?? null;
   const relays = readRelaysFrom(newest).slice(0, 4);
@@ -258,7 +216,7 @@ const xoInbox = xoKeeper({
   query: xapPoolQuery,
   known: async (pk) => knownLiker(await xoLikersItem.getValue(), pk, Date.now()),
   verify: async (pk) => {
-    const liker = await verifyLiker(pk, { query: xapPoolQuery, relays: await xapDeps.lookupRelays(), proof: (h, t, key) => verifyTwitterProof(h, t, key) });
+    const liker = await verifyLiker(pk, { query: xapPoolQuery, relays: await xapLookupRelays(), proof: (h, t, key) => verifyTwitterProof(h, t, key) });
     if (liker) await xoLikersItem.setValue(rememberLiker(await xoLikersItem.getValue(), pk, liker, Date.now()));
     return liker;
   },
@@ -418,8 +376,7 @@ export default defineBackground(() => {
   browser.windows.onRemoved.addListener((windowId) => void siwm.windowClosed(windowId).catch(() => {}));
 
   browser.tabs.onRemoved.addListener((tabId) => {
-    buckets.delete(tabId);
-    xapBuckets.delete(tabId);
+    lookups.dropRateKey(tabId);
     receiptChecks.delete(tabId);
     void dropTabState(tabId);
     void shareMenuLast.getValue().then((last) => (tabId in last ? shareMenuLast.setValue(withoutTab(last, tabId)) : undefined));
@@ -777,7 +734,7 @@ async function handle(msg: BgRequest, sender: Browser.runtime.MessageSender): Pr
     }
     case 'xap-totals': {
       if (!isXContentScript(sender) || sender.tab?.id == null) throw new Error('Not allowed');
-      return xapTotals(msg.recipients, !!msg.fresh, sender.tab.id);
+      return lookups.xapTotals(msg.recipients, !!msg.fresh, sender.tab.id);
     }
     case 'xap-publish': {
       checkShareMenuSender(sender, browser.runtime.id);
@@ -788,7 +745,7 @@ async function handle(msg: BgRequest, sender: Browser.runtime.MessageSender): Pr
       await xapLastItem.setValue(Date.now());
       const res = await publishXap(msg, {
         query: xapPoolQuery,
-        lookupRelays: xapDeps.lookupRelays,
+        lookupRelays: xapLookupRelays,
         myRelays: resolveRelays,
         // the signer's key right now, not the one saved at the last test: the user may have switched accounts
         pubkey: testSigner,
@@ -797,15 +754,7 @@ async function handle(msg: BgRequest, sender: Browser.runtime.MessageSender): Pr
         record: async (s) => xapSentItem.setValue(withSent(await xapSentItem.getValue(), s)),
       });
       // the next ask, popup or action bar, goes to the relays
-      freshTotals.forget(msg.recipient);
-      const cache = await loadXapCache();
-      cache.delete(msg.recipient);
-      if (msg.post) {
-        const key = postKey(msg.recipient, msg.post);
-        freshPostTotals.forget(key);
-        cache.delete(key);
-      }
-      persistXapCache();
+      await lookups.forgetXap(msg.recipient, msg.post);
       // published: the next Xap to this recipient (and post) gets a new mark
       // best effort: the receipt is out, so a storage error here must not read as a failed publish
       if (res.results.some((r) => r.ok))
@@ -851,16 +800,16 @@ async function handle(msg: BgRequest, sender: Browser.runtime.MessageSender): Pr
     }
     case 'xap-post-totals': {
       if (!isXContentScript(sender) || sender.tab?.id == null) throw new Error('Not allowed');
-      return xapPostTotals(msg.posts, !!msg.fresh, sender.tab.id);
+      return lookups.xapPostTotals(msg.posts, !!msg.fresh, sender.tab.id);
     }
     case 'xmr-price': {
       // only a tip popup asks; those open on x.com only
       if (!isXContentScript(sender) || sender.tab?.id == null) throw new Error('Not allowed');
-      return { usd: await xmrUsd() };
+      return { usd: await lookups.xmrUsd() };
     }
     case 'resolve-handles': {
       if (!isXContentScript(sender) || sender.tab?.id == null) throw new Error('Not allowed');
-      return resolveBadges(msg.handles, sender.tab.id);
+      return lookups.resolveHandles(msg.handles, sender.tab.id);
     }
     case 'x-claims-seen': {
       if (!isXContentScript(sender)) throw new Error('Not allowed');
@@ -889,7 +838,7 @@ async function handle(msg: BgRequest, sender: Browser.runtime.MessageSender): Pr
     }
     case 'xmrbio-resolve': {
       if (!isXContentScript(sender) && !isExtensionPage(sender)) throw new Error('Not allowed');
-      return resolveQueued(msg.handle);
+      return lookups.xmrbioResolve(msg.handle);
     }
     case 'burner-import': {
       if (!isExtensionPage(sender)) throw new Error('Not allowed');
@@ -1076,10 +1025,7 @@ const directory = directoryKeeper({
   alarms: browser.alarms,
   enabled: async () => (await xmrSettingsItem.getValue()).badgesX,
   // badges looked up before may now have, lose or change an xmr.bio entry; x.com tabs follow the status item
-  changed: async () => {
-    (await loadCaches()).badges.clear();
-    persistCaches();
-  },
+  changed: () => lookups.clearBadges(),
 });
 // exchange logos for the saved records: xmr.club's pack, named with its hash in the signed list (PLAN-LOGOS)
 const logos = logoKeeper({
@@ -1260,31 +1206,6 @@ async function applySiteInfoSetting(on: boolean) {
   persistTabState();
 }
 
-/** A response body, refused past `max` bytes while it's still arriving. */
-async function boundedBody(res: Response, max: number): Promise<Uint8Array> {
-  if (Number(res.headers.get('content-length')) > max) throw new Error('Response too large');
-  const reader = res.body?.getReader();
-  if (!reader) throw new Error('No body');
-  const chunks: Uint8Array[] = [];
-  let size = 0;
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    size += value.length;
-    if (size > max) {
-      await reader.cancel();
-      throw new Error('Response too large');
-    }
-    chunks.push(value);
-  }
-  const out = new Uint8Array(size);
-  let at = 0;
-  for (const c of chunks) {
-    out.set(c, at);
-    at += c.length;
-  }
-  return out;
-}
 
 // at most 10 receipt checks per tab a minute: a page re-rendering doesn't refetch the manifest each time
 const receiptChecks = new Map<number, number[]>();
@@ -1307,80 +1228,6 @@ const receiptDeps: CheckDeps = {
   hasAccess: (origin) => browser.permissions.contains({ origins: [`${origin}/*`] }),
 };
 
-function loadCaches() {
-  caches ??= Promise.all([badgeCacheItem.getValue(), proofCacheItem.getValue()]).then(([b, p]) => ({
-    badges: new EntryCache(b),
-    proofs: new EntryCache(p),
-  }));
-  return caches;
-}
-
-function persistCaches() {
-  clearTimeout(persistTimer);
-  persistTimer = setTimeout(async () => {
-    const { badges, proofs } = await loadCaches();
-    await Promise.all([badgeCacheItem.setValue(badges.entries()), proofCacheItem.setValue(proofs.entries())]);
-  }, 1000);
-}
-
-async function cachedVerify(handle: string, tweetId: string, pubkey: string): Promise<ProofResult> {
-  const { proofs } = await loadCaches();
-  const key = `${handle}:${tweetId}:${pubkey}`;
-  const ttl = (r: ProofResult) => (r.status === 'verified' ? PROOF_OK_TTL_MS : PROOF_FAIL_TTL_MS);
-  const hit = proofs.get(key, Date.now(), ttl);
-  if (hit) return hit;
-  const result = await verifyTwitterProof(handle, tweetId, pubkey);
-  // network errors aren't cached, so the next sighting tries again
-  if (result.status !== 'error') proofs.set(key, result, Date.now());
-  return result;
-}
-
-async function resolveBadges(handles: string[], tabId: number): Promise<ResolveHandlesResult> {
-  const settings = await xmrSettingsItem.getValue();
-  const { badgesX: enabled, nostrDiscovery } = settings;
-  if (!enabled) return { badges: [], pending: [] };
-  const claimsOn = xClaimsOn(settings);
-  const valid = [...new Set(handles.filter((h) => typeof h === 'string' && HANDLE_RE.test(h)))].slice(0, MAX_HANDLES_PER_CALL);
-  const { badges: cache } = await loadCaches();
-  const now = Date.now();
-  const out: [string, Badge][] = [];
-  const misses: string[] = [];
-  for (const h of valid) {
-    const hit = cache.get(normalizeHandle(h), now, (b) => (b.primary ? BADGE_TTL_MS : NO_BADGE_TTL_MS));
-    if (!hit) misses.push(h);
-    // with discovery or claims off, entries cached earlier from them must not come back
-    else {
-      const b = nostrDiscovery ? hit : withoutNostr(hit);
-      out.push([hit.handle, claimsOn ? b : withoutSelf(b)]);
-    }
-  }
-  if (!misses.length) return { badges: out, pending: [] };
-  // the local directory costs nothing and tells no one anything, so it is never throttled (RATE-2)
-  const lookup = await directory.lookup();
-  const selfClaims = await claims.lookup();
-  if (!nostrDiscovery) {
-    // not cached: the directory and claims are already local, and a change applies at once
-    for (const h of misses) {
-      const key = normalizeHandle(h);
-      out.push([key, mergeBadge(key, [...lookup(key), ...selfEntries(selfClaims(key), lookup)])]);
-    }
-    return { badges: out, pending: [] };
-  }
-  let bucket = buckets.get(tabId);
-  if (!bucket) buckets.set(tabId, (bucket = new TokenBucket(50, 2)));
-  const granted = bucket.take(misses.length);
-  const batch = misses.slice(0, granted);
-  if (batch.length) {
-    const { relays } = await settingsItem.getValue();
-    const found = await resolveHandles(batch, { discovery: true, relays: [...new Set([...DEFAULT_RELAYS, ...INDEX_RELAYS, ...relays])], verify: cachedVerify, directory: lookup, selfClaims });
-    for (const [key, badge] of found) {
-      cache.set(key, badge, Date.now());
-      out.push([key, badge]);
-    }
-    persistCaches();
-  }
-  return { badges: out, pending: misses.slice(granted) };
-}
 
 // X self-claims (PLAN-XCLAIMS): what profiles you opened show about themselves, kept on this device only
 const xClaimsItem = storage.defineItem<XClaimStore | null>('local:xClaims', { fallback: null });
@@ -1388,98 +1235,9 @@ const claims = claimKeeper({
   store: xClaimsItem,
   changedItem: xClaimsChangedItem,
   enabled: async () => xClaimsOn(await xmrSettingsItem.getValue()),
-  dropBadge: async (handle) => {
-    (await loadCaches()).badges.delete(handle);
-    persistCaches();
-  },
-  dropAllBadges: async () => {
-    (await loadCaches()).badges.clear();
-    persistCaches();
-  },
+  dropBadge: (handle) => lookups.dropBadge(handle),
+  dropAllBadges: () => lookups.clearBadges(),
 });
-
-function loadXapCache() {
-  xapCache ??= xapCacheItem.getValue().then((e) => new EntryCache(e, 1000));
-  return xapCache;
-}
-
-function persistXapCache() {
-  clearTimeout(xapPersistTimer);
-  xapPersistTimer = setTimeout(async () => xapCacheItem.setValue((await loadXapCache()).entries()), 1000);
-}
-
-/**
- * Cached totals feed the action-bar counts (verified only, which doesn't depend on the current
- * address). A popup asks `fresh`: one recipient, from the relays or a fetch under 15 s old.
- */
-async function xapTotals(recipients: string[], fresh: boolean, tabId: number): Promise<XapTotalsResult> {
-  const valid = [...new Set(Array.isArray(recipients) ? recipients.filter((r) => typeof r === 'string' && /^[0-9a-f]{64}$/.test(r)) : [])].slice(0, MAX_XAP_RECIPIENTS);
-  if (fresh) {
-    if (valid.length !== 1) throw new Error('One recipient at a time');
-    return { totals: [[valid[0]!, await freshTotals.get(valid[0]!)]], pending: [] };
-  }
-  const { badgesX, nostrDiscovery } = await xmrSettingsItem.getValue();
-  // without discovery, relays only hear about a recipient when the user opens their popup
-  if (!badgesX || !nostrDiscovery) return { totals: [], pending: [] };
-  const cache = await loadXapCache();
-  const out: [string, XapTotals][] = [];
-  const misses: string[] = [];
-  for (const pk of valid) {
-    const hit = cache.get(pk, Date.now(), xapTtl);
-    if (hit) out.push([pk, hit]);
-    else misses.push(pk);
-  }
-  if (!misses.length) return { totals: out, pending: [] };
-  let bucket = xapBuckets.get(tabId);
-  if (!bucket) xapBuckets.set(tabId, (bucket = new TokenBucket(50, 2)));
-  const granted = bucket.take(misses.length);
-  const batch = misses.slice(0, granted);
-  if (batch.length) {
-    for (const [pk, t] of await countFor(batch, xapDeps)) {
-      cache.set(pk, t, Date.now());
-      out.push([pk, t]);
-    }
-    persistXapCache();
-  }
-  return { totals: out, pending: misses.slice(granted) };
-}
-
-/**
- * Post figures (NKIP-0002 external post tips) for the action bar, or `fresh` for one post's popup.
- * Same gates, cache and per-tab bucket as profile totals; each post costs one token.
- */
-async function xapPostTotals(posts: unknown, fresh: boolean, tabId: number): Promise<XapPostTotalsResult> {
-  const valid = validPosts(posts, MAX_XAP_RECIPIENTS);
-  if (fresh) {
-    if (valid.length !== 1) throw new Error('One post at a time');
-    const key = postKey(valid[0]!.pubkey, valid[0]!.id);
-    return { totals: [[key, await freshPostTotals.get(key)]], pending: [] };
-  }
-  const { badgesX, nostrDiscovery } = await xmrSettingsItem.getValue();
-  if (!badgesX || !nostrDiscovery) return { totals: [], pending: [] };
-  const cache = await loadXapCache();
-  const out: [string, XapTotals][] = [];
-  const misses: PostRef[] = [];
-  for (const p of valid) {
-    const key = postKey(p.pubkey, p.id);
-    const hit = cache.get(key, Date.now(), xapTtl);
-    if (hit) out.push([key, hit]);
-    else misses.push(p);
-  }
-  if (!misses.length) return { totals: out, pending: [] };
-  let bucket = xapBuckets.get(tabId);
-  if (!bucket) xapBuckets.set(tabId, (bucket = new TokenBucket(50, 2)));
-  const granted = bucket.take(misses.length);
-  const batch = misses.slice(0, granted);
-  if (batch.length) {
-    for (const [key, t] of await countPosts(batch, xapDeps)) {
-      cache.set(key, t, Date.now());
-      out.push([key, t]);
-    }
-    persistXapCache();
-  }
-  return { totals: out, pending: misses.slice(granted) };
-}
 
 // ---- which key signs (PLAN-MANAGEDID) ----
 
@@ -1694,22 +1452,11 @@ async function setupRelays(pubkey: string): Promise<string[]> {
   return [...new Set([...nip65, ...relays, ...DEFAULT_RELAYS, ...INDEX_RELAYS])];
 }
 
-/** One xmr.bio /resolve at a time, so the freshness guard sees responses in order. */
-function resolveQueued(handle: string): Promise<XmrbioResult> {
-  const run = resolveQueue.then(async () => {
-    const stored = await resolveSeen.getValue();
-    const { result, seen } = await resolveXmrbio(handle, Array.isArray(stored) ? stored : []);
-    await resolveSeen.setValue(seen);
-    return result;
-  });
-  resolveQueue = run.catch(() => {});
-  return run;
-}
 
 /** The user's own handle on xmr.bio, for the status panel (a click, never passive). */
 async function xmrbioStatus(handle: string, pubkey: string): Promise<XmrbioStatus> {
   try {
-    const r = await resolveQueued(handle);
+    const r = await lookups.xmrbioResolve(handle);
     if (!r.found) return { found: false };
     return { found: true, address: r.identity.address, check: r.check, linked: xmrbioLinked(r.identity.proofs, pubkey) };
   } catch (e) {
@@ -1736,7 +1483,7 @@ async function readSetupStatus(): Promise<SetupStatus> {
   if (mine && ids) {
     const claim = twitterClaims(ids, new Set([normalizeHandle(mine.handle)]))[0];
     if (claim) {
-      const proof = await cachedVerify(claim.handle, claim.tweetId, pubkey);
+      const proof = await lookups.verify(claim.handle, claim.tweetId, pubkey);
       link = { handle: claim.handle, tweetUrl: tweetUrl(claim.handle, claim.tweetId), proof };
     }
   }

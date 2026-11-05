@@ -12,6 +12,7 @@
     "zip": "wxt zip && wxt zip -b firefox",
     "compile": "tsc --noEmit",
     "test": "vitest run",
+    "build:ripley": "vite build -c vite.ripley.config.ts --mode x && vite build -c vite.ripley.config.ts --mode service",
     "postinstall": "wxt prepare"
   },
   "dependencies": {
@@ -28,6 +29,7 @@
     "fake-indexeddb": "6.2.5",
     "happy-dom": "21.0.4",
     "typescript": "7.0.2",
+    "vite": "8.3.5",
     "vitest": "5.0.5",
     "wxt": "0.21.4"
   }
