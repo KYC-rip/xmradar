@@ -3,6 +3,13 @@
 What changed in each XMRadar release. Downloads, checksums and build provenance are on the
 [releases page](https://github.com/KYC-rip/xmradar/releases).
 
+## 0.6.13
+
+- **xo anyone with a badge.** The heart no longer fades for X accounts that have a Monero badge but no Nostr key. Your xo goes to their X handle and waits on relays; when they set up XMRadar, it finds those xos and tells them once: "N Monero people sent your posts xos before you set up XMRadar". Every xo now names the author's handle as well as their key (an `X` tag, `twitter:<handle>`); earlier XMRadar versions still count xos sent to a key.
+- **Set up in a minute.** Until your Monero identity is complete, a small card on X offers to set it up. It opens a new setup page in XMRadar: your Nostr key (your signer, or the XMRadar identity), your X handle and Monero address, and one proof tweet, which XMRadar fills in when it sees it on X. "Not now" hides the card for a week, × for good. After your first xo it says once that the xo counts after setup. In the toolbar popup, *Your tip badge* opens the same page until you're set up.
+- **xo rings.** On X, the avatar of an account Monero people sent xos gets a thin orange ring, and its badge shows the total (`ɱ❤ 37`). xmr.bio counts them every 10 minutes and adds them to its signed directory: xos from Monero people, distinct posts, at most 10 per sender, so a soft public signal, not proof of distinct people. Switch: Options → Badges on X → *xo rings and counts*.
+- With *Tell me when I get a Xap or an xo* on, XMRadar now also asks relays for xos to your proven X handle, not only to your key.
+
 ## 0.6.12
 
 - **XMRadar identity.** No Nostr signer? XMRadar makes a Nostr key for you, kept in this browser only and announced with a notification, so xo, Xap receipts and the Monero identity steps work without one. Options → Monero identity chooses automatic, only your signer, or the XMRadar identity, and can export or delete it.

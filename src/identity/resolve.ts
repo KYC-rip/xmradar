@@ -12,6 +12,8 @@ export interface BadgeEntry {
   /** how the handle link was checked, e.g. `nip39:client` */
   method: string;
   pubkey?: string;
+  /** xos from Monero people, counted by xmr.bio (directory entries only, PLAN-XORINGS) */
+  xoCount?: number;
   tweetId?: string;
   /** created_at (seconds) of the claim event */
   createdAt?: number;
@@ -78,6 +80,9 @@ const fromRelays = (e: BadgeEntry) => e.source === 'nostr' || (e.source === 'xse
 export function xoKey(b: Badge): string | null {
   return xapEntry(b)?.pubkey ?? b.entries.find((e) => e.source === 'xmrbio' && e.verified && e.pubkey)?.pubkey ?? null;
 }
+
+/** The account's xo total from xmr.bio's directory, or 0: only a verified xmr.bio entry carries one. */
+export const xoCountOf = (b: Badge | null | undefined): number => b?.entries.find((e) => e.source === 'xmrbio' && e.verified && e.xoCount)?.xoCount ?? 0;
 
 export const withoutSelf = (b: Badge): Badge => (b.entries.some((e) => e.source === 'xself') ? mergeBadge(b.handle, b.entries.filter((e) => e.source !== 'xself')) : b);
 

@@ -2,11 +2,12 @@ import type { ContentScriptContext } from 'wxt/utils/content-script-context';
 import { badgeLook, mountBadge, type BadgeLook } from '../../identity/badge-look';
 import { PendingQueue } from '../../identity/bucket';
 import { normalizeHandle } from '../../identity/envelope';
-import { xapEntry, xoKey, type Badge } from '../../identity/resolve';
+import { xapEntry, xoCountOf, xoKey, type Badge } from '../../identity/resolve';
+import { postAvatar, profileAvatar, removeRings, setRing } from './x-xo-ring';
 import { articleViewSlot, hoverCardSlot, pinnedPost, profileClaimScope, profileHeader, profileSlot, tweetSlot, userCellSlot, type BadgeSlot } from '../../identity/x-handle';
 import { emptyClaim, parseClaim, type ClaimPlace } from '../../identity/xclaims';
 import { sendToBackground, type XapTotals } from '../../messaging';
-import { directoryStatusItem, myHandleItem, xClaimsChangedItem, xClaimsOn, xmrSettingsItem, xoButtonOn, xoCountsItem, xoSentItem } from '../../settings';
+import { directoryStatusItem, myHandleItem, xClaimsChangedItem, xClaimsOn, xmrSettingsItem, xoButtonOn, xoCountsItem, xoRingsOn, xoSentItem } from '../../settings';
 import { storage } from 'wxt/utils/storage';
 import { XO_SELECTOR, xoManager } from './x-xo';
 import { openTip } from './tip';
@@ -44,8 +45,22 @@ export function startBadges(ctx: ContentScriptContext) {
   let observer: MutationObserver | null = null;
   let look: BadgeLook = badgeLook(null);
   let discovery = false;
+  // xo rings and counts (PLAN-XORINGS): from the directory, on unless switched off
+  let rings = true;
+  const xoShown = (b: Badge | null | undefined) => (rings ? xoCountOf(b) : 0);
   const removeAll = () => {
     for (const host of document.querySelectorAll(`${HOST_TAG}, ${XAP_SELECTOR}, ${XO_SELECTOR}`)) host.remove();
+    removeRings();
+  };
+  /** the ring on this slot's avatar: a post's author, or the profile header's own */
+  const ringFor = (slot: BadgeSlot, badge: Badge | null | undefined) => {
+    if (slot.article) {
+      const av = postAvatar(slot.article);
+      if (av) setRing(av, slot.key, badge?.primary ? xoShown(badge) : 0);
+    } else if (slot.key.startsWith('profile:')) {
+      const av = profileAvatar(document, slot.handle);
+      if (av) setRing(av, slot.key, badge?.primary ? xoShown(badge) : 0);
+    }
   };
 
   // xo (PLAN-MONEROLIKE): the buttons follow the switch, the user's sent xos and their own posts' counts
@@ -228,7 +243,7 @@ export function startBadges(ctx: ContentScriptContext) {
       },
     });
     if (!el) return;
-    // the xo goes right after the Xap: to the author's key when one is known, else a faded like-only heart
+    // the xo goes right after the Xap: to the author's key when one is known, else to their handle (PLAN-XOREACH)
     if (slot.statusId) xo.place(slot.article, slot.statusId, xoKey(badge), slot.handle);
     if (key) wantTotals(key);
   }
@@ -236,7 +251,7 @@ export function startBadges(ctx: ContentScriptContext) {
   function insert(slot: BadgeSlot, badge: Badge) {
     const host = document.createElement(HOST_TAG);
     host.dataset.key = slot.key;
-    const btn = mountBadge(host, look, slot.handle);
+    const btn = mountBadge(host, look, slot.handle, xoShown(badge));
     btn.addEventListener('click', (e) => {
       // the tweet itself is a link; don't let X navigate
       e.preventDefault();
@@ -255,6 +270,7 @@ export function startBadges(ctx: ContentScriptContext) {
 
   function apply(slot: BadgeSlot) {
     const badge = lookup(slot.handle);
+    if (badge !== undefined) ringFor(slot, badge);
     if (slot.article) {
       const pill = slot.pill ? slot.anchor.querySelector<HTMLElement>(`:scope > ${HOST_TAG}`) : null;
       // a recycled tweet node may still hold another author's button and pill
@@ -422,6 +438,7 @@ export function startBadges(ctx: ContentScriptContext) {
   });
 
   void xmrSettingsItem.getValue().then((s) => {
+    rings = xoRingsOn(s);
     look = badgeLook(s);
     discovery = s.nostrDiscovery;
     claimsOn = xClaimsOn(s);
@@ -442,6 +459,11 @@ export function startBadges(ctx: ContentScriptContext) {
       removeAll();
     }
     discovery = s.nostrDiscovery;
+    if (xoRingsOn(s) !== rings) {
+      // badges carry the count, so they're redrawn with the rings
+      rings = xoRingsOn(s);
+      removeAll();
+    }
     const next = badgeLook(s);
     if (next.icon !== look.icon || next.label !== look.label) {
       // redrawn from the results below, no new lookups

@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Set up your Monero identity · XMRadar</title>
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>Set up your Monero identity</h1>
+        <p class="hint">About a minute. Then Monero people can send your X posts xos (Monero likes), and the xos you send count.</p>
+      </header>
+
+      <ol class="wizard">
+        <li class="card pad" data-step="key">
+          <div class="head"><span class="marker">1</span><strong>Your Nostr key</strong><code data-value></code></div>
+          <div class="body">
+            <p class="hint">If you have a Nostr signer extension (Alby, nos2x…), XMRadar asks it for your key in a temporary tab. If not, XMRadar makes one for you, kept in this browser only.</p>
+            <div class="row"><button id="key-make" class="primary" type="button">Get my key</button></div>
+          </div>
+          <p class="status" data-status role="status"></p>
+        </li>
+
+        <li class="card pad" data-step="address">
+          <div class="head"><span class="marker">2</span><strong>Your X handle and Monero address</strong><code data-value></code></div>
+          <div class="body">
+            <label class="field"><span>X handle</span><span class="row"><span>@</span><input id="handle" type="text" spellcheck="false" autocomplete="off" placeholder="yourhandle" /></span></label>
+            <label class="field"><span>Monero address (mainnet, starts with 4 or 8)</span><input id="address" type="text" class="mono" spellcheck="false" autocomplete="off" placeholder="4… or 8…" /></label>
+            <div class="row"><button id="address-publish" class="primary" type="button">Publish</button></div>
+            <div class="review" data-review hidden>
+              <p class="hint" data-review-summary></p>
+              <pre class="diff mono" data-review-diff></pre>
+              <div class="row"><button class="primary" data-review-sign type="button">Publish this change</button><button data-review-cancel type="button">Cancel</button></div>
+            </div>
+          </div>
+          <p class="status" data-status role="status"></p>
+        </li>
+
+        <li class="card pad" data-step="link">
+          <div class="head"><span class="marker">3</span><strong>Your proof tweet</strong><code data-value></code></div>
+          <div class="body">
+            <p class="hint">One tweet with your Nostr key links it to your X account. XMRadar writes it; you post it.</p>
+            <div class="row"><button id="tweet" class="primary" type="button">Post the tweet</button></div>
+            <label class="field"><span>Then the tweet's link (XMRadar fills it in when it sees your tweet on X)</span><input id="tweet-url" type="url" class="mono" spellcheck="false" autocomplete="off" placeholder="https://x.com/yourhandle/status/…" /></label>
+            <div class="row"><button id="link" type="button">Link it</button></div>
+            <div class="review" data-review hidden>
+              <p class="hint" data-review-summary></p>
+              <pre class="diff mono" data-review-diff></pre>
+              <div class="row"><button class="primary" data-review-sign type="button">Publish this change</button><button data-review-cancel type="button">Cancel</button></div>
+            </div>
+          </div>
+          <p class="status" data-status role="status"></p>
+        </li>
+      </ol>
+
+      <section id="done" class="card pad done-card" hidden>
+        <strong class="ok">You&apos;re set up.</strong>
+        <span>Monero people can xo your posts, and your xos count. xos sent to your handle before today are on their way: XMRadar tells you once it has checked them.</span>
+        <label class="check"><input id="xmrbio-on" type="checkbox" /> Also list me on xmr.bio</label>
+        <span class="hint" id="xmrbio-status"></span>
+      </section>
+
+      <p class="hint small">What's public: your Monero address and your X link are Nostr events anyone can read. XMRadar asks relays for xos to your key and your X handle. Everything else is in <a href="/options.html#identity" target="_blank">Options → Monero identity</a>.</p>
+    </main>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

@@ -10,6 +10,7 @@ import { startSiteInfo } from './site';
 import { startBadges } from './x-badges';
 import { startCopyLinks } from './x-copy-links';
 import { startSyncedMarks } from './x-synced';
+import { startSetupCard } from './x-setup-card';
 import { shareMenu, type ShareMenu } from './x-share';
 import './style.css';
 
@@ -26,6 +27,8 @@ export default defineContentScript({
     if (onX) startBadges(ctx);
     // posts copied to Nostr get a small mark; switched live from the options page
     if (onX) startSyncedMarks(ctx);
+    // until the Monero identity is set up: a card that opens setup.html (PLAN-XOREACH)
+    if (onX) startSetupCard(ctx);
     // swap receipts (NKIP-0001) on any other site's top frame
     startReceipts(ctx);
     // site info from the xmr.club feed (badge, popup card, warnings)

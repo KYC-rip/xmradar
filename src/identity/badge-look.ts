@@ -91,6 +91,7 @@ export const BADGE_CSS = `
   cursor: pointer;
 }
 .pill { padding: 0 6px; }
+.xo { margin-left: 4px; font-variant-numeric: tabular-nums; }
 .pill.icon { padding-left: 1px; }
 .round { width: 16px; justify-content: center; padding: 0; }
 .round.color { background: transparent; }
@@ -125,27 +126,36 @@ function styleRoot(root: ShadowRoot) {
 }
 
 /** The badge element: a button on X, a plain span for previews (they sit inside a radio's label). */
-export function buildBadge(doc: Document, look: BadgeLook, handle: string | null): HTMLElement {
+export function buildBadge(doc: Document, look: BadgeLook, handle: string | null, xo = 0): HTMLElement {
   const { icon, label } = badgeLook({ badgeIcon: look.icon, badgeLabel: look.label });
   const el = doc.createElement(handle === null ? 'span' : 'button');
   el.className = ['badge', label ? 'pill' : 'round', icon !== 'none' ? `icon ${icon}` : '', handle === null ? 'preview' : ''].filter(Boolean).join(' ');
   if (icon !== 'none') el.append(moneroSymbol(doc, icon));
   if (label) el.append('XMR');
+  // the xo total from xmr.bio's directory (PLAN-XORINGS), in the pill look only: the round one is a 16 px
+  // circle; there the total is in the tooltip and label, and the ring shows there are xos
+  if (xo > 0 && label) {
+    const n = doc.createElement('span');
+    n.className = 'xo';
+    n.textContent = `ɱ❤ ${xo}`;
+    el.append(n);
+  }
   if (handle === null) {
     el.setAttribute('aria-hidden', 'true');
   } else {
     (el as HTMLButtonElement).type = 'button';
-    el.setAttribute('aria-label', `Accepts Monero — tip @${handle}`);
-    el.title = `Accepts Monero — tip @${handle}`;
+    const xos = xo > 0 ? `. ${xo} xo${xo === 1 ? '' : 's'} from Monero people (counted by xmr.bio, every 10 minutes)` : '';
+    el.setAttribute('aria-label', `Accepts Monero — tip @${handle}${xos}`);
+    el.title = `Accepts Monero — tip @${handle}${xos}`;
   }
   return el;
 }
 
 /** Puts the badge in a closed shadow root on `host`; returns the badge element. */
-export function mountBadge(host: HTMLElement, look: BadgeLook, handle: string | null): HTMLElement {
+export function mountBadge(host: HTMLElement, look: BadgeLook, handle: string | null, xo = 0): HTMLElement {
   const root = host.attachShadow({ mode: 'closed' });
   styleRoot(root);
-  const el = buildBadge(host.ownerDocument, look, handle);
+  const el = buildBadge(host.ownerDocument, look, handle, xo);
   root.append(el);
   return el;
 }

@@ -98,6 +98,7 @@ With **Discover X badges via relays** turned on under **Options → Badges on X*
 ## Badges from xmr.bio and X profiles (Phases 2d, 2g)
 
 - **xmr.bio's directory:** the whole signed list of handles with a Monero address, downloaded every hour (the same file for everyone) and checked against xmr.bio's pinned key, so no lookup reveals which accounts you view.
+- **xo rings:** the directory also carries each account's xo total. xmr.bio reads xos from damus, nos.lol and primal every 10 minutes, checks each sender is a Monero person (a valid Monero address and a proof tweet naming their npub), and counts distinct posts, at most 10 per sender. An account with xos gets a thin orange ring on its avatar and `ɱ❤ N` in its badge. Anyone can recount from the public xo events. A Monero address can be reused and one X account can prove several keys, so the number is a soft signal, not proof of distinct people. Switch: *Options → Badges on X → xo rings and counts*.
 - **X profiles:** an address someone posts on their own profile (bio, Website, pinned post) gets a badge too, kept on this device and labelled **not verified**. Switch: **Read addresses from X profiles**.
 - Every post by a badged author shows a small XMR pill after their name. The profile header's badge must match the @handle it shows.
 
@@ -124,9 +125,10 @@ A Xap is a Monero tip recorded on Nostr the way [NKIP-0002](https://github.com/n
 Next to the Xap button on X posts, a heart sends **xo**: a Monero like, as a public Nostr reaction (NIP-25 kind 17, naming the post the way Xaps do) to the author's key. Your signer signs it from xmradar.app/signer, opened behind the X tab.
 
 - **Click:** an xo. Click again to take it back (a NIP-09 deletion). **Hold** the heart half a second, or press **Shift+Enter**: an xo and X's own ♥ on that post, at once. *Options → Badges on X → Also like on X when I send an xo* makes a plain click do both. Taking an xo back never un-likes on X.
-- **Who gets it:** the author's Nostr-verified key, or the key they linked on xmr.bio (carried in xmr.bio's signed directory). Where no key is known the heart is faded: it can't reach them, and holding it only likes on X.
+- **Who gets it:** the author's Nostr-verified key, or the key they linked on xmr.bio (carried in xmr.bio's signed directory). Every xo also names the author's X handle (an `X` tag, `twitter:<handle>`). Where no key is known, the xo goes to the handle alone and waits on relays: when the author sets up XMRadar and proves that handle, it counts, and they're told once how many Monero people sent them xos before.
+- **Setting up:** until your Monero identity is complete, a small card on X opens XMRadar's setup page: a Nostr key, your X handle and Monero address, and one proof tweet. Options → Monero identity has the same steps in full.
 - **Where it goes:** the author's NIP-65 read relays (public `wss` relays only), the 3 default relays and your own.
-- **Receiving:** with *Tell me when I get a Xap or an xo* on, every 30 minutes XMRadar asks your relays and the defaults for xos to your key. Only xos from Monero people count (a key with a valid Monero address and an X account its proof tweet confirms), one per person per post; forged events and other people's deletions don't. One notification per check, an *xos received* list in Options, and on your own posts the count, with a few hearts floating up once when new ones arrive. Your own xo on your post counts as one, as on X.
+- **Receiving:** with *Tell me when I get a Xap or an xo* on, every 30 minutes XMRadar asks your relays and the defaults for xos to your key and, once your proof tweet is linked, to your X handle. Only xos from Monero people count (a key with a valid Monero address and an X account its proof tweet confirms), one per person per post; forged events and other people's deletions don't. One notification per check, an *xos received* list in Options, and on your own posts the count, with a few hearts floating up once when new ones arrive. Your own xo on your post counts as one, as on X.
 - With reduced motion, the hearts change state without animating.
 
 ## Your Nostr identity

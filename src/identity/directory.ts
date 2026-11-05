@@ -22,6 +22,8 @@ export interface DirectoryEntry {
   verifiedAt: string;
   /** the Nostr key the account linked on xmr.bio, while its signed proof holds there (PLAN-XOKEYS) */
   pubkey?: string;
+  /** xos from Monero people to this account, as xmr.bio counts them (PLAN-XORINGS) */
+  xoCount?: number;
 }
 
 /** What's kept in storage: plain JSON, rebuilt into a Map on load. */
@@ -69,7 +71,10 @@ export function readDirectory(
     seen.add(e.handle as string);
     // an optional linked key, kept only in its exact form; a bad one is dropped, not the entry
     const pubkey = typeof e.nostr_pubkey === 'string' && /^[0-9a-f]{64}$/.test(e.nostr_pubkey) ? e.nostr_pubkey : undefined;
-    entries.push({ handle: e.handle as string, address: e.address as string, verifiedAt: e.verified_at as string, ...(pubkey ? { pubkey } : {}) });
+    // the xo total (PLAN-XORINGS): a whole number from 1 to 10^7, else dropped, not the entry
+    const xo = e.xo_count;
+    const xoCount = typeof xo === 'number' && Number.isInteger(xo) && xo >= 1 && xo <= 10_000_000 ? xo : undefined;
+    entries.push({ handle: e.handle as string, address: e.address as string, verifiedAt: e.verified_at as string, ...(pubkey ? { pubkey } : {}), ...(xoCount ? { xoCount } : {}) });
   }
   if (dropped) console.warn(`[XMRadar] xmr.bio directory: ${dropped} entries dropped`);
   return { generatedAt, keyId: key, fetchedAt: now, stale: !!opts.stale, entries };
@@ -79,7 +84,7 @@ export function readDirectory(
 export function directoryIndex(d: StoredDirectory | null): (handle: string) => BadgeEntry[] {
   const map = new Map<string, BadgeEntry>();
   for (const e of d?.entries ?? []) {
-    map.set(e.handle, { source: 'xmrbio', address: e.address, check: validateMoneroAddress(e.address), verified: true, method: 'xmrbio:directory', ...(e.pubkey ? { pubkey: e.pubkey } : {}) });
+    map.set(e.handle, { source: 'xmrbio', address: e.address, check: validateMoneroAddress(e.address), verified: true, method: 'xmrbio:directory', ...(e.pubkey ? { pubkey: e.pubkey } : {}), ...(e.xoCount ? { xoCount: e.xoCount } : {}) });
   }
   return (handle) => {
     const hit = map.get(handle.toLowerCase());

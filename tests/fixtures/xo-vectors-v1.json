@@ -1,0 +1,400 @@
+{
+ "version": 1,
+ "now": 1800000000,
+ "recipient_pubkey": "421f5fc9a21065445c96fdb91c0c1e2f2431741c72713b4b99ddcb316f31e9fc",
+ "xo": [
+  {
+   "name": "keyed with X",
+   "event": {
+    "kind": 17,
+    "created_at": 1799999940,
+    "content": "ɱ❤",
+    "tags": [
+     [
+      "k",
+      "web"
+     ],
+     [
+      "i",
+      "https://x.com/i/status/123"
+     ],
+     [
+      "X",
+      "twitter:alice"
+     ],
+     [
+      "p",
+      "421f5fc9a21065445c96fdb91c0c1e2f2431741c72713b4b99ddcb316f31e9fc"
+     ]
+    ],
+    "pubkey": "774ae7f858a9411e5ef4246b70c65aac5649980be5c17891bbec17895da008cb",
+    "id": "fe0d69aa2f02449b4199a62d6896c1f43f6da7a8f5894211ce23379c6a9e8d3a",
+    "sig": "2db65ed86dc8b631fdd313b41759209cb0949a07110d86552b3280fa857548a025cee184322e085505066fe1e9cc4d2b8dd1adebd677ced012f6021360ea5f9c"
+   },
+   "expected": {
+    "statusId": "123",
+    "author": "421f5fc9a21065445c96fdb91c0c1e2f2431741c72713b4b99ddcb316f31e9fc",
+    "handle": "alice"
+   }
+  },
+  {
+   "name": "X only",
+   "event": {
+    "kind": 17,
+    "created_at": 1799999940,
+    "content": "ɱ❤",
+    "tags": [
+     [
+      "k",
+      "web"
+     ],
+     [
+      "i",
+      "https://x.com/i/status/123"
+     ],
+     [
+      "X",
+      "twitter:alice"
+     ]
+    ],
+    "pubkey": "774ae7f858a9411e5ef4246b70c65aac5649980be5c17891bbec17895da008cb",
+    "id": "14933c2c14316d5e3715f9fa42ba25a509d8d14bb03a0cbe5def0a291b27198f",
+    "sig": "b38428ef057bd2c7fb980a4138b0f811480798628e3795bf81216fe41757c441e6f85d6880fc8ef2321ab1eedae0b16bbf8017eb14e6caa1d5f3800329f36f4e"
+   },
+   "expected": {
+    "statusId": "123",
+    "author": null,
+    "handle": "alice"
+   }
+  },
+  {
+   "name": "p only (0.6.12)",
+   "event": {
+    "kind": 17,
+    "created_at": 1799999940,
+    "content": "ɱ❤",
+    "tags": [
+     [
+      "k",
+      "web"
+     ],
+     [
+      "i",
+      "https://x.com/i/status/123"
+     ],
+     [
+      "p",
+      "421f5fc9a21065445c96fdb91c0c1e2f2431741c72713b4b99ddcb316f31e9fc"
+     ]
+    ],
+    "pubkey": "774ae7f858a9411e5ef4246b70c65aac5649980be5c17891bbec17895da008cb",
+    "id": "cf986656ee994baaf09792a2968b40ad9690b994f7f2790cb931509b7a5736c3",
+    "sig": "bebc90cc93ecf4cf4e51ffa80b9b40609b9fa68fd40007845deefa1a67a2f377a68cf470c31f1a4f5d98670deea7f560e19303fe6160e74f20eb76b5581f26b9"
+   },
+   "expected": {
+    "statusId": "123",
+    "author": "421f5fc9a21065445c96fdb91c0c1e2f2431741c72713b4b99ddcb316f31e9fc",
+    "handle": null
+   }
+  },
+  {
+   "name": "mixed-case X",
+   "event": {
+    "kind": 17,
+    "created_at": 1799999940,
+    "content": "ɱ❤",
+    "tags": [
+     [
+      "k",
+      "web"
+     ],
+     [
+      "i",
+      "https://x.com/i/status/123"
+     ],
+     [
+      "X",
+      "twitter:Alice"
+     ]
+    ],
+    "pubkey": "774ae7f858a9411e5ef4246b70c65aac5649980be5c17891bbec17895da008cb",
+    "id": "8a10dff7b55d730cf2907cb740b3e20a9420ebb788579c7eb67f9d48dbbbea1a",
+    "sig": "5080e9118e511792432de5116f61d9385704a2d71b2f004ec2823a02e3d04c597a21cab1026f9717ab466a8912235e1af219e2c76670edfc45962df99d12f85f"
+   },
+   "expected": {
+    "statusId": "123",
+    "author": null,
+    "handle": "alice"
+   }
+  },
+  {
+   "name": "two X",
+   "event": {
+    "kind": 17,
+    "created_at": 1799999940,
+    "content": "ɱ❤",
+    "tags": [
+     [
+      "k",
+      "web"
+     ],
+     [
+      "i",
+      "https://x.com/i/status/123"
+     ],
+     [
+      "X",
+      "twitter:alice"
+     ],
+     [
+      "X",
+      "twitter:bob"
+     ]
+    ],
+    "pubkey": "774ae7f858a9411e5ef4246b70c65aac5649980be5c17891bbec17895da008cb",
+    "id": "289f3c720a86087e08278921fafbbd1d2868174fce56d3c87b50050ddbae59de",
+    "sig": "cdada8d1872dbf7422e25ad31cdbb0c5d6b2475813574461adcfd102a6223ecfd692c2f2f4db1952593576ad7c8193a751ed498e6da5f5afc80288a4768d1eef"
+   },
+   "expected": null
+  },
+  {
+   "name": "two p",
+   "event": {
+    "kind": 17,
+    "created_at": 1799999940,
+    "content": "ɱ❤",
+    "tags": [
+     [
+      "k",
+      "web"
+     ],
+     [
+      "i",
+      "https://x.com/i/status/123"
+     ],
+     [
+      "p",
+      "421f5fc9a21065445c96fdb91c0c1e2f2431741c72713b4b99ddcb316f31e9fc"
+     ],
+     [
+      "p",
+      "421f5fc9a21065445c96fdb91c0c1e2f2431741c72713b4b99ddcb316f31e9fc"
+     ]
+    ],
+    "pubkey": "774ae7f858a9411e5ef4246b70c65aac5649980be5c17891bbec17895da008cb",
+    "id": "934daaefc12dc35c3813d01b9025c7a2fc51c4a34d2e26599375782ab1b92ccd",
+    "sig": "f973cc237013a72d12304c33aa01c1648db299bbfaba0cb5da32c7965f605818e18edf4f868c7375809f222c808bb875308105c1dfe11d54291f5cdaa7df5ce8"
+   },
+   "expected": null
+  },
+  {
+   "name": "neither p nor X",
+   "event": {
+    "kind": 17,
+    "created_at": 1799999940,
+    "content": "ɱ❤",
+    "tags": [
+     [
+      "k",
+      "web"
+     ],
+     [
+      "i",
+      "https://x.com/i/status/123"
+     ]
+    ],
+    "pubkey": "774ae7f858a9411e5ef4246b70c65aac5649980be5c17891bbec17895da008cb",
+    "id": "9473ebb208cba46ca6a00e4a081d5190094311085df853195283d2d168e6435b",
+    "sig": "556a15a9104bcf2c7f391c6b56e76b80cffb2dc21bc3408e7b7c3f9e2d322d911191e2768f42bcb778952acefb17c735dbda8be8fd7e1bc32641201624fc7c93"
+   },
+   "expected": null
+  },
+  {
+   "name": "bad X handle",
+   "event": {
+    "kind": 17,
+    "created_at": 1799999940,
+    "content": "ɱ❤",
+    "tags": [
+     [
+      "k",
+      "web"
+     ],
+     [
+      "i",
+      "https://x.com/i/status/123"
+     ],
+     [
+      "X",
+      "alice"
+     ]
+    ],
+    "pubkey": "774ae7f858a9411e5ef4246b70c65aac5649980be5c17891bbec17895da008cb",
+    "id": "3690c5353d90e55854345d1d1a06782f142a81198c545d9fe270ce6f1c5f206a",
+    "sig": "198e7a8898d18ebf89f7a073dee3bb24fb6e14d5ced41072425c595d7622b573dc2ed3dd3865656ef19bd51a6dcd00b8372c3ce04e7b84bc17919322a5c77ffe"
+   },
+   "expected": null
+  },
+  {
+   "name": "too long handle",
+   "event": {
+    "kind": 17,
+    "created_at": 1799999940,
+    "content": "ɱ❤",
+    "tags": [
+     [
+      "k",
+      "web"
+     ],
+     [
+      "i",
+      "https://x.com/i/status/123"
+     ],
+     [
+      "X",
+      "twitter:waytoolonghandle1"
+     ]
+    ],
+    "pubkey": "774ae7f858a9411e5ef4246b70c65aac5649980be5c17891bbec17895da008cb",
+    "id": "c84ce3833bfc9d9630d3a36642075e80116d2ad7afdfe5e8a6d25394bbf453ff",
+    "sig": "c4526974a67eaf738fe8f49ad412bc2acaaaea8a6e7a1ded092eb8af0b0b7de9f0601b36a9d006904b3b9a73b800deb567940deccdfa392f970cde438e1ef373"
+   },
+   "expected": null
+  },
+  {
+   "name": "from the future",
+   "event": {
+    "kind": 17,
+    "created_at": 1800003600,
+    "content": "ɱ❤",
+    "tags": [
+     [
+      "k",
+      "web"
+     ],
+     [
+      "i",
+      "https://x.com/i/status/123"
+     ],
+     [
+      "X",
+      "twitter:alice"
+     ]
+    ],
+    "pubkey": "774ae7f858a9411e5ef4246b70c65aac5649980be5c17891bbec17895da008cb",
+    "id": "167f74e2ac9d37a3e1cecdf72d8df88a42f350a8f561712b34aa3169d06c7d00",
+    "sig": "50ee1b42b6d2358f0c6684cd2c9955e16ccfa31ce2c798127b54e09bee5f60ea5149ee51ed0b9a7e1b892f6ea23f8e431ebb68253826b9321e35ec1d21cac50f"
+   },
+   "expected": null
+  },
+  {
+   "name": "wrong content",
+   "event": {
+    "kind": 17,
+    "created_at": 1799999940,
+    "content": "+",
+    "tags": [
+     [
+      "k",
+      "web"
+     ],
+     [
+      "i",
+      "https://x.com/i/status/123"
+     ],
+     [
+      "X",
+      "twitter:alice"
+     ]
+    ],
+    "pubkey": "774ae7f858a9411e5ef4246b70c65aac5649980be5c17891bbec17895da008cb",
+    "id": "4108a516bdcac338f7d4b99095541c5ba32a66819954ed6beefac79e0beb0328",
+    "sig": "b0eb9bad412c46d923d3209384dc147edaba3d864c8bd84124d6183263f15e43a9a60dcf80f77ad72ff586f81d070c1a885119f4b0355d1204f5cefe1a44e321"
+   },
+   "expected": null
+  },
+  {
+   "name": "an e tag",
+   "event": {
+    "kind": 17,
+    "created_at": 1799999940,
+    "content": "ɱ❤",
+    "tags": [
+     [
+      "k",
+      "web"
+     ],
+     [
+      "i",
+      "https://x.com/i/status/123"
+     ],
+     [
+      "e",
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+     ],
+     [
+      "X",
+      "twitter:alice"
+     ]
+    ],
+    "pubkey": "774ae7f858a9411e5ef4246b70c65aac5649980be5c17891bbec17895da008cb",
+    "id": "0114f5efd272c128dca5cb258be05092b99fbc8a0238385de1929a7781c34157",
+    "sig": "a1e261bf266f11120203d80795defb5ba85406966c9eccc119d40c7d5e3e906c1d890b4b62d32cc3d737ee7e2eea49d80c5740d8a740792599c6d48512035376"
+   },
+   "expected": null
+  },
+  {
+   "name": "not an X status",
+   "event": {
+    "kind": 17,
+    "created_at": 1799999940,
+    "content": "ɱ❤",
+    "tags": [
+     [
+      "k",
+      "web"
+     ],
+     [
+      "i",
+      "https://evil.example/status/1"
+     ],
+     [
+      "X",
+      "twitter:alice"
+     ]
+    ],
+    "pubkey": "774ae7f858a9411e5ef4246b70c65aac5649980be5c17891bbec17895da008cb",
+    "id": "5bbc449228625013f80cf0fbd1b85e7ef9932e7c41b3926acc4992078727ff5b",
+    "sig": "500ffebeffe6f592945104dc712b4aa5608ad228ba422a6cb6566323302f6fbf8fe6161f4f4cb3f9823603fff55898ca0d1398c17ae0aa5de32dfc681c5f01f9"
+   },
+   "expected": null
+  }
+ ],
+ "addresses": [
+  {
+   "name": "standard",
+   "address": "497raTyHwdNFVqt247QKVoPWgCLCDRj22CBY6zgP6Xoh6xuqR3Nncv4ejV819yTvzScMopZz65fmBc5abGkpKAkxDUs5zvf",
+   "valid": true
+  },
+  {
+   "name": "integrated",
+   "address": "4JpXbGnnYttFVqt247QKVoPWgCLCDRj22CBY6zgP6Xoh6xuqR3Nncv4ejV819yTvzScMopZz65fmBc5abGkpKAkxKQBD1mdnv4W1zGDZbs",
+   "valid": true
+  },
+  {
+   "name": "testnet",
+   "address": "9zfQ4idZDzUFVqt247QKVoPWgCLCDRj22CBY6zgP6Xoh6xuqR3Nncv4ejV819yTvzScMopZz65fmBc5abGkpKAkxDWzwUY4",
+   "valid": false
+  },
+  {
+   "name": "bad checksum",
+   "address": "497raTyHwdNFVqt247QKVoPWgCLCDRj22CBY6zgP6Xoh6xuqR3Nncv4ejV819yTvzScMopZz65fmBc5abGkpKAkxDUs5zvA",
+   "valid": false
+  },
+  {
+   "name": "short",
+   "address": "497raTyHwdNFVqt247QKVoPWgCLCDRj22CBY6zgP6Xoh6xuqR3Nncv4ejV819yTvzScMopZz65fmBc5abGkpKAkxDU",
+   "valid": false
+  }
+ ]
+}

@@ -286,6 +286,10 @@
               <div><span class="row-title">Also like on X when I send an xo</span><span class="row-hint">Holding the heart (or Shift+Enter) always sends an xo and likes the post on X; this makes a plain click do both too. Taking an xo back never un-likes</span></div>
               <input data-xmr="xo-like" type="checkbox" role="switch" class="switch" />
             </label>
+            <label class="setting">
+              <div><span class="row-title">xo rings and counts</span><span class="row-hint">An orange ring on the avatar of accounts Monero people sent xos, and the total in their badge. Counted by xmr.bio every 10 minutes: distinct posts, at most 10 per sender, so a soft signal, not proof of distinct people</span></div>
+              <input data-xmr="xo-rings" type="checkbox" role="switch" class="switch" />
+            </label>
           </div>
           <div id="xap-inbox" class="card pad">
             <label class="setting">
@@ -297,7 +301,7 @@
               <p class="row-hint">A Xap is the tipper's word that they sent it. It shows as verified once your wallet confirms it; check your wallet before you thank anyone.</p>
               <ul data-inbox="list" class="xap-list"></ul>
               <h2 class="card-head">xos received</h2>
-              <p class="row-hint">Counted only from Monero people: a key with a Monero address and an X account its proof tweet confirms. One per person per post.</p>
+              <p class="row-hint">Counted only from Monero people: a key with a Monero address and an X account its proof tweet confirms. One per person per post. XMRadar asks relays for xos to your key and, once it's proven, your X handle.</p>
               <ul data-inbox="xo-list" class="xap-list"></ul>
               <div class="row"><button data-inbox="check" type="button">Check now</button><span data-inbox="status" class="row-hint" role="status" aria-live="polite"></span></div>
               <details><summary class="row-hint" data-inbox="relays-summary"></summary><p data-inbox="relays" class="row-hint"></p></details>

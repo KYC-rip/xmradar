@@ -23,6 +23,7 @@ import { checkSessionSender, checkShareMenuSender, isExtensionPageSender, isSign
 import { setAuto, suggestFor, tagsReady } from '../ai/requests';
 import { signerModeItem, syncedPostsItem, xmrbioListItem, xmrbioListPrefItem } from '../settings';
 import { recordSynced, type SyncedPost } from '../nostr/synced';
+import { proofCandidateItem, setupDoneItem } from '../settings';
 import { DEFAULT_RELAYS, directoryStatusItem, nip65CacheItem, siwmHelperOn, useNip65On, INDEX_RELAYS, withoutIndex, myHandleItem, postedItem, pubkeyItem, receiptsOn, settingsItem, siteInfoOn, updateCheckOn, updateStateItem, logoPackItem, xapInboxItem, xapNotifyOn, siteWarningsOn, copyReportsOn, swapRecordDaysItem, swapRecordsCleanedItem, xapMarksItem, xClaimsChangedItem, xClaimsOn, xmrSettingsItem } from '../settings';
 import { storage } from 'wxt/utils/storage';
 import { activeInbox, burnerCreatingItem, burnerInboxItem, burnerLastErrorItem, burnFreeInbox, createFreeInbox, forgetImportedInbox, importInbox, type BurnerDeps } from '../burner/service';
@@ -245,7 +246,8 @@ async function nip65ReadRelays(pubkey: string): Promise<string[]> {
   return relays;
 }
 /** Where an xo goes: the sender's post relays, the author's read relays and the defaults (the shared floor). */
-const xoRelays = async (me: string, author: string) => xoRelayOrder(withoutIndex(await nip65ReadRelays(author)), DEFAULT_RELAYS, withoutIndex(await resolveRelays(me).catch(() => [])));
+// an author with no key known (PLAN-XOREACH): the defaults, the floor both sides read, then the sender's own
+const xoRelays = async (me: string, author: string | null) => xoRelayOrder(author ? withoutIndex(await nip65ReadRelays(author)) : [], DEFAULT_RELAYS, withoutIndex(await resolveRelays(me).catch(() => [])));
 
 const xoInbox = xoKeeper({
   held: xoInboxItem,
@@ -253,6 +255,11 @@ const xoInbox = xoKeeper({
   // with the Xap notifications: one switch for "tell me what Monero people send me"
   enabled: async () => xapNotifyOn(await xmrSettingsItem.getValue()),
   pubkey: () => pubkeyItem.getValue(),
+  // PLAN-XOREACH: xos sent to the handle before the user had a key
+  handle: async () => {
+    const m = await myHandleItem.getValue();
+    return m?.proven ? m.handle : null;
+  },
   // its own read relays and the defaults first: that's where senders put xos
   relays: async (pubkey) => xoRelayOrder(withoutIndex(await nip65ReadRelays(pubkey)), DEFAULT_RELAYS, withoutIndex(await resolveRelays(pubkey).catch(() => [])), MAX_RELAYS),
   read: (relays, filter) => readEach(relays, filter, 6000),
@@ -329,6 +336,9 @@ export default defineBackground(() => {
     // another key now signs (switching between the signer and the XMRadar identity, PLAN-MANAGEDID): what
     // the old key sent can't be taken back by this one, and the handle must be proven again for it
     if (old && pk && old !== pk) void rebindToKey();
+  });
+  myHandleItem.watch((m, old) => {
+    if ((m?.proven ? m.handle : null) !== (old?.proven ? old.handle : null)) void xoInbox.apply();
   });
   void settingsItem.getValue().then((s) => updates.apply(updateCheckOn(s)));
   settingsItem.watch((s, old) => {
@@ -829,26 +839,59 @@ async function handle(msg: BgRequest, sender: Browser.runtime.MessageSender): Pr
       const sent = await xoSentItem.getValue();
       const nowSecs = Math.floor(Date.now() / 1000);
       if (msg.type === 'xo-send') {
-        if (typeof msg.author !== 'string' || !/^[0-9a-f]{64}$/.test(msg.author)) throw new Error('Bad author');
+        // no key known (PLAN-XOREACH): the xo goes to the handle and waits for its owner to set up
+        const author = msg.author ?? null;
+        if (author !== null && (typeof author !== 'string' || !/^[0-9a-f]{64}$/.test(author))) throw new Error('Bad author');
+        if (typeof msg.handle !== 'string' || !HANDLE_RE.test(msg.handle)) throw new Error('Bad handle');
         // your own post too, as on X: it counts as one, shown from the sent record, never notified
         if (sent[msg.post]) return { ok: true, id: sent[msg.post]!.id };
         // one quiet visit to the signer page: its key and the signature together
-        const { pubkey: me, event } = await signQuietly(xoTemplate(msg.post, msg.author, nowSecs));
-        const results = await publishToRelays(await xoRelays(me, msg.author), event);
+        const { pubkey: me, event } = await signQuietly(xoTemplate(msg.post, author, msg.handle, nowSecs));
+        const results = await publishToRelays(await xoRelays(me, author), event);
         if (!results.some((r) => r.ok)) return { ok: false, error: 'No relay took it' };
-        await xoSentItem.setValue(rememberSent(await xoSentItem.getValue(), msg.post, { id: event.id, at: Date.now(), author: msg.author })).catch(() => {});
+        await xoSentItem.setValue(rememberSent(await xoSentItem.getValue(), msg.post, { id: event.id, at: Date.now(), ...(author ? { author } : {}) })).catch(() => {});
         return { ok: true, id: event.id };
       }
       const mine = sent[msg.post];
       if (!mine) return { ok: true };
       const { pubkey: me, event } = await signQuietly(undoTemplate(mine.id, nowSecs));
-      const results = await publishToRelays(await xoRelays(me, mine.author ?? me), event);
+      const results = await publishToRelays(await xoRelays(me, mine.author ?? null), event);
       // forgotten only once a relay took the deletion, so the button never says undone when it isn't
       if (!results.some((r) => r.ok)) return { ok: false, error: 'Couldn’t undo: no relay took it' };
       const rest = { ...(await xoSentItem.getValue()) };
       delete rest[msg.post];
       await xoSentItem.setValue(rest).catch(() => {});
       return { ok: true };
+    }
+    // the setup card on X (PLAN-XOREACH): a launcher only; keys and signing stay on extension pages
+    case 'setup-card-state': {
+      checkShareMenuSender(sender, browser.runtime.id);
+      const pubkey = await pubkeyItem.getValue();
+      if (!pubkey) return { complete: false };
+      const known = await setupDoneItem.getValue();
+      if (known?.pubkey === pubkey) return { complete: known.done };
+      // not checked for this key yet: a proven handle is worth one status check, anything less isn't done
+      if (!(await myHandleItem.getValue())?.proven) return { complete: false };
+      try {
+        await setupStatus();
+        return { complete: !!(await setupDoneItem.getValue())?.done };
+      } catch {
+        return { complete: false };
+      }
+    }
+    case 'open-setup': {
+      const tabId = checkShareMenuSender(sender, browser.runtime.id);
+      const hint = typeof msg.handleHint === 'string' && HANDLE_RE.test(msg.handleHint) ? msg.handleHint : '';
+      await browser.tabs.create({ url: browser.runtime.getURL('/setup.html') + (hint ? `#${hint}` : ''), openerTabId: tabId, index: (sender.tab?.index ?? 0) + 1 });
+      return null;
+    }
+    case 'proof-tweet-seen': {
+      checkShareMenuSender(sender, browser.runtime.id);
+      if (typeof msg.handle !== 'string' || !HANDLE_RE.test(msg.handle) || typeof msg.statusId !== 'string' || !/^[1-9]\d{0,19}$/.test(msg.statusId)) throw new Error('Bad tweet');
+      const pubkey = await pubkeyItem.getValue();
+      // only a suggestion for setup.html: linking still checks the tweet on X itself
+      if (pubkey) await proofCandidateItem.setValue({ handle: msg.handle, statusId: msg.statusId, pubkey, at: Date.now() });
+      return null;
     }
     case 'xap-post-totals': {
       if (!isXContentScript(sender) || sender.tab?.id == null) throw new Error('Not allowed');
@@ -1733,6 +1776,7 @@ async function setupStatus(listNow = false): Promise<SetupStatus> {
   if (record && record.status !== 'failed' && status.xmrbio?.found !== true && mine) status = { ...status, xmrbio: await xmrbioStatus(mine.handle, status.pubkey) };
   status = { ...status, listing: record ? { status: record.status, at: record.at, ...(record.error ? { error: record.error } : {}) } : null };
   await setupStatusLast.setValue({ at: Date.now(), status });
+  await setupDoneItem.setValue({ pubkey: status.pubkey, done: !!status.address?.check.ok && status.link?.proof.status === 'verified' }).catch(() => {});
   return status;
 }
 

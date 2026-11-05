@@ -185,8 +185,12 @@ export type BgRequest =
   | { type: 'share-menu-copy' }
   | { type: 'xap-totals'; recipients: string[]; fresh?: boolean }
   /** xo (PLAN-MONEROLIKE): send or take back the user's xo on an X post */
-  | { type: 'xo-send'; post: string; author: string }
+  | { type: 'xo-send'; post: string; author: string | null; handle: string }
   | { type: 'xo-undo'; post: string }
+  /** the setup card on X (PLAN-XOREACH): is setup done for this key; open setup.html; a proof tweet seen */
+  | { type: 'setup-card-state' }
+  | { type: 'open-setup'; handleHint?: string }
+  | { type: 'proof-tweet-seen'; handle: string; statusId: string }
   /** the identity card in Options (PLAN-MANAGEDID) */
   | { type: 'identity-state' }
   /** "List me on xmr.bio" pressed (PLAN-XMRBIOLIST) */
@@ -283,6 +287,10 @@ export type BgResponse<T extends BgRequest['type']> = T extends 'fetch-image'
                                     ? { nsec: string | null }
                                   : T extends 'xo-send' | 'xo-undo'
                                     ? { ok: boolean; id?: string; error?: string }
+                                  : T extends 'setup-card-state'
+                                    ? { complete: boolean }
+                                  : T extends 'open-setup' | 'proof-tweet-seen'
+                                    ? null
                                   : T extends 'xap-post-totals'
                                     ? XapPostTotalsResult
                                   : T extends 'xap-publish'

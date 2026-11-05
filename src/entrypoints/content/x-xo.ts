@@ -1,10 +1,11 @@
 import { sendToBackground } from '../../messaging';
 import { ownStatusId } from '../../extractors/x';
 import { XAP_ATTR, XAP_SELECTOR, actionBar, actionBars } from './x-xap';
+import { noteXoSent } from './x-setup-card';
 
 /**
- * The xo button (PLAN-MONEROLIKE): a Monero like, right after the Xap button on posts whose author has a
- * known key. Playful to send (Echo Bloom: squash, bloom into Monero orange, a ghost outline and a burst of
+ * The xo button (PLAN-MONEROLIKE): a Monero like, right after the Xap button on X posts. With the author's
+ * key known it goes to the key; without one (PLAN-XOREACH) to their X handle, and waits there until they set up. Playful to send (Echo Bloom: squash, bloom into Monero orange, a ghost outline and a burst of
  * dots), joyful to receive (on the user's own posts, new xos float up as small hearts once). Web
  * Animations only, transform and opacity; with reduced motion the state just changes.
  */
@@ -131,7 +132,7 @@ export function celebrate(svg: SVGSVGElement, count: Element | null, hearts = 5)
 
 export interface XoOpts {
   post: string;
-  /** the author's key; null: none known, so the heart is faded and can only like on X (PLAN-XOKEYS) */
+  /** the author's key; null: none known, so the xo is addressed to their handle (PLAN-XOREACH) */
   /** a plain click also likes the post on X (opt-in); a hold always does */
   alsoLike?: boolean;
   author: string | null;
@@ -145,7 +146,8 @@ export interface XoOpts {
 export const ownXos = (article: Element) => actionBars(article).flatMap((bar) => [...bar.querySelectorAll<HTMLElement>(`:scope > ${XO_SELECTOR}`)]);
 
 const label = (o: Pick<XoOpts, 'own' | 'sent' | 'handle' | 'author'>, shown: number) => {
-  if (!o.author) return `@${o.handle} hasn’t linked a Nostr key, so an xo can’t reach them. Hold to like on X.`;
+  if (!o.own && !o.author)
+    return o.sent ? `You sent an xo. It waits for @${o.handle} to set up XMRadar. Click to take it back.` : `@${o.handle} hasn’t set up XMRadar yet. Your xo waits for them, and counts once they do. Click: xo · Hold: xo + like on X`;
   if (!o.own) return o.sent ? 'You sent an xo. Click to take it back.' : `Send @${o.handle} an xo (a Monero like, over Nostr). Click: xo · Hold: xo + like on X`;
   const counted = shown ? `xo: ${shown}${o.sent ? ', yours included' : ' from Monero people'}` : 'xo: none yet';
   return `${counted}. ${o.sent ? 'Click to take yours back.' : 'Click: xo · Hold: xo + like on X'}`;
@@ -166,9 +168,6 @@ export function setXoState(wrap: HTMLElement, o: Pick<XoOpts, 'own' | 'sent' | '
   btn?.setAttribute('aria-pressed', String(o.sent));
   if (btn) btn.title = label(o, shown);
   wrap.dataset.sent = String(o.sent);
-  // no key: faded, like-only
-  wrap.dataset.likeOnly = String(!o.author);
-  wrap.style.opacity = o.author ? '' : '0.45';
   // the others' count, so a click can redraw with it
   wrap.dataset.count = String(count ?? 0);
 }
@@ -231,8 +230,7 @@ export function insertXo(article: Element, opts: XoOpts): HTMLElement[] {
           hold = null;
           // the click that ends this hold, however long it lasts, is skipped (see pointerup below)
           charged = true;
-          if (wrap.dataset.likeOnly === 'true') void likeOnly(wrap, icon, opts.post);
-          else void toggle(wrap, icon, opts, true);
+          void toggle(wrap, icon, opts, true);
         }, HOLD_MS),
       };
     });
@@ -256,16 +254,13 @@ export function insertXo(article: Element, opts: XoOpts): HTMLElement[] {
         charged = false;
         return;
       }
-      // no key known: a click only explains (the tooltip); holding likes on X
-      if (wrap.dataset.likeOnly === 'true') return;
       void toggle(wrap, icon, opts, wrap.dataset.alsoLike === 'true');
     });
     btn.addEventListener('keydown', (e) => {
       if (e.key !== 'Enter' || !e.shiftKey || !e.isTrusted || wrap.dataset.sent === 'true') return;
       e.preventDefault();
       e.stopPropagation();
-      if (wrap.dataset.likeOnly === 'true') void likeOnly(wrap, icon, opts.post);
-      else void toggle(wrap, icon, opts, true);
+      void toggle(wrap, icon, opts, true);
     });
     setXoState(wrap, opts, opts.count);
     wrap.dataset.alsoLike = String(!!opts.alsoLike);
@@ -324,21 +319,6 @@ export async function likeOnX(post: string, doc: Document = document): Promise<b
   return likeButtonFor(post, doc) === 'liked';
 }
 
-/** A faded heart's hold: X's like only, with a small bloom; no xo can be sent without the author's key. */
-async function likeOnly(wrap: HTMLElement, icon: SVGSVGElement, post: string) {
-  if (wrap.dataset.busy === 'true') return;
-  wrap.dataset.busy = 'true';
-  bloom(icon);
-  const btn = wrap.querySelector('button');
-  const why = 'No xo: this account hasn’t linked a Nostr key.';
-  try {
-    const ok = await likeOnX(post);
-    if (btn) btn.title = ok ? `Liked on X. ${why}` : `X’s like couldn’t be pressed on this post. ${why}`;
-  } finally {
-    delete wrap.dataset.busy;
-  }
-}
-
 async function toggle(wrap: HTMLElement, icon: SVGSVGElement, opts: XoOpts, alsoLike = false) {
   if (wrap.dataset.busy === 'true') return;
   wrap.dataset.busy = 'true';
@@ -351,10 +331,9 @@ async function toggle(wrap: HTMLElement, icon: SVGSVGElement, opts: XoOpts, also
   // X's like goes together with the bloom, not after the signer and relays: the user asked for both now
   const liked = !was && alsoLike ? likeOnX(opts.post) : null;
   try {
-    // toggle runs only with a key (a faded heart never sends)
-    if (!opts.author) throw new Error('No Nostr key known for this account');
-    const res = await sendToBackground(was ? { type: 'xo-undo', post: opts.post } : { type: 'xo-send', post: opts.post, author: opts.author });
+    const res = await sendToBackground(was ? { type: 'xo-undo', post: opts.post } : { type: 'xo-send', post: opts.post, author: opts.author, handle: opts.handle });
     if (!res.ok) throw new Error(res.error ?? 'Not sent');
+    if (!was) noteXoSent();
     // taking an xo back never un-likes
     if (liked && !(await liked)) {
       const btn = wrap.querySelector('button');

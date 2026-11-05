@@ -164,6 +164,8 @@ export interface XmrSettings extends XmrSettingsV2 {
   xoButton?: boolean;
   /** a plain click on xo also likes the post on X (PLAN-XOLIKE); off unless switched on (a hold always does) */
   xoAlsoLike?: boolean;
+  /** an orange ring on avatars and the xo total in the badge, from xmr.bio's directory (PLAN-XORINGS); read with `xoRingsOn` */
+  xoRings?: boolean;
 }
 
 export const siteInfoOn = (s: Partial<XmrSettings> | null | undefined) => s?.siteInfo !== false;
@@ -174,6 +176,7 @@ export const copyReportsOn = (s: Partial<XmrSettings> | null | undefined) => sit
 /** asking relays for Xaps to the user's key links this browser to it, so it's off unless switched on */
 export const xapNotifyOn = (s: Partial<XmrSettings> | null | undefined) => s?.xapNotify === true;
 export const xoButtonOn = (s: Partial<XmrSettings> | null | undefined) => s?.xoButton !== false;
+export const xoRingsOn = (s: Partial<XmrSettings> | null | undefined) => s?.xoRings !== false;
 
 /** v1, before the redesign: one switch for X badges. */
 export interface XmrSettingsV1 {
@@ -219,6 +222,16 @@ export const signerModeItem = storage.defineItem<SignerMode>('local:signerMode',
 export const xmrbioListPrefItem = storage.defineItem<'on' | 'off'>('local:xmrbioListPref', { fallback: 'on' });
 export const xmrbioListItem = storage.defineItem<Record<string, { status: 'listed' | 'exists' | 'exists-unlisted' | 'failed'; at: number; error?: string }>>('local:xmrbioList', { fallback: {} });
 export const myHandleItem = storage.defineItem<{ handle: string; proven: boolean } | null>('local:myHandle', { fallback: null });
+/**
+ * PLAN-XOREACH. Whether the Monero identity is complete (a valid address and a verified proof tweet) for a key,
+ * as the last status check found: the X setup card reads it, since the full status is session-only.
+ */
+export const setupDoneItem = storage.defineItem<{ pubkey: string; done: boolean } | null>('local:setupDone', { fallback: null });
+/** The setup card on X: "Not now" snoozes it, × dismisses it for good; `nudged` once the xo nudge was shown. */
+export const setupCardItem = storage.defineItem<{ snoozedUntil?: number; dismissed?: boolean; nudged?: boolean }>('local:setupCard', { fallback: {} });
+/** A proof tweet the X page showed for the current key, for setup.html to fill in (30 minutes). */
+export const proofCandidateItem = storage.defineItem<{ handle: string; statusId: string; pubkey: string; at: number } | null>('session:proofCandidate', { fallback: null });
+export const PROOF_CANDIDATE_MS = 30 * 60_000;
 
 /** The xmr.bio directory (2d) as the options page shows it; the directory itself is kept by the background. */
 export const directoryStatusItem = storage.defineItem<DirectoryStatus | null>('local:xmrbioDirectoryStatus', { fallback: null });
