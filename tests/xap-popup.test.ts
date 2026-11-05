@@ -164,3 +164,41 @@ describe('Xap popup', () => {
   });
 });
 
+
+describe('Xap popup in RipleyOS (walletReceipts: the receipt follows RipleyOS’s wallet send)', () => {
+  beforeEach(() => {
+    fakeBrowser.reset();
+    send.mockReset().mockImplementation(async (m: { type: string }) => (m.type === 'xap-totals' || m.type === 'xap-post-totals' ? { totals: [], pending: [] } : m.type === 'xmr-price' ? { usd: 500 } : null));
+  });
+  afterEach(() => { document.body.innerHTML = ''; });
+  const mountR = (post?: string) => { const el = renderXap({ handle: 'xbtoshi', entry, receipts: true, walletReceipts: true, post, isClosed: () => false }); document.body.append(el); return el; };
+  const trustedClick = (el: Element) => { const e = new MouseEvent('click', { bubbles: true, cancelable: true }); Object.defineProperty(e, 'isTrusted', { value: true }); e.preventDefault(); el.dispatchEvent(e); };
+
+  it('no “I sent it”; says RipleyOS asks after the wallet sends; a trusted wallet click names the tip once', async () => {
+    const el = mountR(POST);
+    typeAmount(el, '0.01');
+    await vi.waitFor(() => expect(wallet(el).getAttribute('href')).toMatch(/^monero:/));
+    expect([...el.querySelectorAll('button')].some((b) => b.textContent === 'I sent it')).toBe(false);
+    expect(el.textContent).toContain('RipleyOS asks whether to publish a public receipt');
+    const amount = /tx_amount=([\d.]+)/.exec(wallet(el).getAttribute('href')!)![1];
+    trustedClick(wallet(el));
+    expect(send).toHaveBeenCalledWith({ type: 'xap-pending', recipient: PK, address: ADDR, amount, post: POST });
+  });
+
+  it('an untrusted click, or no amount, names nothing', async () => {
+    const el = mountR();
+    trustedClick(wallet(el));
+    typeAmount(el, '0.01');
+    await vi.waitFor(() => expect(wallet(el).getAttribute('href')).toMatch(/^monero:/));
+    wallet(el).dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+    expect(send.mock.calls.filter(([m]) => (m as { type: string }).type === 'xap-pending')).toHaveLength(0);
+  });
+
+  it('the extension’s popup is unchanged: “I sent it” stays and no xap-pending is ever sent', async () => {
+    const el = mount(true);
+    typeAmount(el, '0.01');
+    await vi.waitFor(() => expect(button(el, 'I sent it')).toBeTruthy());
+    trustedClick(wallet(el));
+    expect(send.mock.calls.filter(([m]) => (m as { type: string }).type === 'xap-pending')).toHaveLength(0);
+  });
+});

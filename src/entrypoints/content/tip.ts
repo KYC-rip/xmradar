@@ -65,7 +65,9 @@ export async function openTip(ctx: ContentScriptContext, handle: string | null, 
 async function mountTip(ctx: ContentScriptContext, detected: string | null, badge?: Badge, opts: TipOptions = {}) {
   const previousFocus = document.activeElement as HTMLElement | null;
   let closed = false;
-  const receipts = opts.xap ? (await xmrSettingsItem.getValue()).tipReceipts : false;
+  const xmrSettings = opts.xap ? await xmrSettingsItem.getValue() : null;
+  const receipts = xmrSettings ? xmrSettings.tipReceipts : false;
+  const walletReceipts = !!xmrSettings?.walletReceipts;
 
   const ui = await createShadowRootUi(ctx, {
     name: 'xmradar-tip',
@@ -149,7 +151,7 @@ async function mountTip(ctx: ContentScriptContext, detected: string | null, badg
         title.textContent = opts.post ? `Xap this post by @${who}` : `Xap @${who}`;
         dialog.setAttribute('aria-label', title.textContent);
         if (xap?.pubkey) {
-          const x = renderXap({ handle: who, entry: xap as BadgeEntry & { pubkey: string }, cached: opts.totals, receipts, post: opts.post, onPublished: opts.onPublished, onTotals: opts.onTotals, onProfileTotals: opts.onProfileTotals, isClosed: () => closed });
+          const x = renderXap({ handle: who, entry: xap as BadgeEntry & { pubkey: string }, cached: opts.totals, receipts, walletReceipts, post: opts.post, onPublished: opts.onPublished, onTotals: opts.onTotals, onProfileTotals: opts.onProfileTotals, isClosed: () => closed });
           x.append(badgePanel(badge));
           if (badge.differ) x.prepend(h('div', { class: 'warn' }, 'This account has published more than one address. Xaps go to its Nostr address; check the sources below before sending.'));
           result.replaceChildren(x);

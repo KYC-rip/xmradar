@@ -184,6 +184,8 @@ export type BgRequest =
   | { type: 'identity-delete' }
   | { type: 'xap-post-totals'; posts: { id: string; pubkey: string }[]; fresh?: boolean }
   | { type: 'xap-publish'; recipient: string; address: string; amount: string; post?: string }
+  /** RipleyOS only: the tip the user is opening in RipleyOS's wallet */
+  | { type: 'xap-pending'; recipient: string; address: string; amount: string; post?: string }
   | { type: 'xmr-price' }
   | { type: 'receipt-found'; text: string; eventId?: string }
   | { type: 'receipt-badge'; level: 'ok' | 'caution' | 'warn' | 'none' }

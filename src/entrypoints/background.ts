@@ -736,6 +736,9 @@ async function handle(msg: BgRequest, sender: Browser.runtime.MessageSender): Pr
       if (!isXContentScript(sender) || sender.tab?.id == null) throw new Error('Not allowed');
       return lookups.xapTotals(msg.recipients, !!msg.fresh, sender.tab.id);
     }
+    // RipleyOS only (its own wallet makes the receipt); the extension never sends it
+    case 'xap-pending':
+      throw new Error('Not allowed');
     case 'xap-publish': {
       checkShareMenuSender(sender, browser.runtime.id);
       if (!(await xmrSettingsItem.getValue()).tipReceipts) throw new Error('Xap receipts are turned off in XMRadar’s options');

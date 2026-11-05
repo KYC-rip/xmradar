@@ -17,6 +17,8 @@ export { xoKeeper, freshXoInbox, xoCounts, XO_ALARM, XO_MINUTES, type XoInbox, t
 export { verifyLiker, knownLiker, rememberLiker, type Liker, type LikerCache } from '../xo/verify';
 // the key an X account's xo goes to, from a badge the service answered (Ripley checks a page's xo against it)
 export { xoKey } from '../identity/resolve';
+// phase 4: tip receipts, published by RipleyOS after its wallet's send and the user's yes
+export { publishXap, withSent, type PublishDeps, type PublishRequest } from '../xap/service';
 export { recordSynced, syncedLink, MAX_SYNCED, type SyncedPost, type SyncedPosts } from '../nostr/synced';
 
 /**

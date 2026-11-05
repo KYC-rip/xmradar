@@ -160,6 +160,8 @@ export interface XmrSettings extends XmrSettingsV2 {
   copyReports?: boolean;
   /** "Tell me when I get a Xap" (PLAN-XAPINBOX); read with `xapNotifyOn`, off unless switched on. Also covers xos. */
   xapNotify?: boolean;
+  /** RipleyOS only: the receipt follows RipleyOS's wallet send (and RipleyOS's own confirm), not "I sent it" */
+  walletReceipts?: boolean;
   /** the xo button on X posts (PLAN-MONEROLIKE); read with `xoButtonOn`, on unless switched off */
   xoButton?: boolean;
   /** a plain click on xo also likes the post on X (PLAN-XOLIKE); off unless switched on (a hold always does) */

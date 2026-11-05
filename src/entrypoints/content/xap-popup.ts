@@ -71,6 +71,8 @@ export interface XapOptions {
   cached?: XapTotals;
   /** "Ask to publish a Xap receipt after a tip" */
   receipts: boolean;
+  /** RipleyOS: the receipt follows its wallet's send — no "I sent it"; opening the wallet tells RipleyOS the tip */
+  walletReceipts?: boolean;
   /** X status id: this Xap tips that post, and the figures above are the post's */
   post?: string;
   /** a receipt was published */
@@ -154,7 +156,8 @@ export function renderXap(o: XapOptions): HTMLElement {
   const walletLink = h('a', { class: 'button primary', textContent: 'Open in wallet' });
   const copyAmount = h('button', { textContent: 'Copy amount' });
   const sentBtn = h('button', { textContent: 'I sent it' });
-  const actions = h('div', { class: 'row' }, walletLink, copyAmount, o.receipts ? sentBtn : '');
+  const byWallet = o.receipts && !!o.walletReceipts;
+  const actions = h('div', { class: 'row' }, walletLink, copyAmount, o.receipts && !byWallet ? sentBtn : '');
 
   // drawn once, so the amount stays the same through retries (R13); replaced below by the
   // recipient's kept mark, so a popup reopened after paying gives the same amount
@@ -189,7 +192,9 @@ export function renderXap(o: XapOptions): HTMLElement {
     }
     qrBox.replaceChildren(qrSvg(uri));
     // without receipts this is a plain tip, and the amount is optional
-    uniqueLine.textContent = unique ? `You'll send ${unique} XMR${usd && total ? ` (≈ ${picoToUsd(total, usd)})` : ''}; the last digits mark this Xap.` : o.receipts ? 'A Xap needs an amount.' : '';
+    uniqueLine.textContent = unique
+      ? `You'll send ${unique} XMR${usd && total ? ` (≈ ${picoToUsd(total, usd)})` : ''}; the last digits mark this Xap.${byWallet ? ' Once your RipleyOS wallet sends exactly this amount, RipleyOS asks whether to publish a public receipt.' : ''}`
+      : o.receipts ? 'A Xap needs an amount.' : '';
     if (unique || !o.receipts) {
       walletLink.href = uri;
       walletLink.removeAttribute('aria-disabled');
@@ -218,6 +223,12 @@ export function renderXap(o: XapOptions): HTMLElement {
         update();
       });
   copyAmount.addEventListener('click', () => unique && copy(unique, copyAmount, uniqueLine));
+  // RipleyOS: the user is opening this tip in the wallet — say which, so the wallet's send can become its receipt
+  if (byWallet)
+    walletLink.addEventListener('click', (e) => {
+      if (!e.isTrusted || !unique || !walletLink.getAttribute('href')) return;
+      void sendToBackground({ type: 'xap-pending', recipient: entry.pubkey, address, amount: unique, ...(o.post ? { post: o.post } : {}) }).catch(() => {});
+    });
   update();
 
   // R8: an explicit "I sent it", then an explicit yes to a public receipt
