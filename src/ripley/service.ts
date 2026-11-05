@@ -10,6 +10,12 @@ declare const __XMRADAR_VERSION__: string;
 export const version = typeof __XMRADAR_VERSION__ === 'string' ? __XMRADAR_VERSION__ : 'dev';
 export { xLookups, REQUEST_TYPES, type XLookups, type XLookupsDeps, type Kv, type RateKey } from '../service/x-lookups';
 export { directoryKeeper, boundedBody, type KeeperDeps };
+// phase 3: xo (Ripley signs, after its own confirm) and the synced marks (Ripley records copies to Nostr)
+export { KIND_XO, XO_CONTENT, xoTemplate, undoTemplate, xoOf, readRelaysFrom, xoRelayOrder } from '../xo/event';
+export { rememberSent, MAX_SENT, type SentXo } from '../xo/sent';
+export { xoKeeper, freshXoInbox, xoCounts, XO_ALARM, XO_MINUTES, type XoInbox, type XoDeps, type XoItem } from '../xo/inbox';
+export { verifyLiker, knownLiker, rememberLiker, type Liker, type LikerCache } from '../xo/verify';
+export { recordSynced, syncedLink, MAX_SYNCED, type SyncedPost, type SyncedPosts } from '../nostr/synced';
 
 /**
  * `browser.alarms` for the directory keeper, on timers: the hourly refresh and the retry run while RipleyOS

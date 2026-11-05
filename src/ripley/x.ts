@@ -1,8 +1,8 @@
 /**
- * XMRadar on X inside Ripley Terminal's X app (ripley-os plans/x-app-xmradar.md, phase 2): tip badges with the
- * tip popup (its wallet link opens Ripley's wallet), xap totals, synced marks and clean copied links.
- * Not here: xo, receipts, publishing, the composer, AI tags, site info, Sign in with Monero — Ripley either
- * does those itself or they come later as Ripley-confirmed actions.
+ * XMRadar on X inside Ripley Terminal's X app (ripley-os plans/x-app-xmradar.md, phases 2–3): tip badges with the
+ * tip popup (its wallet link opens Ripley's wallet), xap totals, synced marks, clean copied links, "Copy to
+ * Nostr" (into Ripley's Nostr composer) and the xo button (Ripley signs an xo only after its own confirm).
+ * Not here: receipts, publishing, XMRadar's composer, AI tags, site info, Sign in with Monero.
  *
  * Injected by Ripley at document start in X's top frame. It does nothing until the page has a body AND
  * Ripley's IPC is present (5 s at most; then it stays inert and says so once in the console — with no IPC there
@@ -16,6 +16,7 @@ import { cleanXLinksOn, settingsItem } from '../settings';
 import { startBadges } from '../entrypoints/content/x-badges';
 import { startCopyLinks } from '../entrypoints/content/x-copy-links';
 import { startSyncedMarks } from '../entrypoints/content/x-synced';
+import { startShare } from './share';
 
 const WAIT_MS = 5000;
 type Status = 'started' | 'inert';
@@ -26,6 +27,8 @@ function start() {
   const ctx = new ContentScriptContext('xmradar-ripley');
   startBadges(ctx);
   startSyncedMarks(ctx);
+  // "Copy to Nostr" in X's share menu → Ripley's Nostr composer (phase 3)
+  startShare(ctx);
   // X's share tracking taken out of copied X links; switched live
   let stopCopyLinks: (() => void) | null = null;
   const setCopyLinks = (on: boolean) => {

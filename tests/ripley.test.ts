@@ -121,6 +121,14 @@ describe('the Ripley service bundle (built file)', () => {
     expect(mod.REQUEST_TYPES).toEqual([...REQUEST_TYPES]);
     expect(mod.version).toMatch(/^\d+\.\d+\.\d+$/);
   });
+
+  it('exports what Ripley needs to sign xos and record copies itself (phase 3)', async () => {
+    const mod = await import(/* @vite-ignore */ `data:text/javascript;base64,${Buffer.from(serviceBundle).toString('base64')}`);
+    for (const f of ['xoTemplate', 'undoTemplate', 'xoRelayOrder', 'readRelaysFrom', 'rememberSent', 'xoKeeper', 'freshXoInbox', 'verifyLiker', 'knownLiker', 'rememberLiker', 'recordSynced', 'syncedLink']) expect(typeof mod[f]).toBe('function');
+    expect(mod.xoTemplate('123', 'a'.repeat(64), 1)).toMatchObject({ kind: 17, content: 'ɱ❤' });
+    expect(mod.MAX_SENT).toBeGreaterThan(0);
+    expect(mod.MAX_SYNCED).toBeGreaterThan(0);
+  });
 });
 
 describe('Ripley shims', () => {
