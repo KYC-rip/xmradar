@@ -15,6 +15,8 @@ export { KIND_XO, XO_CONTENT, xoTemplate, undoTemplate, xoOf, readRelaysFrom, xo
 export { rememberSent, MAX_SENT, type SentXo } from '../xo/sent';
 export { xoKeeper, freshXoInbox, xoCounts, XO_ALARM, XO_MINUTES, type XoInbox, type XoDeps, type XoItem } from '../xo/inbox';
 export { verifyLiker, knownLiker, rememberLiker, type Liker, type LikerCache } from '../xo/verify';
+// the key an X account's xo goes to, from a badge the service answered (Ripley checks a page's xo against it)
+export { xoKey } from '../identity/resolve';
 export { recordSynced, syncedLink, MAX_SYNCED, type SyncedPost, type SyncedPosts } from '../nostr/synced';
 
 /**
