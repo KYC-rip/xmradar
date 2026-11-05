@@ -4,11 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>XMRadar</title>
-<meta name="description" content="A browser extension for Chrome and Firefox: Monero tips on X from your own wallet, recorded on Nostr, signed swap receipts and letters of guarantee checked before you deposit, burner email, and posts copied to Nostr.">
+<meta name="description" content="A browser extension for Chrome and Firefox: Monero tips and Monero likes on X, your own Monero badge, signed swap receipts and letters of guarantee checked before you deposit, Sign in with Monero, burner email, and posts copied to Nostr.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://xmradar.app/">
 <meta property="og:title" content="XMRadar">
-<meta property="og:description" content="Monero on the pages you already use. Free and open source; holds no keys and no funds.">
+<meta property="og:description" content="Monero on the pages you already use: tips, likes and your own badge on X. Free and open source; holds no Monero keys and no funds.">
 <meta property="og:image" content="https://xmradar.app/og.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
@@ -25,6 +25,7 @@
   <a class="brand" href="#top"><img src="logo/xmradar.svg" alt=""><span>XMRadar</span></a>
   <nav aria-label="Main">
     <a href="#features">Features</a>
+    <a href="#proof">Your badge</a>
     <a href="#on-x">On X</a>
     <a href="#privacy">Privacy</a>
     <a href="https://nkips.org">NKIPs</a>
@@ -43,12 +44,12 @@
       <div class="copy">
         <span class="pill">Browser extension · Chrome and Firefox · early release</span>
         <h1>Monero on the pages you already use.</h1>
-        <p class="lede">XMRadar shows who takes Monero on X, lets you tip them from your own wallet, checks swap sites before you deposit, and copies posts to Nostr.</p>
+        <p class="lede">XMRadar shows who takes Monero on X, lets you tip them from your own wallet or send a Monero like, checks swap sites before you deposit, and copies posts to Nostr.</p>
         <div class="btns">
           <a class="btn btn-primary" href="{{CHROME_URL}}">Download for Chrome</a>
           <a class="btn btn-secondary" href="{{FIREFOX_URL}}">Download for Firefox</a>
         </div>
-        <span class="fine">Free and <a href="https://github.com/KYC-rip/xmradar">open source</a>. Holds no keys and no funds.</span>
+        <span class="fine">Free and <a href="https://github.com/KYC-rip/xmradar">open source</a>. Holds no Monero keys and no funds.</span>
       </div>
       <div class="stage" aria-hidden="true">
         <div class="mock post">
@@ -79,7 +80,7 @@
           <a class="btn btn-primary" href="{{CHROME_URL}}">Download for Chrome</a>
           <a class="btn btn-secondary" href="{{FIREFOX_URL}}">Download for Firefox</a>
         </div>
-        <span class="fine">Free and <a href="https://github.com/KYC-rip/xmradar">open source</a>. Holds no keys and no funds.</span>
+        <span class="fine">Free and <a href="https://github.com/KYC-rip/xmradar">open source</a>. Holds no Monero keys and no funds.</span>
       </div>
       <div class="stage col" aria-hidden="true">
         <div class="mock order">
@@ -97,11 +98,33 @@
         <div class="mock status-row"><span class="dot danger"></span><b>Address not in the signed letter</b><span class="push muted">don't send</span></div>
       </div>
     </div>
+    <div class="slide" id="slide-badge" role="tabpanel" aria-label="Your badge" aria-hidden="true" inert>
+      <div class="copy">
+        <span class="pill">Your badge · four steps, in Options</span>
+        <h1>Wear a Monero badge on X.</h1>
+        <p class="lede">Publish your Monero address, link your X account with one tweet, and XMRadar users see an XMR badge next to your name. No Nostr signer needed: without one, XMRadar makes a Nostr key for you, kept in this browser.</p>
+        <div class="btns">
+          <a class="btn btn-primary" href="{{CHROME_URL}}">Download for Chrome</a>
+          <a class="btn btn-secondary" href="{{FIREFOX_URL}}">Download for Firefox</a>
+        </div>
+        <span class="fine">Free and <a href="https://github.com/KYC-rip/xmradar">open source</a>. Holds no Monero keys and no funds.</span>
+      </div>
+      <div class="stage col" aria-hidden="true">
+        <div class="mock steps">
+          <div class="step-row"><span class="tick">✓</span><b>Nostr key</b><span class="push muted">XMRadar identity</span></div>
+          <div class="step-row"><span class="tick">✓</span><b>Your X handle</b><span class="push muted">@satoshi_fan</span></div>
+          <div class="step-row"><span class="tick">✓</span><b>Monero address</b><span class="push muted">8sB7…Kva</span></div>
+          <div class="step-row"><span class="tick">✓</span><b>X account linked</b><span class="push muted">proof tweet</span></div>
+        </div>
+        <div class="mock status-row"><span class="dot ok"></span><b>Listed on xmr.bio</b><span class="push muted">your badge for XMRadar users</span></div>
+      </div>
+    </div>
   </div>
 
   <div class="tabs" role="tablist" aria-label="Slides">
     <button role="tab" aria-controls="slide-tips" aria-selected="true">Tips</button>
     <button role="tab" aria-controls="slide-safety" aria-selected="false" tabindex="-1">Safety</button>
+    <button role="tab" aria-controls="slide-badge" aria-selected="false" tabindex="-1">Your badge</button>
     <button class="pause" type="button" aria-pressed="false" hidden>Pause</button>
   </div>
 </section>
@@ -112,12 +135,30 @@
     <article class="feature">
       <span class="kicker">01 · X · NKIP-0002</span>
       <h3>Tip badges</h3>
-      <p>An XMR badge on X for people who published a Monero address on Nostr or xmr.bio. Click it to tip from your own wallet; a Xap records the tip on Nostr. Totals separate tips the recipient confirmed from ones that are only claimed.</p>
+      <p>An XMR badge on X for people who published a Monero address on Nostr or verified it on xmr.bio, including people XMRadar listed there. Click it to tip from your own wallet; a Xap records the tip on Nostr. Totals separate tips the recipient confirmed from ones that are only claimed.</p>
       <div class="feature-demo"><span class="xap">ɱ 0.004 ✓</span><span class="claimed">+0.002 claimed</span></div>
     </article>
 
     <article class="feature">
-      <span class="kicker">02 · NKIP-0001 · letters of guarantee</span>
+      <span class="kicker">02 · X · NIP-25</span>
+      <h3>xo, a Monero like</h3>
+      <p>A heart next to the Xap button sends the author a Monero like over Nostr. Hold it (or press Shift+Enter) to like the post on X too. Received xos count only from Monero people, with a Monero address and a verified X link, and can notify you along with your Xaps.</p>
+      <div class="feature-demo"><span class="xo-demo"><span class="heart">♥</span> 12</span><span class="claimed">hold: also like on X</span></div>
+    </article>
+
+    <article class="feature">
+      <span class="kicker">03 · Options → Monero identity</span>
+      <h3>Your own badge</h3>
+      <p>Four steps: a Nostr key, your X handle, your Monero address, and one tweet that links them. No signer? XMRadar makes a Nostr key for you, kept in this browser. Once your link and address check out, XMRadar also lists you on xmr.bio (you can untick it), whose directory XMRadar users with badges on download, so they see your badge too.</p>
+      <div class="feature-demo rows">
+        <div class="row"><span class="dot ok"></span><b>Address published</b></div>
+        <div class="row"><span class="dot ok"></span><b>X account linked</b></div>
+        <div class="row"><span class="dot ok"></span><b>Listed on xmr.bio</b></div>
+      </div>
+    </article>
+
+    <article class="feature">
+      <span class="kicker">04 · NKIP-0001 · letters of guarantee</span>
       <h3>Swap guard</h3>
       <p>On an exchange's order page, XMRadar checks the signed NKIP-0001 receipt, or the operator's letter of guarantee (PGP or MistProof), against the addresses on the page and in what you copy. A verified copy is saved in your browser for disputes. The toolbar shows the site's xmr.club grade, with a warning for open incidents, and a lookalike of a listed exchange or wallet gets a warning page before it loads.</p>
       <p class="small">Exchange data from <a href="https://xmr.club">xmr.club</a>, licensed <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>.</p>
@@ -129,18 +170,50 @@
     </article>
 
     <article class="feature">
-      <span class="kicker">03 · kyc.rip GhostMail</span>
+      <span class="kicker">05 · NKIP-0003</span>
+      <h3>Sign in with Monero</h3>
+      <p>A <code>monero-signin:</code> link opens XMRadar's own window with the site, the account, the address, where the signature goes and the full message. Links that break the spec, have expired or come from another site are refused. Your wallet signs; step-by-step guides for Feather, Monero GUI, Cake Wallet, the CLI and RPC.</p>
+      <div class="feature-demo rows">
+        <div class="row"><span class="dot ok"></span><b>xmr.bio</b><span class="muted">sign in as @satoshi_fan</span></div>
+      </div>
+    </article>
+
+    <article class="feature">
+      <span class="kicker">06 · kyc.rip GhostMail</span>
       <h3>Burner email</h3>
       <p>A throwaway address in one click for sign-ups. New mail shows up as a notification with the code already pulled out.</p>
       <div class="burner"><code>qz4r8m@ghostmail.kyc.rip</code><span class="muted">42 min</span></div>
     </article>
 
     <article class="feature">
-      <span class="kicker">04 · Nostr</span>
+      <span class="kicker">07 · Nostr</span>
       <h3>Copy posts to Nostr</h3>
-      <p>Right-click a post on X, Bluesky, Mastodon or any page, or hover it and press Alt+Shift+N. Text, images and up to 5 tags go to your relays, signed by your own Nostr signer. Tags can be suggested by a model on your own computer, or a provider with your own key.</p>
+      <p>Right-click a post on X, Bluesky, Mastodon or any page, or hover it and press Alt+Shift+N. Text, images, whole X threads, quoted posts as a picture, and up to 5 tags go to your relays, signed by your own NIP-07 signer (needed here: XMRadar's own key never signs your posts). Copied X posts get a small <i>Nostr ✓</i>.</p>
       <div class="keys" aria-label="Alt+Shift+N"><span>Alt</span><span>Shift</span><span>N</span></div>
     </article>
+
+    <article class="feature">
+      <span class="kicker">08 · chat.xmr.club</span>
+      <h3>Chat</h3>
+      <p>Menu → Chat opens chat.xmr.club in Chrome's side panel or Firefox's sidebar: a lobby, an X room and a room for each site listed on xmr.club.</p>
+      <div class="feature-demo"><span class="claimed"># lobby</span><span class="claimed"># x</span><span class="claimed"># example.swap</span></div>
+    </article>
+  </div>
+</section>
+
+<section id="proof" class="wrap proof">
+  <div class="panel">
+    <div class="panel-title">
+      <span class="kicker">SEEN A "VERIFYING THAT I CONTROL…" TWEET?</span>
+      <span class="big">That's an X account linking its Nostr key</span>
+      <span class="muted" style="font-size:15px;text-wrap:pretty">The tweet proves the X account and the Nostr key belong together (NIP-39). Once that key also publishes a Monero address, the account can wear an XMR badge: XMRadar shows it to users who look accounts up on Nostr, and, when XMRadar lists the account on xmr.bio, to everyone with badges on through xmr.bio's signed directory. The listing also gives a wallet name, <code>yourhandle.oa.xmr.bio</code>, for OpenAlias wallets. Then anyone can tip them from their own wallet.</span>
+      <div class="btns" style="margin-top:8px"><a class="btn btn-primary" href="#install">Install XMRadar</a></div>
+    </div>
+    <ol class="proof-steps">
+      <li><b>Install XMRadar</b><span class="muted">Chrome or Firefox, below.</span></li>
+      <li><b>Options → Monero identity</b><span class="muted">Your handle, your Monero address, and one tweet XMRadar writes for you.</span></li>
+      <li><b>Wear it</b><span class="muted">XMRadar users with badges on see it, and can tip you or send an xo.</span></li>
+    </ol>
   </div>
 </section>
 
@@ -168,13 +241,16 @@
 <section id="privacy" class="wrap privacy">
   <div class="privacy-intro">
     <h2>What it never touches</h2>
-    <p>XMRadar runs in your browser. It has no account and no backend: its own site is asked only for the latest version number. The code is open, so you can check every claim below.</p>
+    <p>XMRadar runs in your browser, with no account. Its own site is asked only for the latest version number; other services are asked only for the features you use, listed below. The code is open, so you can check every claim.</p>
     <a class="source" href="https://github.com/KYC-rip/xmradar"><code>KYC-rip/xmradar</code><span>Read the source →</span></a>
   </div>
   <ul class="checks">
-    <li><span class="tick">✓</span><div><b>No keys, no funds</b><span class="body">Tips open in your wallet. XMRadar never sends or holds Monero.</span></div></li>
-    <li><span class="tick">✓</span><div><b>Your signer signs</b><span class="body">Nostr events go through your NIP-07 extension, and you approve each one.</span></div></li>
+    <li><span class="tick">✓</span><div><b>No Monero keys, no funds</b><span class="body">Tips open in your wallet, and your wallet signs for Sign in with Monero. XMRadar never sends or holds Monero.</span></div></li>
+    <li><span class="tick">✓</span><div><b>Your Nostr key, your choice</b><span class="body">With a NIP-07 signer, events go through it, and it decides what to ask you. Without one, XMRadar makes its own key, kept in the extension's own storage (IndexedDB) that pages and content scripts can't open, exportable and deletable in Options. That key signs only XMRadar's own events without asking each time: xos and their removal, Xap receipts and confirmations, your profile name, relay list, Monero address, X link and the xmr.bio listing request. Never your posts.</span></div></li>
+    <li><span class="tick">✓</span><div><b>xmr.bio listing is your choice</b><span class="body">On by default. Once your X link verifies and you've published a Monero address, and xmr.bio doesn't know your handle yet, XMRadar sends your handle, address, Nostr key and the proof tweet's id to xmr.bio. Your profile and its directory show the handle, address and key; the tweet id stays in the stored proof. Untick it in Options → Monero identity; on xmr.bio, unlist hides you and delete removes the profile.</span></div></li>
+    <li><span class="tick">✓</span><div><b>What an xo shows</b><span class="body">An xo is a public Nostr event naming the X post's link and the author's Nostr key, so relays see who liked what. Holding the heart, or the option for a plain click, also likes the post on X.</span></div></li>
     <li><span class="tick">✓</span><div><b>No transaction ids in public</b><span class="body">Tip receipts never include a transaction id, tx key or payment proof.</span></div></li>
+    <li><span class="tick">✓</span><div><b>xmr.bio's directory comes whole</b><span class="body">While badges are on (the default), XMRadar downloads xmr.bio's signed directory, the same file for everyone, about once an hour, and matches X accounts on your device. xmr.bio doesn't learn which accounts you view.</span></div></li>
     <li><span class="tick">✓</span><div><b>Discovery is off by default</b><span class="body">Looking up X accounts on relays is opt-in, because relays can see which accounts you view.</span></div></li>
     <li><span class="tick">✓</span><div><b>The site you visit stays in your browser</b><span class="body">xmr.club's signed list is downloaded whole, the same file for everyone, and matched on your device, lookalike warnings included.</span></div></li>
     <li><span class="tick">✓</span><div><b>Receipts and letters stay local</b><span class="body">Checked and saved in your browser only. A letter is asked for only from the order page's own site, and keys come from xmr.club's signed list, never from the page.</span></div></li>
@@ -193,7 +269,8 @@
     </div>
     <div class="nkips">
       <a href="https://nkips.org/nkip-0001/"><code>NKIP-0001</code><span class="name">Verifiable deposit receipts</span><span class="muted">→</span></a>
-      <a href="https://nkips.org"><code>NKIP-0002</code><span class="name">Verifiable Monero tips on Nostr</span><span class="muted" style="font-size:12px">Draft</span></a>
+      <a href="https://nkips.org/nkip-0002/"><code>NKIP-0002</code><span class="name">Verifiable Monero tips on Nostr</span><span class="muted" style="font-size:12px">Draft</span></a>
+      <a href="https://nkips.org/nkip-0003/"><code>NKIP-0003</code><span class="name">Sign in with Monero</span><span class="muted">→</span></a>
     </div>
   </div>
 </section>
@@ -203,7 +280,7 @@
     <img src="logo/xmradar.svg" alt="">
     <h2>Install XMRadar</h2>
     <p>Not in the Chrome or Firefox stores yet. Download the zip from GitHub Releases, unzip it, and load it from <code>chrome://extensions</code> (Developer mode → Load unpacked), or in Firefox 140+ from <code>about:debugging</code>.</p>
-    <p>Works with any NIP-07 signer, such as Alby or nos2x, and any Monero wallet that opens <code>monero:</code> links.</p>
+    <p>Works with any Monero wallet that opens <code>monero:</code> links. A NIP-07 signer such as Alby or nos2x is optional: without one, XMRadar's own key covers your badge, xo and Xap receipts (when they're on). Copying posts to Nostr needs a signer.</p>
     <div class="btns">
       <a class="btn btn-primary" href="{{CHROME_URL}}">Download for Chrome</a>
       <a class="btn btn-secondary" href="{{FIREFOX_URL}}">Download for Firefox</a>

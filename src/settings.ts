@@ -215,6 +215,9 @@ export const xoLikersItem = storage.defineItem<LikerCache>('local:xoLikers', { f
 /** Which key signs (PLAN-MANAGEDID): the user's signer, else the XMRadar identity when none is found (`auto`). */
 export type SignerMode = 'auto' | 'signer' | 'managed';
 export const signerModeItem = storage.defineItem<SignerMode>('local:signerMode', { fallback: 'auto' });
+/** "Also list me on xmr.bio" (PLAN-XMRBIOLIST): on unless unticked, which stays for every later key and address */
+export const xmrbioListPrefItem = storage.defineItem<'on' | 'off'>('local:xmrbioListPref', { fallback: 'on' });
+export const xmrbioListItem = storage.defineItem<Record<string, { status: 'listed' | 'exists' | 'exists-unlisted' | 'failed'; at: number; error?: string }>>('local:xmrbioList', { fallback: {} });
 export const myHandleItem = storage.defineItem<{ handle: string; proven: boolean } | null>('local:myHandle', { fallback: null });
 
 /** The xmr.bio directory (2d) as the options page shows it; the directory itself is kept by the background. */

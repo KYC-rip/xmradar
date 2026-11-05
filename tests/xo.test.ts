@@ -216,3 +216,15 @@ describe('xoKey (PLAN-XOKEYS)', () => {
     expect(xoKey(mergeBadge('a', [{ ...bio, pubkey: undefined }]))).toBeNull();
   });
 });
+
+import { proofTweetText } from '../src/identity/proof-tweet';
+import { containsNpub } from '../src/identity/nostr';
+import { npubEncode as npubOf } from 'nostr-tools/nip19';
+describe('the proof tweet', () => {
+  it('ends with where it’s from, and still proves the key', () => {
+    const npub = npubOf(PK[0]!);
+    const text = proofTweetText(npub);
+    expect(text).toBe(`Verifying that I control the following Nostr public key: ${npub}\n\ntry it on: XMRadar.app`);
+    expect(containsNpub(text, npub)).toBe(true);
+  });
+});

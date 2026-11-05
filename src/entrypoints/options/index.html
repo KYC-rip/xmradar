@@ -218,6 +218,12 @@
             </li>
           </ol>
 
+          <div id="xmrbio-list" class="row-block">
+            <label><input id="xmrbio-list-on" type="checkbox" /> Also list me on xmr.bio (public directory)</label>
+            <p class="row-hint">Once your X account is linked here, XMRadar lists it on xmr.bio: your X handle, Monero address and Nostr key go on xmr.bio's public directory and your xmr.bio page, and wallets that read OpenAlias (Feather, Cake) can pay <code>yourhandle.oa.xmr.bio</code>. Every XMRadar user then sees your badge, not only those with Nostr discovery on. On xmr.bio (Sign in with Monero, with that address), <em>unlist</em> hides you from the directory; <em>delete</em> also removes your page.</p>
+            <div class="row"><button id="xmrbio-list-now" type="button">List me on xmr.bio now</button><span id="xmrbio-list-status" class="row-hint" role="status" aria-live="polite"></span></div>
+          </div>
+
           <div id="id-confirm" class="confirm hidden">
             <h3>Review the change</h3>
             <div id="id-summary"></div>

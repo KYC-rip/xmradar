@@ -21,7 +21,7 @@ import { allRelaysFrom, fetchWriteRelays, publishToRelays, readEach, readRelay }
 import { assertFetchableImageUrl } from '../nostr/url-guard';
 import { checkSessionSender, checkShareMenuSender, isExtensionPageSender, isSignerPage, isXUrl, SIGNER_PAGE, shareMenuRateLimit, withoutTab } from '../sender';
 import { setAuto, suggestFor, tagsReady } from '../ai/requests';
-import { signerModeItem, syncedPostsItem } from '../settings';
+import { signerModeItem, syncedPostsItem, xmrbioListItem, xmrbioListPrefItem } from '../settings';
 import { recordSynced, type SyncedPost } from '../nostr/synced';
 import { DEFAULT_RELAYS, directoryStatusItem, nip65CacheItem, siwmHelperOn, useNip65On, INDEX_RELAYS, withoutIndex, myHandleItem, postedItem, pubkeyItem, receiptsOn, settingsItem, siteInfoOn, updateCheckOn, updateStateItem, logoPackItem, xapInboxItem, xapNotifyOn, siteWarningsOn, copyReportsOn, swapRecordDaysItem, swapRecordsCleanedItem, xapMarksItem, xClaimsChangedItem, xClaimsOn, xmrSettingsItem } from '../settings';
 import { storage } from 'wxt/utils/storage';
@@ -59,6 +59,7 @@ import { logoKeeper } from '../sites/logos';
 import { INBOX_NOTICE_ID, inboxKeeper, MAX_RELAYS } from '../xap/inbox';
 import { readRelaysFrom, undoTemplate, xoRelayOrder, xoTemplate } from '../xo/event';
 import { idbKeyStore, managedIdentity } from '../identity/managed';
+import { listOutcome, listPlan, registerTemplate, XMRBIO_REGISTER_URL, type ListRecord } from '../identity/xmrbio-list';
 import { bySignerMode, NoSignerError } from '../identity/signer-mode';
 import { rememberSent } from '../xo/sent';
 import { XO_NOTICE_ID, xoKeeper } from '../xo/inbox';
@@ -869,6 +870,10 @@ async function handle(msg: BgRequest, sender: Browser.runtime.MessageSender): Pr
     case 'setup-status': {
       if (!isExtensionPage(sender)) throw new Error('Not allowed');
       return setupStatus();
+    }
+    case 'xmrbio-list': {
+      if (!isExtensionPage(sender)) throw new Error('Not allowed');
+      return setupStatus(true);
     }
     case 'setup-prepare': {
       if (!isExtensionPage(sender)) throw new Error('Not allowed');
@@ -1711,16 +1716,70 @@ async function xmrbioStatus(handle: string, pubkey: string): Promise<XmrbioStatu
   try {
     const r = await resolveQueued(handle);
     if (!r.found) return { found: false };
-    return { found: true, address: r.identity.address, check: r.check, linked: xmrbioLinked(r.identity.proofs, pubkey) };
+    // /resolve finds unlisted profiles too; the directory copy XMRadar holds is what badges come from
+    const dir = await directoryItem.getValue().catch(() => null);
+    const listed = dir ? dir.entries.some((e) => e.handle === handle.toLowerCase()) : undefined;
+    return { found: true, address: r.identity.address, check: r.check, linked: xmrbioLinked(r.identity.proofs, pubkey), ...(listed === undefined ? {} : { listed }) };
   } catch (e) {
     return { found: 'error', reason: e instanceof Error ? e.message : String(e) };
   }
 }
 
-async function setupStatus(): Promise<SetupStatus> {
-  const status = await readSetupStatus();
+async function setupStatus(listNow = false): Promise<SetupStatus> {
+  let status = await readSetupStatus();
+  // "Also list me on xmr.bio" (PLAN-XMRBIOLIST): once the link is verified and xmr.bio doesn't know the handle
+  const mine = await myHandleItem.getValue();
+  const record = mine ? await listOnXmrbio(status, mine.handle, listNow) : null;
+  if (record && record.status !== 'failed' && status.xmrbio?.found !== true && mine) status = { ...status, xmrbio: await xmrbioStatus(mine.handle, status.pubkey) };
+  status = { ...status, listing: record ? { status: record.status, at: record.at, ...(record.error ? { error: record.error } : {}) } : null };
   await setupStatusLast.setValue({ at: Date.now(), status });
   return status;
+}
+
+let listQueue: Promise<unknown> = Promise.resolve();
+/**
+ * Lists the linked account on xmr.bio, at most once per handle + key + address unless `explicit` (the button):
+ * only with a verified link, a valid standard address or subaddress, and xmr.bio not knowing the handle (the
+ * button also tries when xmr.bio couldn't be asked; the server refuses an existing profile). A profile deleted
+ * on xmr.bio is never listed again on its own: its record stays until the button is pressed.
+ */
+function listOnXmrbio(status: SetupStatus, handle: string, explicit: boolean): Promise<ListRecord | null> {
+  // queued, never merged: two automatic checks at once send once (the second sees the record), and a click
+  // always gets its own try after whatever is running
+  const run = listQueue.then(() => listOnce(status, handle, explicit));
+  listQueue = run.catch(() => {});
+  return run;
+}
+
+async function listOnce(status: SetupStatus, handle: string, explicit: boolean): Promise<ListRecord | null> {
+  const plan = listPlan(status, handle, { explicit, pref: await xmrbioListPrefItem.getValue(), records: await xmrbioListItem.getValue() });
+  if (!plan.send) return plan.had;
+  const { key, address, tweetId } = plan;
+  let outcome: ListRecord;
+  try {
+    const event = await signExact(registerTemplate(plan.handle, address, tweetId, Math.floor(Date.now() / 1000)), status.pubkey);
+    const res = await fetch(XMRBIO_REGISTER_URL, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ handle: plan.handle, address, tweet_id: tweetId, event }),
+      credentials: 'omit',
+      referrerPolicy: 'no-referrer',
+      redirect: 'error',
+      // the server's X lookups stop at 12 s
+      signal: AbortSignal.timeout(20_000),
+    });
+    let body: { success?: boolean; error?: unknown; reason?: unknown } | null = null;
+    try {
+      body = JSON.parse(await cappedText(res, 4096));
+    } catch {
+      body = null;
+    }
+    outcome = { ...listOutcome(res.status, body), at: Date.now() };
+  } catch (e) {
+    outcome = { status: 'failed', at: Date.now(), error: (e as Error).message.slice(0, 200) };
+  }
+  await xmrbioListItem.setValue({ ...(await xmrbioListItem.getValue()), [key]: outcome }).catch(() => {});
+  return outcome;
 }
 
 async function readSetupStatus(): Promise<SetupStatus> {

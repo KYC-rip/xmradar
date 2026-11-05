@@ -3,9 +3,11 @@
 What changed in each XMRadar release. Downloads, checksums and build provenance are on the
 [releases page](https://github.com/KYC-rip/xmradar/releases).
 
-## Unreleased
+## 0.6.12
 
 - **XMRadar identity.** No Nostr signer? XMRadar makes a Nostr key for you, kept in this browser only and announced with a notification, so xo, Xap receipts and the Monero identity steps work without one. Options → Monero identity chooses automatic, only your signer, or the XMRadar identity, and can export or delete it.
+- **Listed on xmr.bio.** Once your X link verifies and you've published a Monero address, XMRadar lists you on xmr.bio (on by default; untick *Also list me on xmr.bio* in Options → Monero identity). It sends your handle, address, Nostr key and the proof tweet's id; no challenge tweet. Your badge then reaches XMRadar users through xmr.bio's directory, not only those with Nostr discovery on, and your xos count. You also get a wallet name, `yourhandle.oa.xmr.bio`, that OpenAlias wallets (Feather, Cake) resolve to your address, with DNSSEC. A *List me on xmr.bio now* button retries; on xmr.bio, Sign in with Monero to unlist or delete.
+- **The proof tweet** XMRadar writes for you ends with "try it on: XMRadar.app".
 
 ## 0.6.11
 

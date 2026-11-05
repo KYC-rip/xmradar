@@ -109,11 +109,21 @@ export interface SetupStatus {
   link: { handle: string; tweetUrl: string; proof: ProofResult } | null;
   /** the confirmed handle on xmr.bio; null when no handle is confirmed */
   xmrbio: XmrbioStatus | null;
+  /** the last "list me on xmr.bio" try for this handle, key and address (PLAN-XMRBIOLIST) */
+  listing?: { status: 'listed' | 'exists' | 'exists-unlisted' | 'failed'; at: number; error?: string } | null;
 }
 
 export type XmrbioStatus =
   | { found: false }
-  | { found: true; address: string; check: AddressCheck; /** xmr.bio holds a nostr proof for this pubkey */ linked: boolean }
+  | {
+      found: true;
+      address: string;
+      check: AddressCheck;
+      /** xmr.bio holds a nostr proof for this pubkey */
+      linked: boolean;
+      /** in XMRadar's copy of the signed directory; absent when no copy is held (/resolve doesn't say) */
+      listed?: boolean;
+    }
   | { found: 'error'; reason: string };
 
 export interface PreparedSetup {
@@ -179,6 +189,8 @@ export type BgRequest =
   | { type: 'xo-undo'; post: string }
   /** the identity card in Options (PLAN-MANAGEDID) */
   | { type: 'identity-state' }
+  /** "List me on xmr.bio" pressed (PLAN-XMRBIOLIST) */
+  | { type: 'xmrbio-list' }
   | { type: 'identity-mode'; mode: 'auto' | 'signer' | 'managed' }
   | { type: 'identity-export' }
   | { type: 'identity-delete' }
@@ -261,6 +273,8 @@ export type BgResponse<T extends BgRequest['type']> = T extends 'fetch-image'
                                 ? null
                                 : T extends 'xap-totals'
                                   ? XapTotalsResult
+                                  : T extends 'xmrbio-list'
+                                    ? SetupStatus
                                   : T extends 'identity-state'
                                     ? { mode: 'auto' | 'signer' | 'managed'; managed: string | null; current: string | null }
                                   : T extends 'identity-mode' | 'identity-delete'

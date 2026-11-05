@@ -1,10 +1,12 @@
+import { proofTweetText } from '../../identity/proof-tweet';
+import { listButtonText } from '../../identity/xmrbio-list';
 import { npubEncode } from 'nostr-tools/nip19';
 import { HANDLE_RE, normalizeHandle } from '../../identity/envelope';
 import { tagDiff } from '../../identity/setup';
 import { setupStatusLast, statusFor } from '../../identity/status';
 import { doneCount, identitySteps, type StepKey } from '../../identity/steps';
 import { sendToBackground, type PreparedSetup, type RelayResult, type SetupRequest } from '../../messaging';
-import { myHandleItem, pubkeyItem } from '../../settings';
+import { myHandleItem, pubkeyItem, xmrbioListPrefItem } from '../../settings';
 import { setStatus as setStatusOf } from '../../ui/dom';
 import { mountIdentityStatus } from '../../ui/identity-status';
 
@@ -173,12 +175,33 @@ $('id-handle-save').addEventListener('click', async () => {
 $('id-address-publish').addEventListener('click', () => void prepare({ type: 'add-address', address: addressEl.value }, 'address'));
 $('id-address-remove').addEventListener('click', () => void prepare({ type: 'remove-address' }, 'address'));
 $('id-link').addEventListener('click', () => void prepare({ type: 'link-x', tweetUrl: tweetUrlEl.value }, 'link'));
+
+// "Also list me on xmr.bio" (PLAN-XMRBIOLIST): the choice is remembered for every later key and address
+const listOn = $<HTMLInputElement>('xmrbio-list-on');
+const listStatus = $('xmrbio-list-status');
+void xmrbioListPrefItem.getValue().then((p) => (listOn.checked = p !== 'off'));
+xmrbioListPrefItem.watch((p) => (listOn.checked = p !== 'off'));
+listOn.addEventListener('change', () => void xmrbioListPrefItem.setValue(listOn.checked ? 'on' : 'off'));
+$<HTMLButtonElement>('xmrbio-list-now').addEventListener('click', async (e) => {
+  const btn = e.currentTarget as HTMLButtonElement;
+  btn.disabled = true;
+  listStatus.textContent = 'Listing on xmr.bio…';
+  try {
+    const st = await sendToBackground({ type: 'xmrbio-list' });
+    listStatus.textContent = listButtonText(st, (await myHandleItem.getValue())?.handle ?? '');
+  } catch (err) {
+    listStatus.textContent = (err as Error).message;
+  } finally {
+    btn.disabled = false;
+  }
+});
 $('id-unlink').addEventListener('click', () => void prepare({ type: 'unlink-x' }, 'link'));
 
 $('id-tweet').addEventListener('click', async () => {
   const pk = await pubkeyItem.getValue();
   if (!pk) return setStatus('Connect your signer first (step 1).', 'error');
-  const text = `Verifying that I control the following Nostr public key: ${npubEncode(pk)}`;
+  // the proof only needs the npub as a whole word; the last line tells everyone who sees it where it's from
+  const text = proofTweetText(npubEncode(pk));
   window.open(`https://x.com/intent/post?text=${encodeURIComponent(text)}`, '_blank', 'noopener');
 });
 

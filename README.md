@@ -206,6 +206,8 @@ Built from xmr.club's signed list, inside the browser; the address you open is n
 
 In the options page, under **Monero identity**, a four-step tracker walks you through it: connect your signer, confirm your X handle, publish your Monero address, then post the proof tweet and paste its link. Done steps collapse to one line with Change, Replace, Remove or Unlink. Each change reads your current Nostr list from every relay, keeps all other tags, shows a diff, and is signed once in a temporary tab (your signer still asks first). Relays that can't be read are skipped, and you have to confirm before publishing without them. Your badge is live for other XMRadar users with discovery on once both steps are done.
 
+**Listed on xmr.bio.** With *Also list me on xmr.bio* on (the default), once your X link verifies and your address is published XMRadar lists you on xmr.bio: it sends your handle, address and Nostr key with a signed event (kind 27235) and your proof tweet's id, which xmr.bio checks; no challenge tweet. You then appear in xmr.bio's signed directory, so every XMRadar user with badges on sees your badge, and you get a wallet name, `yourhandle.oa.xmr.bio`, served with DNSSEC by xmr.bio's own nameservers, that OpenAlias wallets (Feather, Cake) resolve to your address. *List me on xmr.bio now* retries; on xmr.bio, Sign in with Monero to unlist or delete.
+
 ## Security notes
 
 - The bridge to `window.nostr` runs in the page's own JavaScript world. Page scripts can see and imitate those messages, so the real security boundary is your signer's approval prompt.
