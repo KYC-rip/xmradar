@@ -156,8 +156,11 @@ import type { AiSource } from './settings';
 
 /** content/options → background */
 export type BgRequest =
-  | { type: 'fetch-image'; sessionId: string; url: string }
-  | { type: 'upload-image'; sessionId: string; url: string; sha256: string; auth: string }
+  /** `kind: 'video'` (PLAN-XVIDEO): the video cap and a longer timeout, whatever the response says it is */
+  | { type: 'fetch-image'; sessionId: string; url: string; kind?: 'video' }
+  | { type: 'upload-image'; sessionId: string; url: string; sha256: string; auth: string; kind?: 'video' }
+  /** the mp4 behind an X video, found by its tweet and media id (PLAN-XVIDEO) */
+  | { type: 'resolve-video'; sessionId: string; statusId: string; mediaId: string }
   | { type: 'publish'; sessionId: string; event: Event; sourceUrl: string; text: string }
   /** `sourceUrl`: the post copied, so a retry that is the first to succeed still marks it (PLAN-SYNCEDMARK) */
   | { type: 'republish'; sessionId: string; event: Event; relays: string[]; sourceUrl?: string }
@@ -237,6 +240,8 @@ export type BurnerCreateEvent = { type: 'progress'; hashes: number } | { type: '
 
 export type BgResponse<T extends BgRequest['type']> = T extends 'fetch-image'
   ? ImageInfo
+  : T extends 'resolve-video'
+  ? import('./nostr/x-video').VideoFound
   : T extends 'upload-image'
     ? { url: string }
     : T extends 'publish'

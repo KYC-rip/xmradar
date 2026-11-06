@@ -6,6 +6,7 @@ import { missingReceiptText } from '../../receipts/issuers';
 import { addressLines, copyWarning, depositShown, pageEventId, receiptTexts } from '../../receipts/page';
 import { isXHost } from '../../sender';
 import { logFetchOn, receiptsOn, settingsItem, siteInfoOn, xmrSettingsItem } from '../../settings';
+import { dataLinkLetters, resetDataLinks } from '../../log/data-links';
 import { letterWatch } from './letter';
 import { mountReceiptCard, worstOf, type CardEntry, type ReceiptCard } from './receipt-card';
 
@@ -48,6 +49,8 @@ export function startReceipts(ctx: ContentScriptContext) {
   let siteInfo: boolean | null = null;
   // the copy warning came from a letter (it goes when site info does)
   let copyFromLetter = false;
+  let lastLetterText = '';
+  let lastLinkLetters = '';
 
   const render = () => {
     const entries: CardEntry[] = [...checks.values()].map((c) => ({
@@ -62,7 +65,11 @@ export function startReceipts(ctx: ContentScriptContext) {
         lines: l.lines,
         saved: !!l.reply?.saved,
         saveError: l.reply?.saveError,
-        letter: { name: l.page.name, orderId: l.page.orderId, format: l.page.format, verified: !!l.reply?.verified, addresses: l.reply?.addresses ?? [], signedText: l.reply?.signedText ?? '', recheck: () => letters.recheck(l.page.siteId) },
+        letter: { name: l.page.name, orderId: l.page.orderId, format: l.page.format, verified: !!l.reply?.verified, addresses: l.reply?.addresses ?? [], signedText: l.reply?.signedText ?? '', recheck: () => {
+          // the same page text is offered again
+          lastLetterText = lastLinkLetters = '';
+          letters.recheck(l.page.siteId);
+        } },
       });
     }
     if (!entries.length && !extra.size) {
@@ -112,7 +119,21 @@ export function startReceipts(ctx: ContentScriptContext) {
       checks.set(text, result);
     }
     // a letter the page shows (Mistex: after "Show MistProof"); innerText keeps its line breaks
-    if (letters.waiting) letters.capture(pageLetterText());
+    if (letters.waiting) {
+      // a letter behind a download link (PLAN-LOGLINK) on its own first, so a block elsewhere on the page can't
+      // spoil it; then the page's text, only when it changed (the regex isn't run again on the same text)
+      const links = dataLinkLetters(document);
+      const key = links.join('\u0000');
+      if (key !== lastLinkLetters) {
+        lastLinkLetters = key;
+        for (const t of links) letters.capture(t);
+      }
+      const text = pageLetterText();
+      if (text !== lastLetterText) {
+        lastLetterText = text;
+        letters.capture(text);
+      }
+    }
     missingCheck(current.length);
     render();
   }
@@ -154,7 +175,8 @@ export function startReceipts(ctx: ContentScriptContext) {
     if (observer) return;
     // a receipt can arrive late: the exchange releases it once the record is witnessed (R15)
     observer = new MutationObserver(() => schedule());
-    observer.observe(document.documentElement, { childList: true, subtree: true, characterData: true });
+    // href too: a download link whose letter is filled in later (PLAN-LOGLINK); nothing else that changes attributes
+    observer.observe(document.documentElement, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ['href'] });
     document.addEventListener('copy', onCopy, true);
     void scan();
     // the order-page match also says whether a receipt is expected here: check again once it's known
@@ -166,6 +188,8 @@ export function startReceipts(ctx: ContentScriptContext) {
   const startLetters = () => {
     const gen = generation;
     void letters.start().then(() => {
+      // the order is known now: the page's text goes to it, even if it hasn't changed
+      lastLetterText = lastLinkLetters = '';
       if (gen === generation) void scan();
     });
   };
@@ -173,6 +197,8 @@ export function startReceipts(ctx: ContentScriptContext) {
   function stop() {
     generation++;
     letters.stop();
+    lastLetterText = lastLinkLetters = '';
+    resetDataLinks();
     depositSince = 0;
     observer?.disconnect();
     observer = null;

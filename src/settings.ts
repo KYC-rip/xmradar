@@ -164,6 +164,8 @@ export interface XmrSettings extends XmrSettingsV2 {
   xoButton?: boolean;
   /** a plain click on xo also likes the post on X (PLAN-XOLIKE); off unless switched on (a hold always does) */
   xoAlsoLike?: boolean;
+  /** a short pop when sending an xo (PLAN-XOSOUND); on unless false */
+  xoSound?: boolean;
   /** an orange ring on avatars and the xo total in the badge, from xmr.bio's directory (PLAN-XORINGS); read with `xoRingsOn` */
   xoRings?: boolean;
 }
@@ -177,6 +179,7 @@ export const copyReportsOn = (s: Partial<XmrSettings> | null | undefined) => sit
 export const xapNotifyOn = (s: Partial<XmrSettings> | null | undefined) => s?.xapNotify === true;
 export const xoButtonOn = (s: Partial<XmrSettings> | null | undefined) => s?.xoButton !== false;
 export const xoRingsOn = (s: Partial<XmrSettings> | null | undefined) => s?.xoRings !== false;
+export const xoSoundOn = (s: Partial<XmrSettings> | null | undefined) => s?.xoSound !== false;
 
 /** v1, before the redesign: one switch for X badges. */
 export interface XmrSettingsV1 {

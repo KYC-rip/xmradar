@@ -3,6 +3,14 @@
 What changed in each XMRadar release. Downloads, checksums and build provenance are on the
 [releases page](https://github.com/KYC-rip/xmradar/releases).
 
+## 0.6.14
+
+- **xo counts on everyone's posts.** Like X's likes, the xo heart on a post now shows how many Monero people sent it an xo, not only on your own posts. The number comes from xmr.bio's signed directory, which XMRadar already downloads whole every hour, so xmr.bio never learns which posts you look at, and only senders xmr.bio has checked as Monero people count, so throwaway keys can't pump it. One per person a post; posts from the last 30 days by accounts listed on xmr.bio. Your own xo shows at once; the heart fills only when you've sent one. Same switch as the rings: Options → Badges on X → *xo rings and counts*.
+- xmr.bio profile pages show the account's xo total (`ɱ❤ 37 xos from Monero people`).
+- **A sound for xo.** Sending an xo makes a short, quiet pop, a little fuller when you hold it (xo + like on X). It's made in the browser, nothing downloaded, and silent in a muted tab. Taking an xo back, and xos you receive, make no sound. Switch: Options → Badges on X → *Sound when I send an xo*.
+- **Videos and GIFs from X.** Copying an X post to Nostr now takes its videos and GIFs too, not only its photos. XMRadar finds the video file through X's public embed endpoint (the one embedded tweets use; no login, nothing about you sent) and picks the best quality under 50 MB. With *Re-upload images and videos to Blossom* on, it goes to your Blossom server; off, the note links X's own video file. Either way the note carries the poster and the size for Nostr apps to show. A video that can't be had (too large, or X doesn't say) goes out as its poster with a "▶ Video:" link to the post on X.
+- **Letters of guarantee behind a download link.** Some exchanges (DEX.fo) put their PGP-signed guarantee only in a "Download signed message" link, not on the page. XMRadar now reads such a link's letter (only links that carry the file inline; it never downloads anything) and checks it like any other, once xmr.club lists the exchange's key.
+
 ## 0.6.13
 
 - **xo anyone with a badge.** The heart no longer fades for X accounts that have a Monero badge but no Nostr key. Your xo goes to their X handle and waits on relays; when they set up XMRadar, it finds those xos and tells them once: "N Monero people sent your posts xos before you set up XMRadar". Every xo now names the author's handle as well as their key (an `X` tag, `twitter:<handle>`); earlier XMRadar versions still count xos sent to a key.

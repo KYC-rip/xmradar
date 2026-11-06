@@ -1,6 +1,15 @@
 export interface ExtractedImage {
+  /** the image; for a video, its poster (or '' for a GIF X shows none for) */
   url: string;
   alt?: string;
+  /** an X video or GIF (PLAN-XVIDEO); a photo has none */
+  kind?: 'video' | 'gif';
+  /** X's media id, from the poster's path: what the mp4 lookup matches */
+  mediaId?: string;
+  /** a GIF's own mp4 on video.twimg.com (videos are looked up instead) */
+  mp4?: string;
+  /** the tweet the media is in (a thread's later tweet, not the first) */
+  statusId?: string;
 }
 
 export interface ExtractedArticle {

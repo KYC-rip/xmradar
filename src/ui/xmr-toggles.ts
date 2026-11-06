@@ -1,5 +1,5 @@
 import type { DirectoryStatus } from '../identity/directory';
-import { directoryStatusItem, patchXmrSettings, xmrSettingsItem, type XmrSettings, xoButtonOn, xoRingsOn } from '../settings';
+import { directoryStatusItem, patchXmrSettings, xmrSettingsItem, type XmrSettings, xoButtonOn, xoRingsOn, xoSoundOn } from '../settings';
 import { optionalPart, part } from './dom';
 
 /**
@@ -32,6 +32,7 @@ export async function mountXmrToggles(root: HTMLElement) {
   const claims = optionalPart<HTMLInputElement>(root, 'xmr', 'claims');
   const xo = optionalPart<HTMLInputElement>(root, 'xmr', 'xo');
   const xoLike = optionalPart<HTMLInputElement>(root, 'xmr', 'xo-like');
+  const xoSound = optionalPart<HTMLInputElement>(root, 'xmr', 'xo-sound');
   const xoRings = optionalPart<HTMLInputElement>(root, 'xmr', 'xo-rings');
   const showDirectory = async () => {
     if (dirLine) dirLine.textContent = directoryText(await directoryStatusItem.getValue(), (await xmrSettingsItem.getValue()).badgesX);
@@ -48,6 +49,10 @@ export async function mountXmrToggles(root: HTMLElement) {
     receipts.checked = x.tipReceipts;
     if (xo) xo.checked = xoButtonOn(x);
     if (xoRings) xoRings.checked = xoRingsOn(x);
+    if (xoSound) {
+      xoSound.checked = xoSoundOn(x);
+      xoSound.disabled = !xoButtonOn(x);
+    }
     if (xoLike) {
       xoLike.checked = x.xoAlsoLike === true;
       xoLike.disabled = !xoButtonOn(x);
@@ -65,6 +70,7 @@ export async function mountXmrToggles(root: HTMLElement) {
   receipts.addEventListener('change', () => void save({ tipReceipts: receipts.checked }));
   xo?.addEventListener('change', () => void save({ xoButton: xo.checked }));
   xoLike?.addEventListener('change', () => void save({ xoAlsoLike: xoLike.checked }));
+  xoSound?.addEventListener('change', () => void save({ xoSound: xoSound.checked }));
   xoRings?.addEventListener('change', () => void save({ xoRings: xoRings.checked }));
   xmrSettingsItem.watch((x) => show(x));
   if (dirLine) directoryStatusItem.watch(() => void showDirectory());

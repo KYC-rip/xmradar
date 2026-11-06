@@ -15,10 +15,12 @@ import { BURNER_CREATE_PORT, type BurnerCreateEvent } from '../messaging';
 import type { BgRequest, BgResponse, ImageInfo, OpenComposerMsg, OpenTipMsg, PreparedSetup, ResolveHandlesResult, SetupRequest, SetupStatus, Wrapped, XmrbioResult, XmrbioStatus } from '../messaging';
 import { setupStatusLast, xmrbioLinked } from '../identity/status';
 import { uploadBlob } from '../nostr/blossom';
+import { scaledMs } from '../nostr/load-media';
+import { resolveXVideo, type VideoFound } from '../nostr/x-video';
+import { loadMedia } from '../nostr/load-media';
 import { statusIdFromUrl } from '../extractors/x-article';
 import { KIND_ARTICLE, checkBlossomAuth, checkPublishable, checkSigned, dedupeKey, sha256Hex } from '../nostr/event';
 import { allRelaysFrom, fetchWriteRelays, publishToRelays, readEach, readRelay } from '../nostr/relays';
-import { assertFetchableImageUrl } from '../nostr/url-guard';
 import { checkSessionSender, checkShareMenuSender, isExtensionPageSender, isSignerPage, isXUrl, SIGNER_PAGE, shareMenuRateLimit, withoutTab } from '../sender';
 import { setAuto, suggestFor, tagsReady } from '../ai/requests';
 import { signerModeItem, syncedPostsItem, xmrbioListItem, xmrbioListPrefItem } from '../settings';
@@ -131,8 +133,19 @@ let persistTimer: ReturnType<typeof setTimeout> | undefined;
 // RATE-2: only relay (source B) lookups are throttled; burst 50, refill 2/s, per tab
 const buckets = new Map<number, TokenBucket>();
 
-// image bytes between fetch-image and upload-image; refetched if the worker was suspended
+// image bytes between fetch-image and upload-image; refetched if the worker was suspended. At most 8 entries
+// and 64 MB together (a video can be 50 MB), oldest dropped first
 const imageCache = new Map<string, { bytes: ArrayBuffer; mime: string }>();
+const IMAGE_CACHE_BYTES = 64 * 1024 * 1024;
+function cacheImage(sha256: string, img: { bytes: ArrayBuffer; mime: string }) {
+  imageCache.delete(sha256);
+  const total = () => [...imageCache.values()].reduce((s, v) => s + v.bytes.byteLength, 0);
+  while (imageCache.size && (imageCache.size >= 8 || total() + img.bytes.byteLength > IMAGE_CACHE_BYTES)) imageCache.delete(imageCache.keys().next().value!);
+  imageCache.set(sha256, img);
+}
+// X videos found (PLAN-XVIDEO): at most 8, by tweet and media id, for the worker's life; failures aren't kept
+const videoCache = new Map<string, VideoFound>();
+
 
 // Xap (NKIP-0002)
 const xapSentItem = storage.defineItem<SentXap[]>('local:xapsSent', { fallback: [] });
@@ -550,18 +563,7 @@ const isExtensionPage = (sender: Browser.runtime.MessageSender) => isExtensionPa
 // the tab URL covers the popup opening inside an embedded frame on x.com
 const isXContentScript = (sender: Browser.runtime.MessageSender) => sender.id === browser.runtime.id && (isXUrl(sender.url) || isXUrl(sender.tab?.url));
 
-async function loadImage(url: string): Promise<{ bytes: ArrayBuffer; mime: string }> {
-  assertFetchableImageUrl(url);
-  const res = await fetch(url, { credentials: 'omit', signal: AbortSignal.timeout(20_000) });
-  // redirects are followed (CDNs use them), so re-check where we actually ended up
-  if (res.redirected) assertFetchableImageUrl(res.url);
-  if (!res.ok) throw new Error(`Image fetch failed (${res.status})`);
-  const bytes = await res.arrayBuffer();
-  if (bytes.byteLength > MAX_IMAGE_BYTES) throw new Error('Image is larger than 20 MB');
-  const mime = (res.headers.get('content-type') ?? 'application/octet-stream').split(';')[0]!.trim();
-  if (!mime.startsWith('image/') && !mime.startsWith('video/')) throw new Error(`Not an image (${mime})`);
-  return { bytes, mime };
-}
+const loadImage = (url: string, kind?: 'video') => loadMedia(url, kind, { fetch: (...a) => fetch(...a), readBody: boundedBody, imageMax: MAX_IMAGE_BYTES });
 
 async function imageDim(bytes: ArrayBuffer, mime: string): Promise<string | undefined> {
   try {
@@ -618,24 +620,38 @@ async function handle(msg: BgRequest, sender: Browser.runtime.MessageSender): Pr
     }
     case 'fetch-image': {
       await requireSession(msg.sessionId, sender);
-      const { bytes, mime } = await loadImage(msg.url);
+      const { bytes, mime } = await loadImage(msg.url, msg.kind === 'video' ? 'video' : undefined);
       const sha256 = await sha256Hex(bytes);
       // a few images per post at most; an abandoned one doesn't stay for the worker's lifetime
-      if (imageCache.size >= 8) imageCache.delete(imageCache.keys().next().value!);
-      imageCache.set(sha256, { bytes, mime });
-      return { sha256, mime, size: bytes.byteLength, dim: await imageDim(bytes, mime) } satisfies ImageInfo;
+      cacheImage(sha256, { bytes, mime });
+      // a video's size comes from X (the resolver), not from decoding it here
+      return { sha256, mime, size: bytes.byteLength, dim: mime.startsWith('video/') ? undefined : await imageDim(bytes, mime) } satisfies ImageInfo;
+    }
+    case 'resolve-video': {
+      await requireSession(msg.sessionId, sender);
+      const key = `${msg.statusId}:${msg.mediaId}`;
+      const hit = videoCache.get(key);
+      if (hit) return hit;
+      const found = await resolveXVideo(String(msg.statusId), String(msg.mediaId));
+      // only a found file is kept: a failure is asked again next time, and never pushes a found one out
+      if (found.ok) {
+        if (videoCache.size >= 8) videoCache.delete(videoCache.keys().next().value!);
+        videoCache.set(key, found);
+      }
+      return found;
     }
     case 'upload-image': {
       await requireSession(msg.sessionId, sender);
       let img = imageCache.get(msg.sha256);
       if (!img) {
-        img = await loadImage(msg.url);
+        img = await loadImage(msg.url, msg.kind === 'video' ? 'video' : undefined);
         if ((await sha256Hex(img.bytes)) !== msg.sha256) throw new Error('Image changed since it was hashed');
       }
       try {
         checkBlossomAuth(msg.auth, msg.sha256);
         const { blossomServer } = await settingsItem.getValue();
-        return { url: await uploadBlob(blossomServer, img.bytes, img.mime, msg.sha256, msg.auth) };
+        const timeout = img.mime.startsWith('video/') ? scaledMs(30_000, img.bytes.byteLength) : 30_000;
+        return { url: await uploadBlob(blossomServer, img.bytes, img.mime, msg.sha256, msg.auth, timeout) };
       } finally {
         imageCache.delete(msg.sha256);
       }

@@ -2,12 +2,12 @@ import type { ContentScriptContext } from 'wxt/utils/content-script-context';
 import { badgeLook, mountBadge, type BadgeLook } from '../../identity/badge-look';
 import { PendingQueue } from '../../identity/bucket';
 import { normalizeHandle } from '../../identity/envelope';
-import { xapEntry, xoCountOf, xoKey, type Badge } from '../../identity/resolve';
+import { xapEntry, xoCountOf, xoKey, xoPostsOf, type Badge } from '../../identity/resolve';
 import { postAvatar, profileAvatar, removeRings, setRing } from './x-xo-ring';
 import { articleViewSlot, hoverCardSlot, pinnedPost, profileClaimScope, profileHeader, profileSlot, tweetSlot, userCellSlot, type BadgeSlot } from '../../identity/x-handle';
 import { emptyClaim, parseClaim, type ClaimPlace } from '../../identity/xclaims';
 import { sendToBackground, type XapTotals } from '../../messaging';
-import { directoryStatusItem, myHandleItem, xClaimsChangedItem, xClaimsOn, xmrSettingsItem, xoButtonOn, xoCountsItem, xoRingsOn, xoSentItem } from '../../settings';
+import { directoryStatusItem, myHandleItem, pubkeyItem, xClaimsChangedItem, xClaimsOn, xmrSettingsItem, xoButtonOn, xoCountsItem, xoRingsOn, xoSentItem, xoSoundOn } from '../../settings';
 import { storage } from 'wxt/utils/storage';
 import { XO_SELECTOR, xoManager } from './x-xo';
 import { openTip } from './tip';
@@ -48,6 +48,8 @@ export function startBadges(ctx: ContentScriptContext) {
   // xo rings and counts (PLAN-XORINGS): from the directory, on unless switched off
   let rings = true;
   const xoShown = (b: Badge | null | undefined) => (rings ? xoCountOf(b) : 0);
+  // others' posts' counts from xmr.bio (PLAN-XOPOSTS): the same switch
+  const xoPublic = (b: Badge | null | undefined, statusId: string) => (rings ? xoPostsOf(b, statusId) : []);
   const removeAll = () => {
     for (const host of document.querySelectorAll(`${HOST_TAG}, ${XAP_SELECTOR}, ${XO_SELECTOR}`)) host.remove();
     removeRings();
@@ -66,16 +68,18 @@ export function startBadges(ctx: ContentScriptContext) {
   // xo (PLAN-MONEROLIKE): the buttons follow the switch, the user's sent xos and their own posts' counts
   const xoSeenItem = storage.defineItem<Record<string, number>>('local:xoSeen', { fallback: {} });
   const xo = xoManager({ on: false, me: null, sent: {}, counts: {}, seen: {} }, (seen) => void xoSeenItem.setValue(seen).catch(() => {}));
-  void Promise.all([xmrSettingsItem.getValue(), myHandleItem.getValue(), xoSentItem.getValue(), xoCountsItem.getValue(), xoSeenItem.getValue()]).then(([s, me, sent, counts, seen]) =>
-    xo.update({ on: xoButtonOn(s), alsoLike: s.xoAlsoLike === true, me, sent, counts, seen }),
+  const keyPrefix = (pk: string | null | undefined) => (pk && /^[0-9a-f]{64}$/.test(pk) ? pk.slice(0, 16) : undefined);
+  void Promise.all([xmrSettingsItem.getValue(), myHandleItem.getValue(), xoSentItem.getValue(), xoCountsItem.getValue(), xoSeenItem.getValue(), pubkeyItem.getValue()]).then(([s, me, sent, counts, seen, pk]) =>
+    xo.update({ on: xoButtonOn(s), alsoLike: s.xoAlsoLike === true, sound: xoSoundOn(s), me, sent, counts, seen, myKey: keyPrefix(pk) }),
   );
   const unwatchXo = [
     xmrSettingsItem.watch((s, old) => {
-      xo.update({ on: xoButtonOn(s), alsoLike: s.xoAlsoLike === true });
+      xo.update({ on: xoButtonOn(s), alsoLike: s.xoAlsoLike === true, sound: xoSoundOn(s) });
       // switched back on: the posts already on screen get their buttons now, not at the next redraw
       if (xoButtonOn(s) && !xoButtonOn(old) && observer) scan(document);
     }),
     myHandleItem.watch((me) => xo.update({ me })),
+    pubkeyItem.watch((pk) => xo.update({ myKey: keyPrefix(pk) })),
     xoSentItem.watch((sent) => xo.update({ sent: sent ?? {} })),
     xoCountsItem.watch((counts) => xo.update({ counts: counts ?? {} })),
   ];
@@ -212,7 +216,7 @@ export function startBadges(ctx: ContentScriptContext) {
     const post = pk && slot.statusId ? slot.statusId : undefined;
     const existing = ownXaps(slot.article);
     if (existing.length && existing.length === actionBars(slot.article).length && existing.every((e) => e.dataset.key === slot.key)) {
-      if (slot.statusId) xo.place(slot.article, slot.statusId, xoKey(badge), slot.handle);
+      if (slot.statusId) xo.place(slot.article, slot.statusId, xoKey(badge), slot.handle, xoPublic(badge, slot.statusId));
       return;
     }
     for (const e of existing) e.remove();
@@ -244,7 +248,7 @@ export function startBadges(ctx: ContentScriptContext) {
     });
     if (!el) return;
     // the xo goes right after the Xap: to the author's key when one is known, else to their handle (PLAN-XOREACH)
-    if (slot.statusId) xo.place(slot.article, slot.statusId, xoKey(badge), slot.handle);
+    if (slot.statusId) xo.place(slot.article, slot.statusId, xoKey(badge), slot.handle, xoPublic(badge, slot.statusId));
     if (key) wantTotals(key);
   }
 

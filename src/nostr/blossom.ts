@@ -1,11 +1,12 @@
-export async function uploadBlob(server: string, bytes: ArrayBuffer, mime: string, sha256: string, authHeader: string): Promise<string> {
+/** `timeoutMs`: 30 s by default; a video's scales with its size (PLAN-XVIDEO). */
+export async function uploadBlob(server: string, bytes: ArrayBuffer, mime: string, sha256: string, authHeader: string, timeoutMs = 30_000): Promise<string> {
   const base = server.replace(/\/+$/, '');
   const attempt = async () => {
     const res = await fetch(`${base}/upload`, {
       method: 'PUT',
       headers: { Authorization: authHeader, 'Content-Type': mime, 'X-SHA-256': sha256 },
       body: bytes,
-      signal: AbortSignal.timeout(30_000),
+      signal: AbortSignal.timeout(timeoutMs),
     });
     if (res.status !== 200 && res.status !== 201) {
       const reason = res.headers.get('X-Reason') ?? (await res.text().catch(() => ''));

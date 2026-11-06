@@ -1,14 +1,70 @@
 import { absUrl, htmlToText, resolveDisplayedLink } from './html-to-text';
 import type { ExtractedImage, Extractor } from './types';
 
+const VIDEO_THUMB = /^\/(?:amplify_video_thumb|ext_tw_video_thumb|tweet_video_thumb)\/(\d{1,20})(?:[/.]|$)/;
+
 export function fullSizeTwimg(src: string): string {
   try {
     const u = new URL(src);
     if (u.hostname === 'pbs.twimg.com' && u.pathname.startsWith('/media/')) u.searchParams.set('name', 'orig');
+    // a video's poster (PLAN-XVIDEO): the original needs its format named too (45 KB default → 85 KB original)
+    if (u.hostname === 'pbs.twimg.com' && VIDEO_THUMB.test(u.pathname)) {
+      const ext = /\.([a-z]{3,4})$/i.exec(u.pathname)?.[1]?.toLowerCase();
+      if (ext) u.searchParams.set('format', ext);
+      u.searchParams.set('name', 'orig');
+    }
     return u.toString();
   } catch {
     return src;
   }
+}
+
+/** X's media id in a video poster's path (amplify_video_thumb, ext_tw_video_thumb, tweet_video_thumb). */
+export function videoMediaId(poster: string): string | undefined {
+  try {
+    const u = new URL(poster);
+    return u.hostname === 'pbs.twimg.com' ? VIDEO_THUMB.exec(u.pathname)?.[1] : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** A GIF's own mp4, only on video.twimg.com (anything else is ignored). */
+export function directMp4(src: string | null): string | undefined {
+  try {
+    const u = new URL(src ?? '');
+    return u.protocol === 'https:' && u.hostname === 'video.twimg.com' && u.pathname.endsWith('.mp4') ? u.toString() : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * One media tile of a tweet (PLAN-XVIDEO): a `<video>` is checked first, since a video tile can also hold its
+ * poster as an `<img>`. A video without an mp4 on the page is looked up later by its media id.
+ */
+export function tileMedia(tile: Element, status: string | null): ExtractedImage | null {
+  const video = tile.querySelector('video');
+  const img = tile.querySelector('img');
+  if (!video) {
+    const alt = img?.getAttribute('alt') ?? undefined;
+    const url = fullSizeTwimg(img?.getAttribute('src') ?? '');
+    return url ? { url, alt: alt && alt !== 'Image' ? alt : undefined } : null;
+  }
+  const mp4 = directMp4(video.getAttribute('src')) ?? directMp4(video.querySelector('source')?.getAttribute('src') ?? null);
+  const posterSrc = video.getAttribute('poster') || img?.getAttribute('src') || '';
+  const poster = posterSrc ? fullSizeTwimg(posterSrc) : '';
+  const mediaId = poster ? videoMediaId(poster) : undefined;
+  // nothing to fetch (no mp4 here, no id to look one up by): still a video, so its poster goes out with a link
+  if (!mp4 && !mediaId) return poster ? { url: poster, kind: 'video', ...(status ? { statusId: status } : {}) } : null;
+  const gif = !!mp4 && /\/tweet_video\//.test(mp4);
+  return {
+    url: poster,
+    kind: gif ? 'gif' : 'video',
+    ...(mediaId ? { mediaId } : {}),
+    ...(mp4 ? { mp4 } : {}),
+    ...(status ? { statusId: status } : {}),
+  };
 }
 
 const statusId = (path: string | null | undefined) => /^\/[A-Za-z0-9_]{1,15}\/status\/(\d{1,20})(?:[/?#]|$)/.exec(path ?? '')?.[1];
@@ -95,13 +151,14 @@ export const xExtractor: Extractor = {
           inlineDivs: true,
         })
       : '';
-    const images: ExtractedImage[] = [...article.querySelectorAll('[data-testid="tweetPhoto"] img')]
+    // photos, videos and GIFs in their order (PLAN-XVIDEO)
+    const status = ownStatusId(article);
+    const images: ExtractedImage[] = [...article.querySelectorAll('[data-testid="tweetPhoto"]')]
       .filter(own)
-      .map((img) => {
-        const alt = img.getAttribute('alt') ?? undefined;
-        return { url: fullSizeTwimg(img.getAttribute('src') ?? ''), alt: alt && alt !== 'Image' ? alt : undefined };
-      })
-      .filter((i) => i.url);
+      // a tile nested in another (X wraps some) counts once, as its outermost
+      .filter((tile) => !tile.parentElement?.closest('[data-testid="tweetPhoto"]'))
+      .map((tile) => tileMedia(tile, status))
+      .filter((i): i is ExtractedImage => !!i && (!!i.url || !!i.mp4));
     const permalink = ownPermalink(article)?.getAttribute('href');
     // best effort: X may render the shared-article card through a different link
     const articleCard = !!article.querySelector('a[href*="/article/"]');

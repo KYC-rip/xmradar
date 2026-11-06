@@ -396,5 +396,67 @@
    "address": "497raTyHwdNFVqt247QKVoPWgCLCDRj22CBY6zgP6Xoh6xuqR3Nncv4ejV819yTvzScMopZz65fmBc5abGkpKAkxDU",
    "valid": false
   }
+ ],
+ "directory_xo_posts": [
+  {
+   "name": "good",
+   "input": {
+    "123": [
+     "f000000000000001",
+     "f000000000000002"
+    ]
+   },
+   "expected": {
+    "123": [
+     "f000000000000001",
+     "f000000000000002"
+    ]
+   }
+  },
+  {
+   "name": "leading zero id dropped",
+   "input": {
+    "0123": [
+     "f000000000000001"
+    ],
+    "5": [
+     "f000000000000001"
+    ]
+   },
+   "expected": {
+    "5": [
+     "f000000000000001"
+    ]
+   }
+  },
+  {
+   "name": "duplicate prefix drops the post",
+   "input": {
+    "7": [
+     "f000000000000001",
+     "f000000000000001"
+    ]
+   },
+   "expected": null
+  },
+  {
+   "name": "uppercase or short prefix drops the post",
+   "input": {
+    "7": [
+     "F000000000000001"
+    ],
+    "8": [
+     "abc"
+    ]
+   },
+   "expected": null
+  },
+  {
+   "name": "empty list dropped",
+   "input": {
+    "7": []
+   },
+   "expected": null
+  }
  ]
 }

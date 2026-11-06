@@ -71,7 +71,9 @@ textarea {
 }
 .images { display: flex; flex-wrap: wrap; gap: 8px; }
 .thumb { position: relative; display: block; }
-.thumb img { width: 88px; height: 88px; object-fit: cover; border-radius: 6px; display: block; }
+.thumb img, .thumb video { width: 88px; height: 88px; object-fit: cover; border-radius: 6px; display: block; }
+.thumb .media { position: absolute; left: 4px; right: 4px; bottom: 4px; padding: 0 4px; border-radius: 6px; background: rgba(0,0,0,.7); color: #fff; font: 600 10px/16px system-ui, sans-serif; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.thumb.video .num { bottom: 24px; }
 .thumb input { position: absolute; top: 4px; right: 4px; }
 .tags { display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
 .tag-line { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
