@@ -15,6 +15,7 @@ import { BURNER_CREATE_PORT, type BurnerCreateEvent } from '../messaging';
 import type { BgRequest, BgResponse, ImageInfo, OpenComposerMsg, OpenTipMsg, PreparedSetup, ResolveHandlesResult, SetupRequest, SetupStatus, Wrapped, XmrbioResult, XmrbioStatus } from '../messaging';
 import { setupStatusLast, xmrbioLinked } from '../identity/status';
 import { uploadBlob } from '../nostr/blossom';
+import { liveController, liveSubscription, throttledCheck } from '../nostr/live';
 import { scaledMs } from '../nostr/load-media';
 import { resolveXVideo, type VideoFound } from '../nostr/x-video';
 import { loadMedia } from '../nostr/load-media';
@@ -60,7 +61,8 @@ import { releaseUrl, UPDATE_NOTICE_ID, updateFor, updateKeeper } from '../update
 import { setGlobalBadge, setTabBadge, updateBadge, type BadgeAction } from '../update/badge';
 import { logoKeeper } from '../sites/logos';
 import { INBOX_NOTICE_ID, inboxKeeper, MAX_RELAYS } from '../xap/inbox';
-import { readRelaysFrom, undoTemplate, xoRelayOrder, xoTemplate } from '../xo/event';
+import { KIND_XO, readRelaysFrom, undoTemplate, xoHandleValue, xoRelayOrder, xoTemplate } from '../xo/event';
+import { KIND_RECEIPT } from '../xap/events';
 import { idbKeyStore, managedIdentity } from '../identity/managed';
 import { listOutcome, listPlan, registerTemplate, XMRBIO_REGISTER_URL, type ListRecord } from '../identity/xmrbio-list';
 import { bySignerMode, NoSignerError } from '../identity/signer-mode';
@@ -229,14 +231,16 @@ const updates = updateKeeper({
   clearNotice: () => browser.notifications.clear(UPDATE_NOTICE_ID).catch(() => {}),
 });
 
+// the user's own relays and the defaults, where XMRadar publishes every receipt; index relays keep none
+const xapInboxRelays = async (pubkey: string) => [...new Set(withoutIndex([...(await resolveRelays(pubkey).catch(() => [])), ...DEFAULT_RELAYS]))].slice(0, MAX_RELAYS);
+
 // Xap notifications (PLAN-XAPINBOX): off unless switched on, since asking relays for Xaps to the user's key
 // tells them this browser watches it
 const xapInbox = inboxKeeper({
   held: xapInboxItem,
   enabled: async () => xapNotifyOn(await xmrSettingsItem.getValue()),
   pubkey: () => pubkeyItem.getValue(),
-  // the user's own relays and the defaults, where XMRadar publishes every receipt; index relays keep none
-  relays: async (pubkey) => [...new Set(withoutIndex([...(await resolveRelays(pubkey).catch(() => [])), ...DEFAULT_RELAYS]))].slice(0, MAX_RELAYS),
+  relays: (pubkey) => xapInboxRelays(pubkey),
   read: (relays, filter, timeoutMs) => readEach(relays, filter, timeoutMs),
   query: xapPoolQuery,
   alarms: browser.alarms,
@@ -262,6 +266,9 @@ async function nip65ReadRelays(pubkey: string): Promise<string[]> {
 // an author with no key known (PLAN-XOREACH): the defaults, the floor both sides read, then the sender's own
 const xoRelays = async (me: string, author: string | null) => xoRelayOrder(author ? withoutIndex(await nip65ReadRelays(author)) : [], DEFAULT_RELAYS, withoutIndex(await resolveRelays(me).catch(() => [])));
 
+// its own read relays and the defaults first: that's where senders put xos
+const xoInboxRelays = async (pubkey: string) => xoRelayOrder(withoutIndex(await nip65ReadRelays(pubkey)), DEFAULT_RELAYS, withoutIndex(await resolveRelays(pubkey).catch(() => [])), MAX_RELAYS);
+
 const xoInbox = xoKeeper({
   held: xoInboxItem,
   counts: xoCountsItem,
@@ -273,8 +280,7 @@ const xoInbox = xoKeeper({
     const m = await myHandleItem.getValue();
     return m?.proven ? m.handle : null;
   },
-  // its own read relays and the defaults first: that's where senders put xos
-  relays: async (pubkey) => xoRelayOrder(withoutIndex(await nip65ReadRelays(pubkey)), DEFAULT_RELAYS, withoutIndex(await resolveRelays(pubkey).catch(() => [])), MAX_RELAYS),
+  relays: (pubkey) => xoInboxRelays(pubkey),
   read: (relays, filter) => readEach(relays, filter, 6000),
   query: xapPoolQuery,
   known: async (pk) => knownLiker(await xoLikersItem.getValue(), pk, Date.now()),
@@ -290,6 +296,35 @@ const xoInbox = xoKeeper({
   clearNotice: () => browser.notifications.clear(XO_NOTICE_ID).then(() => {}, () => {}),
 });
 const xoLastItem = storage.defineItem<Record<number, number>>('session:xoLast', { fallback: {} });
+
+// the live inbox (PLAN-LIVEINBOX): while an X tab is visible, one subscription on the inbox relays, with the
+// same filters the 30-minute checks send; an event just makes that kind's check run now (2 s after it, at most
+// one every 5 s per kind: a burst of xos is a few checks, not one each)
+const LIVE_RELAYS = 6;
+const xoLive = throttledCheck(() => xoInbox.check(), { gapMs: 5_000, debounceMs: 2_000 });
+const xapLive = throttledCheck(() => xapInbox.check(), { gapMs: 5_000, debounceMs: 2_000 });
+const liveInbox = liveController(
+  {
+    on: async () => xapNotifyOn(await xmrSettingsItem.getValue()),
+    pubkey: () => pubkeyItem.getValue(),
+    handle: async () => {
+      const me = await myHandleItem.getValue();
+      return me?.proven ? me.handle.toLowerCase() : null;
+    },
+    // the xo and Xap relays together, the xo keeper's order first (its NIP-65 read relays), at most 6
+    relays: async (pk) => [...new Set([...(await xoInboxRelays(pk).catch(() => [])), ...(await xapInboxRelays(pk).catch(() => []))])].slice(0, LIVE_RELAYS),
+    subscribe: (relays, filters) => liveSubscription({ relays, filters, onEvent: (e) => (e.kind === KIND_XO ? xoLive : xapLive).trigger() }),
+    checkedAt: async () => ({ xo: (await xoInboxItem.getValue())?.checkedAt ?? null, xap: (await xapInboxItem.getValue())?.checkedAt ?? null }),
+    kinds: { xo: KIND_XO, xap: KIND_RECEIPT, handleTag: xoHandleValue },
+  },
+  { xo: () => xoLive.trigger(), xap: () => xapLive.trigger() },
+);
+// the switch turned off, or the key or handle changed: close now (a change reopens on the next heartbeat)
+xmrSettingsItem.watch((s) => {
+  if (!xapNotifyOn(s)) liveInbox.stop();
+});
+pubkeyItem.watch(() => liveInbox.stop());
+myHandleItem.watch(() => liveInbox.stop());
 
 // a quoted post's picture (PLAN-QUOTESHOT): capture, decode and crop stay here; only the crop goes back
 const bitmapOf = async (dataUrl: string) => createImageBitmap(await (await fetch(dataUrl)).blob());
@@ -841,6 +876,11 @@ async function handle(msg: BgRequest, sender: Browser.runtime.MessageSender): Pr
           .then((m) => xapMarksItem.setValue(withMark(m, markFor(msg.recipient, msg.address, msg.post), null, Date.now())))
           .catch(() => {});
       return res;
+    }
+    case 'x-live': {
+      if (!isXContentScript(sender)) throw new Error('Not allowed');
+      await liveInbox.heartbeat();
+      return null;
     }
     case 'xo-send':
     case 'xo-undo': {

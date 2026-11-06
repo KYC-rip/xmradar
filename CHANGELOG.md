@@ -3,6 +3,11 @@
 What changed in each XMRadar release. Downloads, checksums and build provenance are on the
 [releases page](https://github.com/KYC-rip/xmradar/releases).
 
+## 0.6.15
+
+- **xos and Xaps within seconds.** While an X tab is open and showing, XMRadar keeps one live connection to your inbox relays (the same relays and the same question as the 30-minute check), so an xo or a Xap shows up, with its notification and the floating hearts, a few seconds after it's sent. It closes about a minute after you leave X; the 30-minute check stays for the rest of the time, and coming back to X catches up at once. Needs *Tell me when I get a Xap or an xo* on.
+- **DEX.fo's order page reads right.** Pages that list their labels and addresses side by side (DEX.fo: "Receiver", your address, "Send … to:", the deposit address) now get each address's own label, so a matching deposit says so instead of "not labelled as the deposit". "Receiver" counts as a payout label, so a deposit address shown under it is a warning.
+
 ## 0.6.14
 
 - **xo counts on everyone's posts.** Like X's likes, the xo heart on a post now shows how many Monero people sent it an xo, not only on your own posts. The number comes from xmr.bio's signed directory, which XMRadar already downloads whole every hour, so xmr.bio never learns which posts you look at, and only senders xmr.bio has checked as Monero people count, so throwaway keys can't pump it. One per person a post; posts from the last 30 days by accounts listed on xmr.bio. Your own xo shows at once; the heart fills only when you've sent one. Same switch as the rings: Options → Badges on X → *xo rings and counts*.

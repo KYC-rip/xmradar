@@ -7,7 +7,8 @@ import { postAvatar, profileAvatar, removeRings, setRing } from './x-xo-ring';
 import { articleViewSlot, hoverCardSlot, pinnedPost, profileClaimScope, profileHeader, profileSlot, tweetSlot, userCellSlot, type BadgeSlot } from '../../identity/x-handle';
 import { emptyClaim, parseClaim, type ClaimPlace } from '../../identity/xclaims';
 import { sendToBackground, type XapTotals } from '../../messaging';
-import { directoryStatusItem, myHandleItem, pubkeyItem, xClaimsChangedItem, xClaimsOn, xmrSettingsItem, xoButtonOn, xoCountsItem, xoRingsOn, xoSentItem, xoSoundOn } from '../../settings';
+import { directoryStatusItem, myHandleItem, pubkeyItem, xClaimsChangedItem, xClaimsOn, xmrSettingsItem, xoButtonOn, xoCountsItem, xoRingsOn, xoSentItem, xoSoundOn, xapNotifyOn } from '../../settings';
+import { liveHeartbeat } from './x-live';
 import { storage } from 'wxt/utils/storage';
 import { XO_SELECTOR, xoManager } from './x-xo';
 import { openTip } from './tip';
@@ -87,6 +88,8 @@ export function startBadges(ctx: ContentScriptContext) {
     unwatchXo.forEach((u) => u());
     xo.stop();
   });
+  // the live inbox (PLAN-LIVEINBOX): a heartbeat while this X tab is visible and notifications are on
+  liveHeartbeat(ctx, { initial: xmrSettingsItem.getValue().then(xapNotifyOn), watch: (cb) => xmrSettingsItem.watch((s) => cb(xapNotifyOn(s))), send: () => sendToBackground({ type: 'x-live' }) });
   /** one handle's badges and Xap buttons; slot keys end in `:<handle>` */
   const removeFor = (handle: string) => {
     for (const el of document.querySelectorAll<HTMLElement>(`${HOST_TAG}, ${XAP_SELECTOR}`)) if (el.dataset.key?.endsWith(`:${handle}`)) el.remove();

@@ -189,6 +189,8 @@ export type BgRequest =
   | { type: 'xap-totals'; recipients: string[]; fresh?: boolean }
   /** xo (PLAN-MONEROLIKE): send or take back the user's xo on an X post */
   | { type: 'xo-send'; post: string; author: string | null; handle: string }
+  /** an X tab is visible (PLAN-LIVEINBOX): keeps the live inbox open while it lasts */
+  | { type: 'x-live' }
   | { type: 'xo-undo'; post: string }
   /** the setup card on X (PLAN-XOREACH): is setup done for this key; open setup.html; a proof tweet seen */
   | { type: 'setup-card-state' }
@@ -294,7 +296,7 @@ export type BgResponse<T extends BgRequest['type']> = T extends 'fetch-image'
                                     ? { ok: boolean; id?: string; error?: string }
                                   : T extends 'setup-card-state'
                                     ? { complete: boolean }
-                                  : T extends 'open-setup' | 'proof-tweet-seen'
+                                  : T extends 'open-setup' | 'proof-tweet-seen' | 'x-live'
                                     ? null
                                   : T extends 'xap-post-totals'
                                     ? XapPostTotalsResult

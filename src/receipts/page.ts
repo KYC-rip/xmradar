@@ -36,7 +36,7 @@ export const receiptTexts = (doc: Document) => scriptTexts(doc).filter((t) => !p
 
 export type Role = 'deposit' | 'payout' | null;
 const DEPOSIT_LABEL = /\b(deposit|send (?:exactly )?(?:to|the)|pay to|payment address|send)\b/i;
-const PAYOUT_LABEL = /\b(payout|receive|recipient|destination|you get|receiving)\b/i;
+const PAYOUT_LABEL = /\b(payout|receive|receiver|recipient|destination|you get|receiving)\b/i;
 const EVENT_LABEL = /\b(event|attestation|witness|record)\b/i;
 const SKIP = 'script, style, template, noscript, [hidden], [aria-hidden="true"]';
 
@@ -148,19 +148,60 @@ export function roleOf(el: Element, address: string, holdsOther = (text: string)
  * `roleOf`, and the element whose label decided it (`box`): two things in one labelled box share it. A page
  * may add its own deposit wording (`depositLabel`), e.g. BitcoinVN's "Single-use address" on letter pages.
  */
-export function roleAt(el: Element, holdsOther: (text: string) => boolean, depositLabel: RegExp = DEPOSIT_LABEL): { role: Role; box: Element | null } {
+export function roleAt(
+  el: Element,
+  holdsOther: (text: string) => boolean,
+  depositLabel: RegExp = DEPOSIT_LABEL,
+  /** where a flat label run ends: a sibling showing any other address (a copy target's climb ignores signed ones; its run must not) */
+  runStop: (text: string) => boolean = holdsOther,
+): { role: Role; box: Element | null } {
   const marked = el.closest('[data-nkip01]');
   const m = marked?.getAttribute('data-nkip01');
   if (m === 'deposit_address') return { role: 'deposit', box: marked! };
   if (m === 'payout_address') return { role: 'payout', box: marked! };
+  let below: Element | null = null;
   for (const { at, text } of labelLevels(el)) {
-    if (holdsOther(text)) return { role: null, box: null };
+    if (holdsOther(text)) {
+      // a flat layout (DEX.fo: "Receiver", its address, "Send … to:", the deposit address, all siblings): the
+      // labels right before the level below this one, back to a sibling showing another address, are its own
+      const run = below ? labelRun(below, runStop) : '';
+      const d = depositLabel.test(run);
+      const p = PAYOUT_LABEL.test(run);
+      return d !== p ? { role: d ? 'deposit' : 'payout', box: below } : { role: null, box: null };
+    }
     const d = depositLabel.test(text);
     const p = PAYOUT_LABEL.test(text);
     if (d !== p) return { role: d ? 'deposit' : 'payout', box: at };
-    if (d && p) return { role: null, box: null };
+    if (d && p) {
+      // both kinds of label here: in a flat layout the labels just before the level below say which is ours
+      // (a copy button whose climb passes signed addresses gets here, not to the branch above)
+      const run = below ? labelRun(below, runStop) : '';
+      const rd = depositLabel.test(run);
+      const rp = PAYOUT_LABEL.test(run);
+      return rd !== rp ? { role: rd ? 'deposit' : 'payout', box: below } : { role: null, box: null };
+    }
+    below = at;
   }
   return { role: null, box: null };
+}
+
+const RUN_SIBLINGS = 3;
+
+/**
+ * Up to 3 shown siblings right before `el`, nearest first, stopping at one that shows another address: the
+ * label run of a flat label/value list ("Send 0.001 BTC to:" just above the address). Labels only before the
+ * value are read; a page that puts its label after the value gets no role here (a caution, never an ok).
+ */
+function labelRun(el: Element, stop: (text: string) => boolean): string {
+  const parts: string[] = [];
+  for (let sib = el.previousElementSibling, i = 0; sib && i < RUN_SIBLINGS; sib = sib.previousElementSibling) {
+    if (!shown(sib)) continue;
+    const t = `${sib.getAttribute('aria-label') ?? ''} ${spacedText(sib)}`;
+    if (stop(t)) break;
+    parts.push(t);
+    i++;
+  }
+  return parts.join(' ');
 }
 
 /** The deposit wording `roleOf` reads, for pages that add their own. */

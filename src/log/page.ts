@@ -206,11 +206,25 @@ export function letterAddressLines(doc: Document, addresses: LetterAddress[], no
         // a Solana or TON one only in the deposit or payout slot; the climb passes the signed send
         // addresses, so one set beside the real deposit still counts
         const signedOne = (o: string) => addresses.some((a) => a.role && sameLetterAddress(a.address, o));
-        if (!loose(address) || roleAt(el, (lt) => findLetterAddresses(lt, families).some((o) => !sameLetterAddress(o.address, address) && !signedOne(o.address)), LETTER_DEPOSIT).role) unsigned.add(address);
+        if (
+          !loose(address) ||
+          roleAt(
+            el,
+            (lt) => findLetterAddresses(lt, families).some((o) => !sameLetterAddress(o.address, address) && !signedOne(o.address)),
+            LETTER_DEPOSIT,
+            (lt) => findLetterAddresses(lt, families).length > 0,
+          ).role
+        )
+          unsigned.add(address);
         continue;
       }
       // a signed token's contract beside it doesn't own the label
-      const role = roleAt(el, (lt) => findLetterAddresses(lt, families).some((o) => !sameLetterAddress(o.address, address) && !token(o.address)), LETTER_DEPOSIT).role;
+      const role = roleAt(
+        el,
+        (lt) => findLetterAddresses(lt, families).some((o) => !sameLetterAddress(o.address, address) && !token(o.address)),
+        LETTER_DEPOSIT,
+        (lt) => findLetterAddresses(lt, families).length > 0,
+      ).role;
       shownAs.set(s.address, (shownAs.get(s.address) ?? new Set()).add(role));
     }
   }
@@ -225,7 +239,12 @@ export function letterAddressLines(doc: Document, addresses: LetterAddress[], no
   const othersIn = (address: string) => (lt: string) => findLetterAddresses(lt, families).some((o) => !sameLetterAddress(o.address, address) && !token(o.address));
   // a copy button's box may show signed addresses beside it (the deposit as text): only an unsigned one ends the climb
   const unsignedIn = (address: string) => (lt: string) => findLetterAddresses(lt, families).some((o) => !sameLetterAddress(o.address, address) && !signedHas(addresses, o.address));
-  const targetAt = (t: PageTarget) => roleAt(t.el, t.address === 'unreadable' ? () => false : unsignedIn(t.address), LETTER_DEPOSIT);
+  // a target's climb passes signed addresses (its box may show the deposit beside it), but a flat label run
+  // stops at any sibling showing an address (another value's block, whichever address it is), or a payout
+  // button after the deposit block would read the deposit's label
+  const anyAddress = (lt: string) => findLetterAddresses(lt, families).length > 0;
+  const targetAt = (t: PageTarget) =>
+    t.address === 'unreadable' ? roleAt(t.el, () => false, LETTER_DEPOSIT, anyAddress) : roleAt(t.el, unsignedIn(t.address), LETTER_DEPOSIT, anyAddress);
   let noUpgrade = false;
   const badTargets: { role: 'deposit' | 'payout'; address: string }[] = [];
   let unreadableInDeposit = false;
@@ -286,7 +305,7 @@ export function letterAddressLines(doc: Document, addresses: LetterAddress[], no
       // the copy button or payment link beside the shortened deposit holds the full signed one: in the same labelled box
       const boxes = new Set(
         (shortenedHolders(doc, d.address, families) ?? [])
-          .map((el) => roleAt(el, othersIn(d.address), LETTER_DEPOSIT))
+          .map((el) => roleAt(el, othersIn(d.address), LETTER_DEPOSIT, anyAddress))
           .filter((r) => r.role === 'deposit')
           .map((r) => r.box),
       );
