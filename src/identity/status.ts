@@ -54,11 +54,23 @@ export function statusLines(s: SetupStatus, handle: string | null): StatusLine[]
 
   const bio = s.xmrbio;
   const bioOk = bio?.found === true && bio.check.ok;
+  // a badge comes from the directory: a profile known to be missing from it (unlisted) gives none
+  const bioBadge = bioOk && bio.listed !== false;
   if (bio && handle) {
     if (bio.found === 'error') out.push({ text: `xmr.bio: couldn't check (${bio.reason})`, kind: 'warn' });
-    else if (!bio.found) out.push({ text: `xmr.bio: @${handle} isn't verified there`, kind: '' });
+    else if (!bio.found)
+      out.push(
+        s.listing?.status === 'failed'
+          ? { text: `xmr.bio: @${handle} isn't listed there; the last try failed (${s.listing.error ?? 'unknown error'})`, kind: 'warn' }
+          : s.listing?.status === 'exists' || s.listing?.status === 'exists-unlisted'
+            ? { text: `xmr.bio: @${handle} is already there${s.listing.status === 'exists-unlisted' ? ', unlisted' : ''}; manage it on xmr.bio`, kind: '' }
+            : { text: `xmr.bio: @${handle} isn't verified there`, kind: '' },
+      );
     else if (!bio.check.ok) out.push({ text: `xmr.bio: @${handle} verified, but its address is invalid (${bio.check.reason})`, kind: 'warn' });
-    else out.push({ text: `xmr.bio: @${handle} verified, ${short(bio.address)}, ${bio.linked ? 'linked to this key' : 'not linked to this key'}`, kind: bio.linked ? 'ok' : '' });
+    else {
+      out.push({ text: `xmr.bio: @${handle} verified, ${short(bio.address)}, ${bio.linked ? 'linked to this key' : 'not linked to this key'}`, kind: bio.linked ? 'ok' : '' });
+      if (bio.listed === false) out.push({ text: `xmr.bio: @${handle} isn't in the directory XMRadar holds (unlisted, or listed since its last download)`, kind: '' });
+    }
   }
 
   const nostrOk = !!addr?.check.ok && nostrLinked;
@@ -66,8 +78,12 @@ export function statusLines(s: SetupStatus, handle: string | null): StatusLine[]
     out.push({ text: 'Your xmr.bio and Nostr addresses differ. Badges show the xmr.bio one and note the difference.', kind: 'warn' });
   }
 
-  if (bioOk) {
-    out.push({ text: 'Badge: from xmr.bio once XMRadar reads its directory (live from 3 Nov). Until then, right-click → "Tip with Monero" finds it.', kind: 'ok' });
+  if (bioBadge) {
+    out.push(
+      bio.listed
+        ? { text: 'Badge: from xmr.bio’s directory, shown to every XMRadar user.', kind: 'ok' }
+        : { text: `Badge: from xmr.bio’s directory if @${handle} is listed there (XMRadar holds no copy of it to check yet).`, kind: '' },
+    );
     if (nostrOk) out.push({ text: 'Also live now for XMRadar users with Nostr discovery on.', kind: 'ok' });
   } else if (nostrOk) {
     out.push({ text: 'Badge: live for XMRadar users with Nostr discovery on.', kind: 'ok' });

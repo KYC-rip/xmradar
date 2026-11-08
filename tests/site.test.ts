@@ -47,10 +47,16 @@ describe('xmradar.app', () => {
       expect(pause.getAttribute('aria-pressed')).toBe('true');
       vi.advanceTimersByTime(12_000);
       expect(q('#slide-safety').getAttribute('aria-hidden')).toBe('false');
+      expect(tabs).toHaveLength(3);
       tabs[1]!.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+      expect(tabs[2]!.getAttribute('aria-selected')).toBe('true');
+      expect(q('#slide-badge').getAttribute('aria-hidden')).toBe('false');
+      // and from the last tab, round to the first
+      tabs[2]!.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
       expect(tabs[0]!.getAttribute('aria-selected')).toBe('true');
       expect(tabs[0]!.tabIndex).toBe(0);
       expect(tabs[1]!.tabIndex).toBe(-1);
+      expect(tabs[2]!.tabIndex).toBe(-1);
     });
   });
 });

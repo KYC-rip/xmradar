@@ -4,7 +4,16 @@ import './style.css';
 import { npubEncode } from 'nostr-tools/nip19';
 import { currentBuild } from '../../build-info';
 import { badgeSummary, setupStatusLast, statusFor } from '../../identity/status';
-import { pubkeyItem, xapInboxItem } from '../../settings';
+import { pubkeyItem, setupDoneItem, xapInboxItem } from '../../settings';
+
+/** Done for this key, by the saved flag or, before one was saved (0.6.12), by the last status check. */
+async function setupComplete() {
+  const [pk, done, stored] = await Promise.all([pubkeyItem.getValue(), setupDoneItem.getValue(), setupStatusLast.getValue()]);
+  if (!pk) return false;
+  if (done?.pubkey === pk) return done.done;
+  const st = statusFor(stored, pk)?.status;
+  return !!st?.address?.check.ok && st.link?.proof.status === 'verified';
+}
 import { mountTabs, popupTabItem } from '../../ui/tabs';
 import { renderSiteCard } from '../../ui/site-card';
 import { sendToBackground } from '../../messaging';
@@ -34,6 +43,11 @@ $('all-settings').title = currentBuild().label;
 // a link in a popup would navigate the popup itself, so the options page opens in a tab
 for (const el of document.querySelectorAll<HTMLElement>('[data-open]')) {
   el.addEventListener('click', async () => {
+    // the tip badge before setup is complete opens the setup page (PLAN-XOREACH), not Options
+    if (el.id === 'tip-badge' && !(await setupComplete())) {
+      await browser.tabs.create({ url: browser.runtime.getURL('/setup.html') });
+      return window.close();
+    }
     const hash = el.dataset.open ? `#${el.dataset.open}` : '';
     await browser.tabs.create({ url: browser.runtime.getURL(`/options.html${hash}`) });
     window.close();
@@ -47,6 +61,7 @@ async function renderHeader() {
   $('signed-in').textContent = npub ? `Signed in as ${npub.slice(0, 10)}…${npub.slice(-4)}` : 'No signer yet';
   $('connect-signer').classList.toggle('hidden', !!npub);
   $('tip-badge-summary').textContent = badgeSummary(statusFor(stored, pubkey)?.status ?? null);
+  if (!(await setupComplete())) $('tip-badge-summary').textContent = 'Not set up yet: about a minute';
 }
 
 void renderHeader();

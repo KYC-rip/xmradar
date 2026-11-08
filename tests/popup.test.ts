@@ -41,7 +41,7 @@ describe('statusLines', () => {
     const lines = texts(
       status({
         address: { address: NOSTR, check: ok },
-        xmrbio: { found: true, address: BIO, check: ok, linked: true },
+        xmrbio: { found: true, address: BIO, check: ok, linked: true, listed: true },
         unreadable: ['wss://nos.lol'],
       }),
     );

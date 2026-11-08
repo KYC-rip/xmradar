@@ -109,11 +109,21 @@ export interface SetupStatus {
   link: { handle: string; tweetUrl: string; proof: ProofResult } | null;
   /** the confirmed handle on xmr.bio; null when no handle is confirmed */
   xmrbio: XmrbioStatus | null;
+  /** the last "list me on xmr.bio" try for this handle, key and address (PLAN-XMRBIOLIST) */
+  listing?: { status: 'listed' | 'exists' | 'exists-unlisted' | 'failed'; at: number; error?: string } | null;
 }
 
 export type XmrbioStatus =
   | { found: false }
-  | { found: true; address: string; check: AddressCheck; /** xmr.bio holds a nostr proof for this pubkey */ linked: boolean }
+  | {
+      found: true;
+      address: string;
+      check: AddressCheck;
+      /** xmr.bio holds a nostr proof for this pubkey */
+      linked: boolean;
+      /** in XMRadar's copy of the signed directory; absent when no copy is held (/resolve doesn't say) */
+      listed?: boolean;
+    }
   | { found: 'error'; reason: string };
 
 export interface PreparedSetup {
@@ -146,8 +156,11 @@ import type { AiSource } from './settings';
 
 /** content/options → background */
 export type BgRequest =
-  | { type: 'fetch-image'; sessionId: string; url: string }
-  | { type: 'upload-image'; sessionId: string; url: string; sha256: string; auth: string }
+  /** `kind: 'video'` (PLAN-XVIDEO): the video cap and a longer timeout, whatever the response says it is */
+  | { type: 'fetch-image'; sessionId: string; url: string; kind?: 'video' }
+  | { type: 'upload-image'; sessionId: string; url: string; sha256: string; auth: string; kind?: 'video' }
+  /** the mp4 behind an X video, found by its tweet and media id (PLAN-XVIDEO) */
+  | { type: 'resolve-video'; sessionId: string; statusId: string; mediaId: string }
   | { type: 'publish'; sessionId: string; event: Event; sourceUrl: string; text: string }
   /** `sourceUrl`: the post copied, so a retry that is the first to succeed still marks it (PLAN-SYNCEDMARK) */
   | { type: 'republish'; sessionId: string; event: Event; relays: string[]; sourceUrl?: string }
@@ -175,10 +188,18 @@ export type BgRequest =
   | { type: 'share-menu-copy' }
   | { type: 'xap-totals'; recipients: string[]; fresh?: boolean }
   /** xo (PLAN-MONEROLIKE): send or take back the user's xo on an X post */
-  | { type: 'xo-send'; post: string; author: string }
+  | { type: 'xo-send'; post: string; author: string | null; handle: string }
+  /** an X tab is visible (PLAN-LIVEINBOX): keeps the live inbox open while it lasts */
+  | { type: 'x-live' }
   | { type: 'xo-undo'; post: string }
+  /** the setup card on X (PLAN-XOREACH): is setup done for this key; open setup.html; a proof tweet seen */
+  | { type: 'setup-card-state' }
+  | { type: 'open-setup'; handleHint?: string }
+  | { type: 'proof-tweet-seen'; handle: string; statusId: string }
   /** the identity card in Options (PLAN-MANAGEDID) */
   | { type: 'identity-state' }
+  /** "List me on xmr.bio" pressed (PLAN-XMRBIOLIST) */
+  | { type: 'xmrbio-list' }
   | { type: 'identity-mode'; mode: 'auto' | 'signer' | 'managed' }
   | { type: 'identity-export' }
   | { type: 'identity-delete' }
@@ -223,6 +244,8 @@ export type BurnerCreateEvent = { type: 'progress'; hashes: number } | { type: '
 
 export type BgResponse<T extends BgRequest['type']> = T extends 'fetch-image'
   ? ImageInfo
+  : T extends 'resolve-video'
+  ? import('./nostr/x-video').VideoFound
   : T extends 'upload-image'
     ? { url: string }
     : T extends 'publish'
@@ -263,6 +286,8 @@ export type BgResponse<T extends BgRequest['type']> = T extends 'fetch-image'
                                 ? null
                                 : T extends 'xap-totals'
                                   ? XapTotalsResult
+                                  : T extends 'xmrbio-list'
+                                    ? SetupStatus
                                   : T extends 'identity-state'
                                     ? { mode: 'auto' | 'signer' | 'managed'; managed: string | null; current: string | null }
                                   : T extends 'identity-mode' | 'identity-delete'
@@ -271,6 +296,10 @@ export type BgResponse<T extends BgRequest['type']> = T extends 'fetch-image'
                                     ? { nsec: string | null }
                                   : T extends 'xo-send' | 'xo-undo'
                                     ? { ok: boolean; id?: string; error?: string }
+                                  : T extends 'setup-card-state'
+                                    ? { complete: boolean }
+                                  : T extends 'open-setup' | 'proof-tweet-seen' | 'x-live'
+                                    ? null
                                   : T extends 'xap-post-totals'
                                     ? XapPostTotalsResult
                                   : T extends 'xap-publish'

@@ -9,6 +9,10 @@ export interface PostImage {
   sha256?: string;
   dim?: string;
   alt?: string;
+  /** a video's poster (NIP-92 `image`) */
+  image?: string;
+  /** bytes */
+  size?: number;
 }
 
 /** NIP-92 inline media metadata tag. */
@@ -17,6 +21,8 @@ export function imetaTag(img: PostImage): string[] {
   if (img.mime) tag.push(`m ${img.mime}`);
   if (img.sha256) tag.push(`x ${img.sha256}`);
   if (img.dim) tag.push(`dim ${img.dim}`);
+  if (img.size) tag.push(`size ${img.size}`);
+  if (img.image) tag.push(`image ${img.image}`);
   if (img.alt) tag.push(`alt ${img.alt.replace(/\s+/g, ' ').trim()}`);
   return tag;
 }

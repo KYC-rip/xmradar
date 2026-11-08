@@ -46,7 +46,7 @@ describe('the xo button', () => {
     click(wrap.querySelector('button')!);
     expect(wrap.dataset.sent).toBe('true');
     await vi.waitFor(() => expect(wrap.dataset.busy).toBeUndefined());
-    expect(send).toHaveBeenCalledWith({ type: 'xo-send', post: '123', author: AUTHOR });
+    expect(send).toHaveBeenCalledWith({ type: 'xo-send', post: '123', author: AUTHOR, handle: 'alice' });
     expect(wrap.querySelector('svg path')!.getAttribute('fill')).toBe('#f26822');
     click(wrap.querySelector('button')!);
     await vi.waitFor(() => expect(send).toHaveBeenCalledWith({ type: 'xo-undo', post: '123' }));
@@ -80,7 +80,7 @@ describe('the xo button', () => {
     expect(wrap.querySelector('button')!.title).toBe('xo: 4 from Monero people. Click: xo · Hold: xo + like on X');
     click(wrap.querySelector('button')!);
     expect(count()).toBe('5');
-    await vi.waitFor(() => expect(send).toHaveBeenCalledWith({ type: 'xo-send', post: '123', author: AUTHOR }));
+    await vi.waitFor(() => expect(send).toHaveBeenCalledWith({ type: 'xo-send', post: '123', author: AUTHOR, handle: 'alice' }));
     expect(wrap.querySelector('button')!.title).toBe('xo: 5, yours included. Click to take yours back.');
   });
 
@@ -224,39 +224,28 @@ describe('hold to also like on X (PLAN-XOLIKE)', () => {
   });
 });
 
-describe('the faded heart: no key known (PLAN-XOKEYS)', () => {
+describe('no key known: the xo goes to the handle (PLAN-XOREACH)', () => {
   beforeEach(() => send.mockReset().mockResolvedValue({ ok: true, id: 'x' }));
-  it('faded, explains on click and sends nothing; a hold likes on X only', async () => {
-    vi.useFakeTimers();
+  it('not faded; a click sends an xo to the handle, and says it waits for them', async () => {
     const a = tweet();
-    const like = a.querySelector<HTMLElement>('[data-testid="like"]')!;
-    const pressed = vi.fn(() => like.setAttribute('data-testid', 'unlike'));
-    like.addEventListener('click', pressed);
     insertXo(a, { ...opts, author: null });
     const wrap = a.querySelector<HTMLElement>(XO_SELECTOR)!;
     const btn = wrap.querySelector<HTMLElement>('button')!;
-    expect(wrap.style.opacity).toBe('0.45');
-    expect(btn.title).toBe('@alice hasn’t linked a Nostr key, so an xo can’t reach them. Hold to like on X.');
+    expect(wrap.style.opacity).toBe('');
+    expect(btn.title).toBe('@alice hasn’t set up XMRadar yet. Your xo waits for them, and counts once they do. Click: xo · Hold: xo + like on X');
     click(btn);
-    expect(send).not.toHaveBeenCalled();
-    expect(pressed).not.toHaveBeenCalled();
-    const down = new PointerEvent('pointerdown', { bubbles: true, button: 0, clientX: 1, clientY: 1 });
-    Object.defineProperty(down, 'isTrusted', { value: true });
-    btn.dispatchEvent(down);
-    await vi.advanceTimersByTimeAsync(520);
-    vi.useRealTimers();
-    await vi.waitFor(() => expect(pressed).toHaveBeenCalledTimes(1));
-    expect(send).not.toHaveBeenCalled();
-    await vi.waitFor(() => expect(btn.title).toBe('Liked on X. No xo: this account hasn’t linked a Nostr key.'));
+    await vi.waitFor(() => expect(send).toHaveBeenCalledWith({ type: 'xo-send', post: '123', author: null, handle: 'alice' }));
+    await vi.waitFor(() => expect(wrap.dataset.busy).toBeUndefined());
+    expect(wrap.dataset.sent).toBe('true');
+    expect(btn.title).toBe('You sent an xo. It waits for @alice to set up XMRadar. Click to take it back.');
   });
-  it('a key learned later turns it into a real xo heart', () => {
+  it('a key learned later redraws it with the key', () => {
     const a = tweet();
     insertXo(a, { ...opts, author: null });
     insertXo(a, opts);
     const wrap = a.querySelector<HTMLElement>(XO_SELECTOR)!;
     expect(a.querySelectorAll(XO_SELECTOR).length).toBe(1);
-    expect(wrap.dataset.likeOnly).toBe('false');
-    expect(wrap.style.opacity).toBe('');
+    expect(wrap.dataset.author).toBe(AUTHOR);
   });
 });
 
@@ -284,7 +273,7 @@ describe('review fixes (PLAN-XOKEYS)', () => {
     vi.useRealTimers();
     await vi.waitFor(() => expect(a.querySelector<HTMLElement>(XO_SELECTOR)!.dataset.busy).toBeUndefined());
     expect(send).toHaveBeenCalledTimes(1);
-    expect(send).toHaveBeenCalledWith({ type: 'xo-send', post: '123', author: AUTHOR });
+    expect(send).toHaveBeenCalledWith({ type: 'xo-send', post: '123', author: AUTHOR, handle: 'alice' });
     expect(pressed).toHaveBeenCalledTimes(1);
     expect(a.querySelector<HTMLElement>(XO_SELECTOR)!.dataset.sent).toBe('true');
   });

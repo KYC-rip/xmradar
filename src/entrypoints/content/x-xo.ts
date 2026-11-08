@@ -1,10 +1,12 @@
 import { sendToBackground } from '../../messaging';
 import { ownStatusId } from '../../extractors/x';
 import { XAP_ATTR, XAP_SELECTOR, actionBar, actionBars } from './x-xap';
+import { noteXoSent } from './x-setup-card';
+import { playXoSound, primeXoSound } from '../../xo/sound';
 
 /**
- * The xo button (PLAN-MONEROLIKE): a Monero like, right after the Xap button on posts whose author has a
- * known key. Playful to send (Echo Bloom: squash, bloom into Monero orange, a ghost outline and a burst of
+ * The xo button (PLAN-MONEROLIKE): a Monero like, right after the Xap button on X posts. With the author's
+ * key known it goes to the key; without one (PLAN-XOREACH) to their X handle, and waits there until they set up. Playful to send (Echo Bloom: squash, bloom into Monero orange, a ghost outline and a burst of
  * dots), joyful to receive (on the user's own posts, new xos float up as small hearts once). Web
  * Animations only, transform and opacity; with reduced motion the state just changes.
  */
@@ -131,7 +133,7 @@ export function celebrate(svg: SVGSVGElement, count: Element | null, hearts = 5)
 
 export interface XoOpts {
   post: string;
-  /** the author's key; null: none known, so the heart is faded and can only like on X (PLAN-XOKEYS) */
+  /** the author's key; null: none known, so the xo is addressed to their handle (PLAN-XOREACH) */
   /** a plain click also likes the post on X (opt-in); a hold always does */
   alsoLike?: boolean;
   author: string | null;
@@ -140,35 +142,70 @@ export interface XoOpts {
   own: boolean;
   sent: boolean;
   count?: number;
+  /** others' posts (PLAN-XOPOSTS): xmr.bio's list of the Monero people who sent this post an xo (16-hex key prefixes) */
+  public?: string[];
+  /** the user's own key prefix (16 hex), so their own xo is never counted twice */
+  myKey?: string;
+  /** a short pop when the user sends one (PLAN-XOSOUND); on unless false */
+  sound?: boolean;
+}
+
+/** A per-post list this long means "this many or more" (xmr.bio's POST_SENDER_CAP). */
+const PUBLIC_CAP = 200;
+/** Each button's xmr.bio list and the user's key, kept with the node: gone when X drops it (no growing map). */
+const publicOf = new WeakMap<HTMLElement, { list: string[]; me?: string }>();
+const setPublic = (wrap: HTMLElement, list: string[] | undefined, me: string | undefined) => publicOf.set(wrap, { list: list ?? [], me });
+
+/**
+ * Others' posts: the Monero people xmr.bio counted, besides the user, and whether that list was full. The
+ * user's own xo follows their click at once (as X shows your own like), counted or not by xmr.bio.
+ */
+export function publicCount(list: string[], me: string | undefined, sent: boolean) {
+  const others = me ? list.filter((p) => p !== me).length : list.length;
+  const capped = list.length >= PUBLIC_CAP;
+  // with no key known, the list may hold the user already: add nothing (PLAN-XOPOSTS C2)
+  const shown = others + (sent && me ? 1 : 0);
+  return { others, capped, shown, text: !shown ? '' : capped ? `${PUBLIC_CAP}+` : String(shown) };
 }
 
 export const ownXos = (article: Element) => actionBars(article).flatMap((bar) => [...bar.querySelectorAll<HTMLElement>(`:scope > ${XO_SELECTOR}`)]);
 
-const label = (o: Pick<XoOpts, 'own' | 'sent' | 'handle' | 'author'>, shown: number) => {
-  if (!o.author) return `@${o.handle} hasn’t linked a Nostr key, so an xo can’t reach them. Hold to like on X.`;
+const people = (n: number, capped: boolean) => (capped ? `${PUBLIC_CAP}+ Monero people` : n === 1 ? '1 Monero person' : `${n} Monero people`);
+
+const label = (o: Pick<XoOpts, 'own' | 'sent' | 'handle' | 'author'>, shown: number, pub: { others: number; capped: boolean } = { others: 0, capped: false }) => {
+  if (!o.own && pub.others > 0) {
+    const who = people(pub.others, pub.capped);
+    const wait = o.author ? '' : ` Your xo waits for @${o.handle} to set up XMRadar.`;
+    if (o.sent) return `You and ${who} sent xos (counted by xmr.bio).${wait} Click to take yours back.`;
+    return `${who} sent ${pub.others === 1 && !pub.capped ? 'an xo' : 'xos'} (counted by xmr.bio).${wait} Click: xo · Hold: xo + like on X`;
+  }
+  if (!o.own && !o.author)
+    return o.sent ? `You sent an xo. It waits for @${o.handle} to set up XMRadar. Click to take it back.` : `@${o.handle} hasn’t set up XMRadar yet. Your xo waits for them, and counts once they do. Click: xo · Hold: xo + like on X`;
   if (!o.own) return o.sent ? 'You sent an xo. Click to take it back.' : `Send @${o.handle} an xo (a Monero like, over Nostr). Click: xo · Hold: xo + like on X`;
   const counted = shown ? `xo: ${shown}${o.sent ? ', yours included' : ' from Monero people'}` : 'xo: none yet';
   return `${counted}. ${o.sent ? 'Click to take yours back.' : 'Click: xo · Hold: xo + like on X'}`;
 };
 
 /**
- * The count shows on the user's own posts only: others' xos (from the inbox) plus one for the user's own, which
- * the sent record knows at once. Others' posts show none.
+ * The user's own posts: others' xos (from the inbox) plus one for the user's own, which the sent record knows
+ * at once. Others' posts (PLAN-XOPOSTS): the Monero people xmr.bio counted, the user's own xo following the
+ * click; the heart fills only when the user sent one, as X's like does.
  */
 export function setXoState(wrap: HTMLElement, o: Pick<XoOpts, 'own' | 'sent' | 'handle' | 'author'>, count?: number) {
-  const shown = o.own ? (count ?? 0) + (o.sent ? 1 : 0) : 0;
+  const ownShown = o.own ? (count ?? 0) + (o.sent ? 1 : 0) : 0;
+  const rec = publicOf.get(wrap);
+  const pub = o.own ? null : publicCount(rec?.list ?? [], rec?.me, o.sent);
   const svg = wrap.querySelector<SVGSVGElement>(`[${XAP_ATTR}="xo-icon"]`);
-  if (svg) paint(svg, o.sent || shown > 0);
+  if (svg) paint(svg, o.sent || ownShown > 0);
   const c = wrap.querySelector(`[${XAP_ATTR}="xo-count"]`);
-  if (c) c.textContent = shown ? String(shown) : '';
+  const text = pub ? pub.text : ownShown ? String(ownShown) : '';
+  if (c && c.textContent !== text) c.textContent = text;
   const btn = wrap.querySelector('button');
-  btn?.setAttribute('aria-label', label(o, shown));
+  const l = label(o, ownShown, pub ?? undefined);
+  btn?.setAttribute('aria-label', l);
   btn?.setAttribute('aria-pressed', String(o.sent));
-  if (btn) btn.title = label(o, shown);
+  if (btn) btn.title = l;
   wrap.dataset.sent = String(o.sent);
-  // no key: faded, like-only
-  wrap.dataset.likeOnly = String(!o.author);
-  wrap.style.opacity = o.author ? '' : '0.45';
   // the others' count, so a click can redraw with it
   wrap.dataset.count = String(count ?? 0);
 }
@@ -178,8 +215,17 @@ export function insertXo(article: Element, opts: XoOpts): HTMLElement[] {
   for (const bar of actionBars(article)) {
     const xap = bar.querySelector<HTMLElement>(`:scope > ${XAP_SELECTOR}`);
     const have = bar.querySelector<HTMLElement>(`:scope > ${XO_SELECTOR}`);
-    // same post and same key: keep it (a key learned later redraws it)
-    if (have?.dataset.post === opts.post && (have.dataset.author ?? '') === (opts.author ?? '')) continue;
+    // same post and same key: keep it (a key learned later redraws it), with xmr.bio's latest list
+    if (have?.dataset.post === opts.post && (have.dataset.author ?? '') === (opts.author ?? '')) {
+      const rec = publicOf.get(have);
+      const next = opts.public ?? [];
+      const same = !!rec && (rec.list === next || (rec.list.length === next.length && rec.list.every((p, i) => p === next[i])));
+      if (rec?.me !== opts.myKey || !same) {
+        setPublic(have, opts.public, opts.myKey);
+        if (have.dataset.busy !== 'true') setXoState(have, opts, opts.count);
+      }
+      continue;
+    }
     have?.remove();
     if (!xap) continue;
     const wrap = xap.cloneNode(true) as HTMLElement;
@@ -218,8 +264,11 @@ export function insertXo(article: Element, opts: XoOpts): HTMLElement[] {
       hold.ring?.remove();
       hold = null;
     };
+    // the sound's audio starts in the user's gesture, never from the hold's timer (PLAN-XOSOUND)
+    const prime = () => wrap.dataset.sound === 'true' && primeXoSound();
     btn.addEventListener('pointerdown', (e) => {
       if (!e.isTrusted || e.button !== 0 || wrap.dataset.sent === 'true' || wrap.dataset.busy === 'true') return;
+      prime();
       charged = false;
       const ring = chargeRing(icon);
       hold = {
@@ -231,8 +280,7 @@ export function insertXo(article: Element, opts: XoOpts): HTMLElement[] {
           hold = null;
           // the click that ends this hold, however long it lasts, is skipped (see pointerup below)
           charged = true;
-          if (wrap.dataset.likeOnly === 'true') void likeOnly(wrap, icon, opts.post);
-          else void toggle(wrap, icon, opts, true);
+          void toggle(wrap, icon, opts, true);
         }, HOLD_MS),
       };
     });
@@ -256,19 +304,20 @@ export function insertXo(article: Element, opts: XoOpts): HTMLElement[] {
         charged = false;
         return;
       }
-      // no key known: a click only explains (the tooltip); holding likes on X
-      if (wrap.dataset.likeOnly === 'true') return;
+      if (wrap.dataset.sent !== 'true') prime();
       void toggle(wrap, icon, opts, wrap.dataset.alsoLike === 'true');
     });
     btn.addEventListener('keydown', (e) => {
       if (e.key !== 'Enter' || !e.shiftKey || !e.isTrusted || wrap.dataset.sent === 'true') return;
       e.preventDefault();
       e.stopPropagation();
-      if (wrap.dataset.likeOnly === 'true') void likeOnly(wrap, icon, opts.post);
-      else void toggle(wrap, icon, opts, true);
+      prime();
+      void toggle(wrap, icon, opts, true);
     });
+    setPublic(wrap, opts.public, opts.myKey);
     setXoState(wrap, opts, opts.count);
     wrap.dataset.alsoLike = String(!!opts.alsoLike);
+    wrap.dataset.sound = String(opts.sound !== false);
     // the Xap's own counter ends right where this starts; a little air between them
     wrap.style.marginLeft = '10px';
     xap.after(wrap);
@@ -324,21 +373,6 @@ export async function likeOnX(post: string, doc: Document = document): Promise<b
   return likeButtonFor(post, doc) === 'liked';
 }
 
-/** A faded heart's hold: X's like only, with a small bloom; no xo can be sent without the author's key. */
-async function likeOnly(wrap: HTMLElement, icon: SVGSVGElement, post: string) {
-  if (wrap.dataset.busy === 'true') return;
-  wrap.dataset.busy = 'true';
-  bloom(icon);
-  const btn = wrap.querySelector('button');
-  const why = 'No xo: this account hasn’t linked a Nostr key.';
-  try {
-    const ok = await likeOnX(post);
-    if (btn) btn.title = ok ? `Liked on X. ${why}` : `X’s like couldn’t be pressed on this post. ${why}`;
-  } finally {
-    delete wrap.dataset.busy;
-  }
-}
-
 async function toggle(wrap: HTMLElement, icon: SVGSVGElement, opts: XoOpts, alsoLike = false) {
   if (wrap.dataset.busy === 'true') return;
   wrap.dataset.busy = 'true';
@@ -347,14 +381,17 @@ async function toggle(wrap: HTMLElement, icon: SVGSVGElement, opts: XoOpts, also
   // the change shows at once; a refusal puts it back
   setXoState(wrap, { ...opts, sent: !was }, others);
   if (was) unbloom(icon);
-  else bloom(icon, alsoLike);
+  else {
+    bloom(icon, alsoLike);
+    // the user's own send only, with the bloom (PLAN-XOSOUND); primed in the gesture that led here
+    if (wrap.dataset.sound === 'true') playXoSound(alsoLike);
+  }
   // X's like goes together with the bloom, not after the signer and relays: the user asked for both now
   const liked = !was && alsoLike ? likeOnX(opts.post) : null;
   try {
-    // toggle runs only with a key (a faded heart never sends)
-    if (!opts.author) throw new Error('No Nostr key known for this account');
-    const res = await sendToBackground(was ? { type: 'xo-undo', post: opts.post } : { type: 'xo-send', post: opts.post, author: opts.author });
+    const res = await sendToBackground(was ? { type: 'xo-undo', post: opts.post } : { type: 'xo-send', post: opts.post, author: opts.author, handle: opts.handle });
     if (!res.ok) throw new Error(res.error ?? 'Not sent');
+    if (!was) noteXoSent();
     // taking an xo back never un-likes
     if (liked && !(await liked)) {
       const btn = wrap.querySelector('button');
@@ -376,6 +413,10 @@ export interface XoState {
   /** a plain click also likes on X */
   alsoLike?: boolean;
   me: { handle: string; proven: boolean } | null;
+  /** the user's own key prefix (16 hex), for others' posts' counts (PLAN-XOPOSTS) */
+  myKey?: string;
+  /** the send sound (PLAN-XOSOUND) */
+  sound?: boolean;
   sent: Record<string, unknown>;
   counts: Record<string, number>;
   /** counts the user has already seen celebrated, per post */
@@ -389,7 +430,7 @@ export interface XoState {
 export function xoManager(initial: XoState, save: (seen: Record<string, number>) => void) {
   let state = initial;
   const isOwn = (handle: string) => !!state.me?.proven && state.me.handle.toLowerCase() === handle.toLowerCase();
-  const optsFor = (post: string, author: string | null, handle: string): XoOpts => ({ post, author, handle, own: isOwn(handle), sent: !!state.sent[post], count: state.counts[post], alsoLike: !!state.alsoLike });
+  const optsFor = (post: string, author: string | null, handle: string): XoOpts => ({ post, author, handle, own: isOwn(handle), sent: !!state.sent[post], count: state.counts[post], alsoLike: !!state.alsoLike, myKey: state.myKey, sound: state.sound !== false });
   const watching = new WeakSet<Element>();
   const io =
     typeof IntersectionObserver === 'function'
@@ -409,12 +450,13 @@ export function xoManager(initial: XoState, save: (seen: Record<string, number>)
     save(state.seen);
   }
 
-  function place(article: Element, post: string, author: string | null, handle: string) {
+  /** `pub`: xmr.bio's list of who sent this post an xo (PLAN-XOPOSTS); [] when none or switched off */
+  function place(article: Element, post: string, author: string | null, handle: string, pub: string[] = []) {
     if (!state.on) {
       for (const el of ownXos(article)) el.remove();
       return;
     }
-    for (const wrap of insertXo(article, optsFor(post, author, handle))) {
+    for (const wrap of insertXo(article, { ...optsFor(post, author, handle), public: pub })) {
       wrap.dataset.handle = handle;
       if (io && !watching.has(wrap)) {
         watching.add(wrap);
@@ -432,8 +474,12 @@ export function xoManager(initial: XoState, save: (seen: Record<string, number>)
         continue;
       }
       const o = optsFor(wrap.dataset.post ?? '', wrap.dataset.author || null, wrap.dataset.handle ?? '');
+      // the list stays with the node; only the user's key can change here
+      const rec = publicOf.get(wrap);
+      if (rec && rec.me !== state.myKey) setPublic(wrap, rec.list, state.myKey);
       if (wrap.dataset.busy !== 'true') setXoState(wrap, o, o.count);
       wrap.dataset.alsoLike = String(!!state.alsoLike);
+      wrap.dataset.sound = String(state.sound !== false);
       // a new xo while the post is on screen celebrates right away
       if (o.own && next.counts) {
         const r = wrap.getBoundingClientRect();

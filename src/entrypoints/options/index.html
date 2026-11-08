@@ -218,6 +218,12 @@
             </li>
           </ol>
 
+          <div id="xmrbio-list" class="row-block">
+            <label><input id="xmrbio-list-on" type="checkbox" /> Also list me on xmr.bio (public directory)</label>
+            <p class="row-hint">Once your X account is linked here, XMRadar lists it on xmr.bio: your X handle, Monero address and Nostr key go on xmr.bio's public directory and your xmr.bio page, and wallets that read OpenAlias (Feather, Cake) can pay <code>yourhandle.oa.xmr.bio</code>. Every XMRadar user then sees your badge, not only those with Nostr discovery on. On xmr.bio (Sign in with Monero, with that address), <em>unlist</em> hides you from the directory; <em>delete</em> also removes your page.</p>
+            <div class="row"><button id="xmrbio-list-now" type="button">List me on xmr.bio now</button><span id="xmrbio-list-status" class="row-hint" role="status" aria-live="polite"></span></div>
+          </div>
+
           <div id="id-confirm" class="confirm hidden">
             <h3>Review the change</h3>
             <div id="id-summary"></div>
@@ -280,10 +286,18 @@
               <div><span class="row-title">Also like on X when I send an xo</span><span class="row-hint">Holding the heart (or Shift+Enter) always sends an xo and likes the post on X; this makes a plain click do both too. Taking an xo back never un-likes</span></div>
               <input data-xmr="xo-like" type="checkbox" role="switch" class="switch" />
             </label>
+            <label class="setting">
+              <div><span class="row-title">Sound when I send an xo</span><span class="row-hint">A short, quiet pop. Made in the browser, nothing downloaded; silent in a muted tab</span></div>
+              <input data-xmr="xo-sound" type="checkbox" role="switch" class="switch" />
+            </label>
+            <label class="setting">
+              <div><span class="row-title">xo rings and counts</span><span class="row-hint">An orange ring on the avatar of accounts Monero people sent xos, and the total in their badge; on their recent posts, how many Monero people sent each one an xo, beside the heart. Counted by xmr.bio every 10 minutes (the total: distinct posts, at most 10 per sender), so a soft signal, not proof of distinct people</span></div>
+              <input data-xmr="xo-rings" type="checkbox" role="switch" class="switch" />
+            </label>
           </div>
           <div id="xap-inbox" class="card pad">
             <label class="setting">
-              <div><span class="row-title">Tell me when I get a Xap or an xo</span><span class="row-hint">Every 30 minutes, asks your relays and 3 public relays (damus, nos.lol, primal) for Xaps and xos to your npub. They can see that this browser watches your npub. The xo counts on your own posts come from this check.</span><span data-inbox="why" class="row-hint"></span></div>
+              <div><span class="row-title">Tell me when I get a Xap or an xo</span><span class="row-hint">Asks your relays and 3 public relays (damus, nos.lol, primal) for Xaps and xos to your npub: every 30 minutes, and live (within seconds) while an X tab is open and showing. They can see that this browser watches your npub. The xo counts on your own posts come from this check.</span><span data-inbox="why" class="row-hint"></span></div>
               <input data-inbox="switch" type="checkbox" role="switch" class="switch" />
             </label>
             <div data-inbox="body" class="hidden">
@@ -291,7 +305,7 @@
               <p class="row-hint">A Xap is the tipper's word that they sent it. It shows as verified once your wallet confirms it; check your wallet before you thank anyone.</p>
               <ul data-inbox="list" class="xap-list"></ul>
               <h2 class="card-head">xos received</h2>
-              <p class="row-hint">Counted only from Monero people: a key with a Monero address and an X account its proof tweet confirms. One per person per post.</p>
+              <p class="row-hint">Counted only from Monero people: a key with a Monero address and an X account its proof tweet confirms. One per person per post. XMRadar asks relays for xos to your key and, once it's proven, your X handle.</p>
               <ul data-inbox="xo-list" class="xap-list"></ul>
               <div class="row"><button data-inbox="check" type="button">Check now</button><span data-inbox="status" class="row-hint" role="status" aria-live="polite"></span></div>
               <details><summary class="row-hint" data-inbox="relays-summary"></summary><p data-inbox="relays" class="row-hint"></p></details>

@@ -15,6 +15,7 @@ export const DIRECTORY_HOURS = 1;
 export const DIRECTORY_MAX_BYTES = 4 * 1024 * 1024;
 const FUTURE_MS = 10 * 60_000;
 const HANDLE = /^[a-z0-9_]{1,15}$/;
+const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 
 export interface DirectoryEntry {
   handle: string;
@@ -22,6 +23,31 @@ export interface DirectoryEntry {
   verifiedAt: string;
   /** the Nostr key the account linked on xmr.bio, while its signed proof holds there (PLAN-XOKEYS) */
   pubkey?: string;
+  /** xos from Monero people to this account, as xmr.bio counts them (PLAN-XORINGS) */
+  xoCount?: number;
+  /** recent posts' xos (PLAN-XOPOSTS): status id → 16-hex prefixes of the Monero people who sent one */
+  xoPosts?: Record<string, string[]>;
+}
+
+/** A per-post list this long means "this many or more" (xmr.bio's POST_SENDER_CAP). */
+export const XO_POST_CAP = 200;
+const XO_POSTS_MAX = 50;
+const STATUS_ID = /^[1-9]\d{0,19}$/;
+const PREFIX = /^[0-9a-f]{16}$/;
+
+/** `xo_posts` as xmr.bio sends it; a post that's off in any way is dropped, never the entry. */
+export function readXoPosts(v: unknown): Record<string, string[]> | undefined {
+  if (!isObj(v)) return undefined;
+  const out: Record<string, string[]> = {};
+  let n = 0;
+  for (const [id, list] of Object.entries(v)) {
+    if (n >= XO_POSTS_MAX) break;
+    if (!STATUS_ID.test(id) || !Array.isArray(list) || !list.length || list.length > XO_POST_CAP) continue;
+    if (!list.every((p) => typeof p === 'string' && PREFIX.test(p)) || new Set(list).size !== list.length) continue;
+    out[id] = [...(list as string[])];
+    n++;
+  }
+  return n ? out : undefined;
 }
 
 /** What's kept in storage: plain JSON, rebuilt into a Map on load. */
@@ -37,7 +63,6 @@ export interface StoredDirectory {
 
 export class DirectoryTrustError extends Error {}
 
-const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 
 /**
  * A downloaded directory, verified and checked. Returns null when it is not newer than the one held
@@ -69,7 +94,11 @@ export function readDirectory(
     seen.add(e.handle as string);
     // an optional linked key, kept only in its exact form; a bad one is dropped, not the entry
     const pubkey = typeof e.nostr_pubkey === 'string' && /^[0-9a-f]{64}$/.test(e.nostr_pubkey) ? e.nostr_pubkey : undefined;
-    entries.push({ handle: e.handle as string, address: e.address as string, verifiedAt: e.verified_at as string, ...(pubkey ? { pubkey } : {}) });
+    // the xo total (PLAN-XORINGS): a whole number from 1 to 10^7, else dropped, not the entry
+    const xo = e.xo_count;
+    const xoCount = typeof xo === 'number' && Number.isInteger(xo) && xo >= 1 && xo <= 10_000_000 ? xo : undefined;
+    const xoPosts = readXoPosts(e.xo_posts);
+    entries.push({ handle: e.handle as string, address: e.address as string, verifiedAt: e.verified_at as string, ...(pubkey ? { pubkey } : {}), ...(xoCount ? { xoCount } : {}), ...(xoPosts ? { xoPosts } : {}) });
   }
   if (dropped) console.warn(`[XMRadar] xmr.bio directory: ${dropped} entries dropped`);
   return { generatedAt, keyId: key, fetchedAt: now, stale: !!opts.stale, entries };
@@ -79,7 +108,7 @@ export function readDirectory(
 export function directoryIndex(d: StoredDirectory | null): (handle: string) => BadgeEntry[] {
   const map = new Map<string, BadgeEntry>();
   for (const e of d?.entries ?? []) {
-    map.set(e.handle, { source: 'xmrbio', address: e.address, check: validateMoneroAddress(e.address), verified: true, method: 'xmrbio:directory', ...(e.pubkey ? { pubkey: e.pubkey } : {}) });
+    map.set(e.handle, { source: 'xmrbio', address: e.address, check: validateMoneroAddress(e.address), verified: true, method: 'xmrbio:directory', ...(e.pubkey ? { pubkey: e.pubkey } : {}), ...(e.xoCount ? { xoCount: e.xoCount } : {}), ...(e.xoPosts ? { xoPosts: e.xoPosts } : {}) });
   }
   return (handle) => {
     const hit = map.get(handle.toLowerCase());

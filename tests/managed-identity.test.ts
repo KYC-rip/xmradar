@@ -22,7 +22,7 @@ describe('the XMRadar identity', () => {
     expect(ev.pubkey).toBe(pubkey);
     expect(verifyEvent(ev)).toBe(true);
     for (const kind of [1, 4, 30023, 24242, 9734, 1059]) await expect(id.sign({ kind, created_at: 1, tags: [], content: '' })).rejects.toBeInstanceOf(KindNotAllowed);
-    expect([...MANAGED_KINDS].sort((a, b) => a - b)).toEqual([0, 5, 17, 9042, 9044, 10002, 10011, 10133]);
+    expect([...MANAGED_KINDS].sort((a, b) => a - b)).toEqual([0, 5, 17, 9042, 9044, 10002, 10011, 10133, 27235]);
   });
   it('exports as an nsec of the same key, and is gone after delete', async () => {
     const store = memoryKeyStore();

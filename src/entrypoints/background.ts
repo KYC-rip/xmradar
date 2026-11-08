@@ -13,14 +13,18 @@ import { BURNER_CREATE_PORT, type BurnerCreateEvent } from '../messaging';
 import type { BgRequest, BgResponse, ImageInfo, OpenComposerMsg, OpenTipMsg, PreparedSetup, SetupRequest, SetupStatus, Wrapped, XmrbioStatus } from '../messaging';
 import { setupStatusLast, xmrbioLinked } from '../identity/status';
 import { uploadBlob } from '../nostr/blossom';
+import { liveController, liveSubscription, throttledCheck } from '../nostr/live';
+import { scaledMs } from '../nostr/load-media';
+import { resolveXVideo, type VideoFound } from '../nostr/x-video';
+import { loadMedia } from '../nostr/load-media';
 import { statusIdFromUrl } from '../extractors/x-article';
 import { KIND_ARTICLE, checkBlossomAuth, checkPublishable, checkSigned, dedupeKey, sha256Hex } from '../nostr/event';
 import { allRelaysFrom, fetchWriteRelays, publishToRelays, readEach, readRelay } from '../nostr/relays';
-import { assertFetchableImageUrl } from '../nostr/url-guard';
 import { checkSessionSender, checkShareMenuSender, isExtensionPageSender, isSignerPage, isXUrl, SIGNER_PAGE, shareMenuRateLimit, withoutTab } from '../sender';
 import { setAuto, suggestFor, tagsReady } from '../ai/requests';
-import { signerModeItem, syncedPostsItem } from '../settings';
+import { signerModeItem, syncedPostsItem, xmrbioListItem, xmrbioListPrefItem } from '../settings';
 import { recordSynced, type SyncedPost } from '../nostr/synced';
+import { proofCandidateItem, setupDoneItem } from '../settings';
 import { DEFAULT_RELAYS, directoryStatusItem, nip65CacheItem, siwmHelperOn, useNip65On, INDEX_RELAYS, withoutIndex, myHandleItem, postedItem, pubkeyItem, receiptsOn, settingsItem, siteInfoOn, updateCheckOn, updateStateItem, logoPackItem, xapInboxItem, xapNotifyOn, siteWarningsOn, copyReportsOn, swapRecordDaysItem, swapRecordsCleanedItem, xapMarksItem, xClaimsChangedItem, xClaimsOn, xmrSettingsItem } from '../settings';
 import { storage } from 'wxt/utils/storage';
 import { activeInbox, burnerCreatingItem, burnerInboxItem, burnerLastErrorItem, burnFreeInbox, createFreeInbox, forgetImportedInbox, importInbox, type BurnerDeps } from '../burner/service';
@@ -52,8 +56,10 @@ import { releaseUrl, UPDATE_NOTICE_ID, updateFor, updateKeeper } from '../update
 import { setGlobalBadge, setTabBadge, updateBadge, type BadgeAction } from '../update/badge';
 import { logoKeeper } from '../sites/logos';
 import { INBOX_NOTICE_ID, inboxKeeper, MAX_RELAYS } from '../xap/inbox';
-import { readRelaysFrom, undoTemplate, xoRelayOrder, xoTemplate } from '../xo/event';
+import { KIND_XO, readRelaysFrom, undoTemplate, xoHandleValue, xoRelayOrder, xoTemplate } from '../xo/event';
+import { KIND_RECEIPT } from '../xap/events';
 import { idbKeyStore, managedIdentity } from '../identity/managed';
+import { listOutcome, listPlan, registerTemplate, XMRBIO_REGISTER_URL, type ListRecord } from '../identity/xmrbio-list';
 import { bySignerMode, NoSignerError } from '../identity/signer-mode';
 import { rememberSent } from '../xo/sent';
 import { XO_NOTICE_ID, xoKeeper } from '../xo/inbox';
@@ -114,8 +120,19 @@ type CacheEntries<V> = [string, { v: V; at: number }][];
 const badgeCacheItem = storage.defineItem<CacheEntries<Badge>>('local:badgeCache', { fallback: [] });
 const proofCacheItem = storage.defineItem<CacheEntries<ProofResult>>('local:proofCache', { fallback: [] });
 
-// image bytes between fetch-image and upload-image; refetched if the worker was suspended
+// image bytes between fetch-image and upload-image; refetched if the worker was suspended. At most 8 entries
+// and 64 MB together (a video can be 50 MB), oldest dropped first
 const imageCache = new Map<string, { bytes: ArrayBuffer; mime: string }>();
+const IMAGE_CACHE_BYTES = 64 * 1024 * 1024;
+function cacheImage(sha256: string, img: { bytes: ArrayBuffer; mime: string }) {
+  imageCache.delete(sha256);
+  const total = () => [...imageCache.values()].reduce((s, v) => s + v.bytes.byteLength, 0);
+  while (imageCache.size && (imageCache.size >= 8 || total() + img.bytes.byteLength > IMAGE_CACHE_BYTES)) imageCache.delete(imageCache.keys().next().value!);
+  imageCache.set(sha256, img);
+}
+// X videos found (PLAN-XVIDEO): at most 8, by tweet and media id, for the worker's life; failures aren't kept
+const videoCache = new Map<string, VideoFound>();
+
 
 // Xap (NKIP-0002)
 const xapSentItem = storage.defineItem<SentXap[]>('local:xapsSent', { fallback: [] });
@@ -172,14 +189,16 @@ const updates = updateKeeper({
   clearNotice: () => browser.notifications.clear(UPDATE_NOTICE_ID).catch(() => {}),
 });
 
+// the user's own relays and the defaults, where XMRadar publishes every receipt; index relays keep none
+const xapInboxRelays = async (pubkey: string) => [...new Set(withoutIndex([...(await resolveRelays(pubkey).catch(() => [])), ...DEFAULT_RELAYS]))].slice(0, MAX_RELAYS);
+
 // Xap notifications (PLAN-XAPINBOX): off unless switched on, since asking relays for Xaps to the user's key
 // tells them this browser watches it
 const xapInbox = inboxKeeper({
   held: xapInboxItem,
   enabled: async () => xapNotifyOn(await xmrSettingsItem.getValue()),
   pubkey: () => pubkeyItem.getValue(),
-  // the user's own relays and the defaults, where XMRadar publishes every receipt; index relays keep none
-  relays: async (pubkey) => [...new Set(withoutIndex([...(await resolveRelays(pubkey).catch(() => [])), ...DEFAULT_RELAYS]))].slice(0, MAX_RELAYS),
+  relays: (pubkey) => xapInboxRelays(pubkey),
   read: (relays, filter, timeoutMs) => readEach(relays, filter, timeoutMs),
   query: xapPoolQuery,
   alarms: browser.alarms,
@@ -202,7 +221,11 @@ async function nip65ReadRelays(pubkey: string): Promise<string[]> {
   return relays;
 }
 /** Where an xo goes: the sender's post relays, the author's read relays and the defaults (the shared floor). */
-const xoRelays = async (me: string, author: string) => xoRelayOrder(withoutIndex(await nip65ReadRelays(author)), DEFAULT_RELAYS, withoutIndex(await resolveRelays(me).catch(() => [])));
+// an author with no key known (PLAN-XOREACH): the defaults, the floor both sides read, then the sender's own
+const xoRelays = async (me: string, author: string | null) => xoRelayOrder(author ? withoutIndex(await nip65ReadRelays(author)) : [], DEFAULT_RELAYS, withoutIndex(await resolveRelays(me).catch(() => [])));
+
+// its own read relays and the defaults first: that's where senders put xos
+const xoInboxRelays = async (pubkey: string) => xoRelayOrder(withoutIndex(await nip65ReadRelays(pubkey)), DEFAULT_RELAYS, withoutIndex(await resolveRelays(pubkey).catch(() => [])), MAX_RELAYS);
 
 const xoInbox = xoKeeper({
   held: xoInboxItem,
@@ -210,8 +233,12 @@ const xoInbox = xoKeeper({
   // with the Xap notifications: one switch for "tell me what Monero people send me"
   enabled: async () => xapNotifyOn(await xmrSettingsItem.getValue()),
   pubkey: () => pubkeyItem.getValue(),
-  // its own read relays and the defaults first: that's where senders put xos
-  relays: async (pubkey) => xoRelayOrder(withoutIndex(await nip65ReadRelays(pubkey)), DEFAULT_RELAYS, withoutIndex(await resolveRelays(pubkey).catch(() => [])), MAX_RELAYS),
+  // PLAN-XOREACH: xos sent to the handle before the user had a key
+  handle: async () => {
+    const m = await myHandleItem.getValue();
+    return m?.proven ? m.handle : null;
+  },
+  relays: (pubkey) => xoInboxRelays(pubkey),
   read: (relays, filter) => readEach(relays, filter, 6000),
   query: xapPoolQuery,
   known: async (pk) => knownLiker(await xoLikersItem.getValue(), pk, Date.now()),
@@ -227,6 +254,35 @@ const xoInbox = xoKeeper({
   clearNotice: () => browser.notifications.clear(XO_NOTICE_ID).then(() => {}, () => {}),
 });
 const xoLastItem = storage.defineItem<Record<number, number>>('session:xoLast', { fallback: {} });
+
+// the live inbox (PLAN-LIVEINBOX): while an X tab is visible, one subscription on the inbox relays, with the
+// same filters the 30-minute checks send; an event just makes that kind's check run now (2 s after it, at most
+// one every 5 s per kind: a burst of xos is a few checks, not one each)
+const LIVE_RELAYS = 6;
+const xoLive = throttledCheck(() => xoInbox.check(), { gapMs: 5_000, debounceMs: 2_000 });
+const xapLive = throttledCheck(() => xapInbox.check(), { gapMs: 5_000, debounceMs: 2_000 });
+const liveInbox = liveController(
+  {
+    on: async () => xapNotifyOn(await xmrSettingsItem.getValue()),
+    pubkey: () => pubkeyItem.getValue(),
+    handle: async () => {
+      const me = await myHandleItem.getValue();
+      return me?.proven ? me.handle.toLowerCase() : null;
+    },
+    // the xo and Xap relays together, the xo keeper's order first (its NIP-65 read relays), at most 6
+    relays: async (pk) => [...new Set([...(await xoInboxRelays(pk).catch(() => [])), ...(await xapInboxRelays(pk).catch(() => []))])].slice(0, LIVE_RELAYS),
+    subscribe: (relays, filters) => liveSubscription({ relays, filters, onEvent: (e) => (e.kind === KIND_XO ? xoLive : xapLive).trigger() }),
+    checkedAt: async () => ({ xo: (await xoInboxItem.getValue())?.checkedAt ?? null, xap: (await xapInboxItem.getValue())?.checkedAt ?? null }),
+    kinds: { xo: KIND_XO, xap: KIND_RECEIPT, handleTag: xoHandleValue },
+  },
+  { xo: () => xoLive.trigger(), xap: () => xapLive.trigger() },
+);
+// the switch turned off, or the key or handle changed: close now (a change reopens on the next heartbeat)
+xmrSettingsItem.watch((s) => {
+  if (!xapNotifyOn(s)) liveInbox.stop();
+});
+pubkeyItem.watch(() => liveInbox.stop());
+myHandleItem.watch(() => liveInbox.stop());
 
 // a quoted post's picture (PLAN-QUOTESHOT): capture, decode and crop stay here; only the crop goes back
 const bitmapOf = async (dataUrl: string) => createImageBitmap(await (await fetch(dataUrl)).blob());
@@ -286,6 +342,9 @@ export default defineBackground(() => {
     // another key now signs (switching between the signer and the XMRadar identity, PLAN-MANAGEDID): what
     // the old key sent can't be taken back by this one, and the handle must be proven again for it
     if (old && pk && old !== pk) void rebindToKey();
+  });
+  myHandleItem.watch((m, old) => {
+    if ((m?.proven ? m.handle : null) !== (old?.proven ? old.handle : null)) void xoInbox.apply();
   });
   void settingsItem.getValue().then((s) => updates.apply(updateCheckOn(s)));
   settingsItem.watch((s, old) => {
@@ -496,18 +555,7 @@ const isExtensionPage = (sender: Browser.runtime.MessageSender) => isExtensionPa
 // the tab URL covers the popup opening inside an embedded frame on x.com
 const isXContentScript = (sender: Browser.runtime.MessageSender) => sender.id === browser.runtime.id && (isXUrl(sender.url) || isXUrl(sender.tab?.url));
 
-async function loadImage(url: string): Promise<{ bytes: ArrayBuffer; mime: string }> {
-  assertFetchableImageUrl(url);
-  const res = await fetch(url, { credentials: 'omit', signal: AbortSignal.timeout(20_000) });
-  // redirects are followed (CDNs use them), so re-check where we actually ended up
-  if (res.redirected) assertFetchableImageUrl(res.url);
-  if (!res.ok) throw new Error(`Image fetch failed (${res.status})`);
-  const bytes = await res.arrayBuffer();
-  if (bytes.byteLength > MAX_IMAGE_BYTES) throw new Error('Image is larger than 20 MB');
-  const mime = (res.headers.get('content-type') ?? 'application/octet-stream').split(';')[0]!.trim();
-  if (!mime.startsWith('image/') && !mime.startsWith('video/')) throw new Error(`Not an image (${mime})`);
-  return { bytes, mime };
-}
+const loadImage = (url: string, kind?: 'video') => loadMedia(url, kind, { fetch: (...a) => fetch(...a), readBody: boundedBody, imageMax: MAX_IMAGE_BYTES });
 
 async function imageDim(bytes: ArrayBuffer, mime: string): Promise<string | undefined> {
   try {
@@ -564,24 +612,38 @@ async function handle(msg: BgRequest, sender: Browser.runtime.MessageSender): Pr
     }
     case 'fetch-image': {
       await requireSession(msg.sessionId, sender);
-      const { bytes, mime } = await loadImage(msg.url);
+      const { bytes, mime } = await loadImage(msg.url, msg.kind === 'video' ? 'video' : undefined);
       const sha256 = await sha256Hex(bytes);
       // a few images per post at most; an abandoned one doesn't stay for the worker's lifetime
-      if (imageCache.size >= 8) imageCache.delete(imageCache.keys().next().value!);
-      imageCache.set(sha256, { bytes, mime });
-      return { sha256, mime, size: bytes.byteLength, dim: await imageDim(bytes, mime) } satisfies ImageInfo;
+      cacheImage(sha256, { bytes, mime });
+      // a video's size comes from X (the resolver), not from decoding it here
+      return { sha256, mime, size: bytes.byteLength, dim: mime.startsWith('video/') ? undefined : await imageDim(bytes, mime) } satisfies ImageInfo;
+    }
+    case 'resolve-video': {
+      await requireSession(msg.sessionId, sender);
+      const key = `${msg.statusId}:${msg.mediaId}`;
+      const hit = videoCache.get(key);
+      if (hit) return hit;
+      const found = await resolveXVideo(String(msg.statusId), String(msg.mediaId));
+      // only a found file is kept: a failure is asked again next time, and never pushes a found one out
+      if (found.ok) {
+        if (videoCache.size >= 8) videoCache.delete(videoCache.keys().next().value!);
+        videoCache.set(key, found);
+      }
+      return found;
     }
     case 'upload-image': {
       await requireSession(msg.sessionId, sender);
       let img = imageCache.get(msg.sha256);
       if (!img) {
-        img = await loadImage(msg.url);
+        img = await loadImage(msg.url, msg.kind === 'video' ? 'video' : undefined);
         if ((await sha256Hex(img.bytes)) !== msg.sha256) throw new Error('Image changed since it was hashed');
       }
       try {
         checkBlossomAuth(msg.auth, msg.sha256);
         const { blossomServer } = await settingsItem.getValue();
-        return { url: await uploadBlob(blossomServer, img.bytes, img.mime, msg.sha256, msg.auth) };
+        const timeout = img.mime.startsWith('video/') ? scaledMs(30_000, img.bytes.byteLength) : 30_000;
+        return { url: await uploadBlob(blossomServer, img.bytes, img.mime, msg.sha256, msg.auth, timeout) };
       } finally {
         imageCache.delete(msg.sha256);
       }
@@ -767,6 +829,11 @@ async function handle(msg: BgRequest, sender: Browser.runtime.MessageSender): Pr
           .catch(() => {});
       return res;
     }
+    case 'x-live': {
+      if (!isXContentScript(sender)) throw new Error('Not allowed');
+      await liveInbox.heartbeat();
+      return null;
+    }
     case 'xo-send':
     case 'xo-undo': {
       // a real click on an X post's xo button, in the top frame of an x.com tab
@@ -780,26 +847,59 @@ async function handle(msg: BgRequest, sender: Browser.runtime.MessageSender): Pr
       const sent = await xoSentItem.getValue();
       const nowSecs = Math.floor(Date.now() / 1000);
       if (msg.type === 'xo-send') {
-        if (typeof msg.author !== 'string' || !/^[0-9a-f]{64}$/.test(msg.author)) throw new Error('Bad author');
+        // no key known (PLAN-XOREACH): the xo goes to the handle and waits for its owner to set up
+        const author = msg.author ?? null;
+        if (author !== null && (typeof author !== 'string' || !/^[0-9a-f]{64}$/.test(author))) throw new Error('Bad author');
+        if (typeof msg.handle !== 'string' || !HANDLE_RE.test(msg.handle)) throw new Error('Bad handle');
         // your own post too, as on X: it counts as one, shown from the sent record, never notified
         if (sent[msg.post]) return { ok: true, id: sent[msg.post]!.id };
         // one quiet visit to the signer page: its key and the signature together
-        const { pubkey: me, event } = await signQuietly(xoTemplate(msg.post, msg.author, nowSecs));
-        const results = await publishToRelays(await xoRelays(me, msg.author), event);
+        const { pubkey: me, event } = await signQuietly(xoTemplate(msg.post, author, msg.handle, nowSecs));
+        const results = await publishToRelays(await xoRelays(me, author), event);
         if (!results.some((r) => r.ok)) return { ok: false, error: 'No relay took it' };
-        await xoSentItem.setValue(rememberSent(await xoSentItem.getValue(), msg.post, { id: event.id, at: Date.now(), author: msg.author })).catch(() => {});
+        await xoSentItem.setValue(rememberSent(await xoSentItem.getValue(), msg.post, { id: event.id, at: Date.now(), ...(author ? { author } : {}) })).catch(() => {});
         return { ok: true, id: event.id };
       }
       const mine = sent[msg.post];
       if (!mine) return { ok: true };
       const { pubkey: me, event } = await signQuietly(undoTemplate(mine.id, nowSecs));
-      const results = await publishToRelays(await xoRelays(me, mine.author ?? me), event);
+      const results = await publishToRelays(await xoRelays(me, mine.author ?? null), event);
       // forgotten only once a relay took the deletion, so the button never says undone when it isn't
       if (!results.some((r) => r.ok)) return { ok: false, error: 'Couldn’t undo: no relay took it' };
       const rest = { ...(await xoSentItem.getValue()) };
       delete rest[msg.post];
       await xoSentItem.setValue(rest).catch(() => {});
       return { ok: true };
+    }
+    // the setup card on X (PLAN-XOREACH): a launcher only; keys and signing stay on extension pages
+    case 'setup-card-state': {
+      checkShareMenuSender(sender, browser.runtime.id);
+      const pubkey = await pubkeyItem.getValue();
+      if (!pubkey) return { complete: false };
+      const known = await setupDoneItem.getValue();
+      if (known?.pubkey === pubkey) return { complete: known.done };
+      // not checked for this key yet: a proven handle is worth one status check, anything less isn't done
+      if (!(await myHandleItem.getValue())?.proven) return { complete: false };
+      try {
+        await setupStatus();
+        return { complete: !!(await setupDoneItem.getValue())?.done };
+      } catch {
+        return { complete: false };
+      }
+    }
+    case 'open-setup': {
+      const tabId = checkShareMenuSender(sender, browser.runtime.id);
+      const hint = typeof msg.handleHint === 'string' && HANDLE_RE.test(msg.handleHint) ? msg.handleHint : '';
+      await browser.tabs.create({ url: browser.runtime.getURL('/setup.html') + (hint ? `#${hint}` : ''), openerTabId: tabId, index: (sender.tab?.index ?? 0) + 1 });
+      return null;
+    }
+    case 'proof-tweet-seen': {
+      checkShareMenuSender(sender, browser.runtime.id);
+      if (typeof msg.handle !== 'string' || !HANDLE_RE.test(msg.handle) || typeof msg.statusId !== 'string' || !/^[1-9]\d{0,19}$/.test(msg.statusId)) throw new Error('Bad tweet');
+      const pubkey = await pubkeyItem.getValue();
+      // only a suggestion for setup.html: linking still checks the tweet on X itself
+      if (pubkey) await proofCandidateItem.setValue({ handle: msg.handle, statusId: msg.statusId, pubkey, at: Date.now() });
+      return null;
     }
     case 'xap-post-totals': {
       if (!isXContentScript(sender) || sender.tab?.id == null) throw new Error('Not allowed');
@@ -821,6 +921,10 @@ async function handle(msg: BgRequest, sender: Browser.runtime.MessageSender): Pr
     case 'setup-status': {
       if (!isExtensionPage(sender)) throw new Error('Not allowed');
       return setupStatus();
+    }
+    case 'xmrbio-list': {
+      if (!isExtensionPage(sender)) throw new Error('Not allowed');
+      return setupStatus(true);
     }
     case 'setup-prepare': {
       if (!isExtensionPage(sender)) throw new Error('Not allowed');
@@ -1461,16 +1565,71 @@ async function xmrbioStatus(handle: string, pubkey: string): Promise<XmrbioStatu
   try {
     const r = await lookups.xmrbioResolve(handle);
     if (!r.found) return { found: false };
-    return { found: true, address: r.identity.address, check: r.check, linked: xmrbioLinked(r.identity.proofs, pubkey) };
+    // /resolve finds unlisted profiles too; the directory copy XMRadar holds is what badges come from
+    const dir = await directoryItem.getValue().catch(() => null);
+    const listed = dir ? dir.entries.some((e) => e.handle === handle.toLowerCase()) : undefined;
+    return { found: true, address: r.identity.address, check: r.check, linked: xmrbioLinked(r.identity.proofs, pubkey), ...(listed === undefined ? {} : { listed }) };
   } catch (e) {
     return { found: 'error', reason: e instanceof Error ? e.message : String(e) };
   }
 }
 
-async function setupStatus(): Promise<SetupStatus> {
-  const status = await readSetupStatus();
+async function setupStatus(listNow = false): Promise<SetupStatus> {
+  let status = await readSetupStatus();
+  // "Also list me on xmr.bio" (PLAN-XMRBIOLIST): once the link is verified and xmr.bio doesn't know the handle
+  const mine = await myHandleItem.getValue();
+  const record = mine ? await listOnXmrbio(status, mine.handle, listNow) : null;
+  if (record && record.status !== 'failed' && status.xmrbio?.found !== true && mine) status = { ...status, xmrbio: await xmrbioStatus(mine.handle, status.pubkey) };
+  status = { ...status, listing: record ? { status: record.status, at: record.at, ...(record.error ? { error: record.error } : {}) } : null };
   await setupStatusLast.setValue({ at: Date.now(), status });
+  await setupDoneItem.setValue({ pubkey: status.pubkey, done: !!status.address?.check.ok && status.link?.proof.status === 'verified' }).catch(() => {});
   return status;
+}
+
+let listQueue: Promise<unknown> = Promise.resolve();
+/**
+ * Lists the linked account on xmr.bio, at most once per handle + key + address unless `explicit` (the button):
+ * only with a verified link, a valid standard address or subaddress, and xmr.bio not knowing the handle (the
+ * button also tries when xmr.bio couldn't be asked; the server refuses an existing profile). A profile deleted
+ * on xmr.bio is never listed again on its own: its record stays until the button is pressed.
+ */
+function listOnXmrbio(status: SetupStatus, handle: string, explicit: boolean): Promise<ListRecord | null> {
+  // queued, never merged: two automatic checks at once send once (the second sees the record), and a click
+  // always gets its own try after whatever is running
+  const run = listQueue.then(() => listOnce(status, handle, explicit));
+  listQueue = run.catch(() => {});
+  return run;
+}
+
+async function listOnce(status: SetupStatus, handle: string, explicit: boolean): Promise<ListRecord | null> {
+  const plan = listPlan(status, handle, { explicit, pref: await xmrbioListPrefItem.getValue(), records: await xmrbioListItem.getValue() });
+  if (!plan.send) return plan.had;
+  const { key, address, tweetId } = plan;
+  let outcome: ListRecord;
+  try {
+    const event = await signExact(registerTemplate(plan.handle, address, tweetId, Math.floor(Date.now() / 1000)), status.pubkey);
+    const res = await fetch(XMRBIO_REGISTER_URL, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ handle: plan.handle, address, tweet_id: tweetId, event }),
+      credentials: 'omit',
+      referrerPolicy: 'no-referrer',
+      redirect: 'error',
+      // the server's X lookups stop at 12 s
+      signal: AbortSignal.timeout(20_000),
+    });
+    let body: { success?: boolean; error?: unknown; reason?: unknown } | null = null;
+    try {
+      body = JSON.parse(await cappedText(res, 4096));
+    } catch {
+      body = null;
+    }
+    outcome = { ...listOutcome(res.status, body), at: Date.now() };
+  } catch (e) {
+    outcome = { status: 'failed', at: Date.now(), error: (e as Error).message.slice(0, 200) };
+  }
+  await xmrbioListItem.setValue({ ...(await xmrbioListItem.getValue()), [key]: outcome }).catch(() => {});
+  return outcome;
 }
 
 async function readSetupStatus(): Promise<SetupStatus> {

@@ -5,6 +5,8 @@ import { createShadowRootUi } from 'wxt/utils/content-script-ui/shadow-root';
 import { callBridge } from '../../bridge';
 import { extractPost, type ExtractedImage } from '../../extractors';
 import { expandTweet, xExtractor, tweetFor } from '../../extractors/x';
+import { statusIdFromUrl } from '../../extractors/x-article';
+import type { VideoFound } from '../../nostr/x-video';
 import { takeQuoteShot } from './quote-shot';
 import { MAX_THREAD, loadThread, placeImages, withoutMarkers } from '../../extractors/x-thread';
 import { cleanXLinks } from '../../extractors/x-links';
@@ -143,8 +145,23 @@ async function mountComposer(ctx: ContentScriptContext, msg: OpenComposerMsg, ta
       const selected = new Set<ExtractedImage>(post.images);
       // the post's images, then any pasted or dropped in (notes only); pasted ones live in this page only
       const images = [...post.images];
+      // X videos (PLAN-XVIDEO): each looked up once when the composer opens, the result kept for publishing
+      const videos = new Map<ExtractedImage, Promise<VideoFound>>();
+      const videoOf = (img: ExtractedImage): Promise<VideoFound> => {
+        let p = videos.get(img);
+        if (!p) {
+          p = img.mp4
+            ? Promise.resolve({ ok: true, url: img.mp4 } as VideoFound)
+            : img.mediaId && img.statusId
+              ? sendToBackground({ type: 'resolve-video', sessionId: msg.sessionId, statusId: img.statusId, mediaId: img.mediaId }).catch((e) => ({ ok: false, why: (e as Error).message }) as VideoFound)
+              : Promise.resolve({ ok: false, why: 'not found' } as VideoFound);
+          videos.set(img, p);
+        }
+        return p;
+      };
       const thumb = (img: ExtractedImage) => {
-        const box = h('input', { type: 'checkbox', checked: true, attrs: { 'aria-label': 'Include image' } });
+        const video = !!img.kind;
+        const box = h('input', { type: 'checkbox', checked: true, attrs: { 'aria-label': video ? (img.kind === 'gif' ? 'Include GIF' : 'Include video') : 'Include image' } });
         box.addEventListener('change', () => {
           if (box.checked) selected.add(img);
           else selected.delete(img);
@@ -154,12 +171,31 @@ async function mountComposer(ctx: ContentScriptContext, msg: OpenComposerMsg, ta
         // a thread's images carry the number of their [🖼 N] marker in the text
         const n = post.inlineImages ? post.images.indexOf(img) + 1 : 0;
         const title = shot && 'image' in shot && img === shot.image ? 'Quoted post' : undefined;
+        // a video: its poster (or, for a GIF X shows none for, the muted mp4) with what it is under it
+        const label = video ? h('span', { class: 'media', textContent: img.kind === 'gif' ? 'GIF' : '▶ Video' }) : '';
+        if (video && label) {
+          void videoOf(img).then((f) => {
+            if (img.kind === 'gif') return;
+            if (!f.ok) {
+              label.textContent = f.why === 'too large' ? '▶ Too large: poster + link' : '▶ Poster + link';
+              label.title = `The video couldn't be copied (${f.why}); its poster goes out with a link to the post on X.`;
+              return;
+            }
+            const len = f.duration ? ` · ${Math.floor(f.duration / 60)}:${String(f.duration % 60).padStart(2, '0')}` : '';
+            const mb = f.size ? ` · ${(f.size / (1024 * 1024)).toFixed(1)} MB` : '';
+            label.textContent = `▶ Video${len}${mb}`;
+          });
+        }
+        const preview = img.url
+          ? h('img', { src: img.url, alt: img.alt ?? (pasted.has(img) ? 'Pasted image' : video ? 'Video poster' : '') })
+          : h('video', { src: img.mp4 ?? '', muted: true, attrs: { 'aria-label': 'GIF', playsinline: '', preload: 'metadata' } });
         return h(
           'label',
-          { class: 'thumb', ...(title ? { attrs: { title } } : {}) },
-          h('img', { src: img.url, alt: img.alt ?? (pasted.has(img) ? 'Pasted image' : '') }),
+          { class: video ? 'thumb video' : 'thumb', ...(title ? { attrs: { title } } : {}) },
+          preview,
           box,
           n ? h('span', { class: 'num', textContent: String(n) }) : '',
+          label,
         );
       };
       const imageGrid = h('div', { class: images.length ? 'images' : 'images hidden' }, ...images.map(thumb));
@@ -213,7 +249,9 @@ async function mountComposer(ctx: ContentScriptContext, msg: OpenComposerMsg, ta
         h(
           'div',
           { class: 'options' },
-          single.images.length || thread?.post.images.length ? h('label', {}, reupload, ' Re-upload images to Blossom') : '',
+          single.images.length || thread?.post.images.length
+            ? h('label', {}, reupload, [...single.images, ...(thread?.post.images ?? [])].some((i) => i.kind) ? ' Re-upload images and videos to Blossom' : ' Re-upload images to Blossom')
+            : '',
           h('label', {}, appendSource, ' Append link to original'),
         ),
         debugPre,
@@ -377,7 +415,33 @@ async function mountComposer(ctx: ContentScriptContext, msg: OpenComposerMsg, ta
         return signed;
       };
 
+      /** a video's poster + link lines, when its mp4 couldn't be had (PLAN-XVIDEO) */
+      let videoLinks: string[] = [];
+      const prepareVideo = async (img: ExtractedImage): Promise<PostImage> => {
+        const found = await videoOf(img);
+        const watch = `▶ Video: https://x.com/i/status/${img.statusId ?? statusIdFromUrl(post.sourceUrl) ?? ''}`;
+        if (!found.ok) {
+          if (!img.url) throw new Error(`Video not found (${found.why}); untick it`);
+          videoLinks.push(watch);
+          return prepareImage({ url: img.url, alt: img.alt });
+        }
+        const meta = { image: img.url || undefined, alt: img.alt };
+        const original = { url: found.url, mime: 'video/mp4', dim: found.dim, size: found.size, ...meta };
+        if (!reupload.checked) return original;
+        try {
+          const info = await sendToBackground({ type: 'fetch-image', sessionId: msg.sessionId, url: found.url, kind: 'video' });
+          const auth = await sign(blossomAuthTemplate(info.sha256));
+          const uploaded = await sendToBackground({ type: 'upload-image', sessionId: msg.sessionId, url: found.url, sha256: info.sha256, auth: encodeAuthHeader(auth), kind: 'video' });
+          return { url: uploaded.url, mime: info.mime, sha256: info.sha256, dim: found.dim, size: info.size, ...meta };
+        } catch (e) {
+          if (window.confirm(`Video upload failed: ${(e as Error).message}\n\nUse the original video URL (on X's servers) instead?`)) return original;
+          throw new Error(`Video upload failed: ${(e as Error).message}`);
+        }
+      };
+
       const prepareImage = async (img: ExtractedImage): Promise<PostImage> => {
+        // a video first: the generic path below would publish its poster as if it were the video
+        if (img.kind) return prepareVideo(img);
         if (!reupload.checked && !pasted.has(img)) {
           if (img.url.startsWith('blob:')) throw new Error('This image only exists in the page; enable re-upload or untick it');
           return { url: img.url, alt: img.alt };
@@ -477,6 +541,7 @@ async function mountComposer(ctx: ContentScriptContext, msg: OpenComposerMsg, ta
             if (err) throw new Error(err);
           }
           const prepared = new Map<ExtractedImage, PostImage>();
+          videoLinks = [];
           for (const img of images.filter((i) => selected.has(i))) {
             step({ kind: 'uploading', index: prepared.size + 1, count: selected.size });
             prepared.set(img, await prepareImage(img));
@@ -484,7 +549,8 @@ async function mountComposer(ctx: ContentScriptContext, msg: OpenComposerMsg, ta
           }
           // the setting as it is now; a link pasted after opening is cleaned too
           const cleanNow = cleanXLinksOn(await settingsItem.getValue()) ? cleanXLinks : (t: string) => t;
-          const text = cleanNow(textarea.value);
+          // a video that couldn't be copied: its poster goes out, and a line to watch it on X
+          const text = [cleanNow(textarea.value), ...new Set(videoLinks)].filter(Boolean).join('\n\n');
           let template: EventTemplate;
           if (art) {
             template = articleTemplate({

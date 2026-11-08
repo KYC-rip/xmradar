@@ -17,16 +17,16 @@ const people = Array.from({ length: 14 }, () => generateSecretKey());
 const PK = people.map((sk) => getPublicKey(sk));
 const ADDRESS = (JSON.parse(readFileSync(join(process.cwd(), 'tests/fixtures/nkip0003-v1.json'), 'utf8')) as { test_wallet: { primary_address: string } }).test_wallet.primary_address;
 const sign = (sk: Uint8Array, t: { kind: number; tags: string[][]; content: string; created_at: number }) => finalizeEvent(t, sk);
-const xo = (from: number, post: string, at = SECS - 60, to = ME) => sign(people[from]!, xoTemplate(post, to, at));
+const xo = (from: number, post: string, at = SECS - 60, to: string | null = ME, handle = 'me') => sign(people[from]!, xoTemplate(post, to, handle, at));
 
 describe('the xo event', () => {
   it('names the post as Xaps do, and its author', () => {
-    const t = xoTemplate('123', ME, SECS);
-    expect(t).toMatchObject({ kind: 17, content: XO_CONTENT, tags: [['k', 'web'], ['i', 'https://x.com/i/status/123'], ['p', ME]] });
-    expect(xoOf({ ...t }, SECS)).toEqual({ statusId: '123', author: ME });
+    const t = xoTemplate('123', ME, '@Alice', SECS);
+    expect(t).toMatchObject({ kind: 17, content: XO_CONTENT, tags: [['k', 'web'], ['i', 'https://x.com/i/status/123'], ['X', 'twitter:alice'], ['p', ME]] });
+    expect(xoOf({ ...t }, SECS)).toEqual({ statusId: '123', author: ME, handle: 'alice' });
   });
   it('anything else is no xo', () => {
-    const t = xoTemplate('123', ME, SECS);
+    const t = xoTemplate('123', ME, 'alice', SECS);
     const bad = [
       { ...t, content: '+' },
       { ...t, kind: 7 },
@@ -34,10 +34,23 @@ describe('the xo event', () => {
       { ...t, tags: [...t.tags, ['k', 'web']] },
       { ...t, tags: [...t.tags, ['e', 'x']] },
       { ...t, tags: [...t.tags, ['p', PK[0]!]] },
-      { ...t, tags: t.tags.filter((x) => x[0] !== 'p') },
+      { ...t, tags: t.tags.filter((x) => x[0] !== 'p' && x[0] !== 'X') },
+      { ...t, tags: [...t.tags, ['X', 'twitter:bob']] },
+      { ...t, tags: [...t.tags.filter((x) => x[0] !== 'X'), ['X', 'alice']] },
+      { ...t, tags: [...t.tags.filter((x) => x[0] !== 'X'), ['X', 'twitter:waytoolonghandle1']] },
       { ...t, tags: [['k', 'web'], ['i', 'https://evil.example/status/1'], ['p', ME]] },
     ];
     for (const b of bad) expect(xoOf(b, SECS)).toBeNull();
+    // handles are case-insensitive: a mixed-case X value is read lowercased
+    expect(xoOf({ ...t, tags: [...t.tags.filter((x) => x[0] !== 'X'), ['X', 'twitter:Alice']] }, SECS)?.handle).toBe('alice');
+  });
+  it('with no key known it names only the handle (PLAN-XOREACH)', () => {
+    const t = xoTemplate('123', null, 'alice', SECS);
+    expect(t.tags).toEqual([['k', 'web'], ['i', 'https://x.com/i/status/123'], ['X', 'twitter:alice']]);
+    expect(xoOf(t, SECS)).toEqual({ statusId: '123', author: null, handle: 'alice' });
+    // a 0.6.12 xo: p only
+    expect(xoOf({ ...t, tags: [['k', 'web'], ['i', 'https://x.com/i/status/123'], ['p', ME]] }, SECS)).toEqual({ statusId: '123', author: ME, handle: null });
+    expect(() => xoTemplate('123', null, 'not a handle', SECS)).toThrow();
   });
   it('taking one back is a NIP-09 deletion of it', () => {
     expect(undoTemplate('a'.repeat(64), SECS)).toEqual({ kind: 5, created_at: SECS, content: '', tags: [['e', 'a'.repeat(64)], ['k', '17']] });
@@ -166,7 +179,7 @@ describe('the xo inbox', () => {
     expect(xoCounts(state)).toEqual({ '8': 1 });
   });
   it('xos to someone else, and the user’s own, aren’t counted', () => {
-    const { state } = run(freshXoInbox(ME), [xo(0, '1', SECS - 60, PK[3]!), sign(me, xoTemplate('1', ME, SECS - 60))], all(ok('x')));
+    const { state } = run(freshXoInbox(ME), [xo(0, '1', SECS - 60, PK[3]!), sign(me, xoTemplate('1', ME, 'me', SECS - 60))], all(ok('x')));
     expect(xoCounts(state)).toEqual({});
   });
   it('looks back two days past the last xo, 30 days the first time', () => {
@@ -188,6 +201,7 @@ describe('the xo inbox', () => {
       counts: { setValue: async () => {} },
       enabled: async () => true,
       pubkey: async () => ME,
+      handle: async () => null,
       relays: async () => ['wss://r'],
       read: async () => ({ events, readable: ['wss://r'] }),
       query: async () => [],
@@ -214,5 +228,17 @@ describe('xoKey (PLAN-XOKEYS)', () => {
     expect(xoKey(mergeBadge('a', [bio, nostr]))).toBe(PK[0]);
     expect(xoKey(mergeBadge('a', [bio]))).toBe(PK[1]);
     expect(xoKey(mergeBadge('a', [{ ...bio, pubkey: undefined }]))).toBeNull();
+  });
+});
+
+import { proofTweetText } from '../src/identity/proof-tweet';
+import { containsNpub } from '../src/identity/nostr';
+import { npubEncode as npubOf } from 'nostr-tools/nip19';
+describe('the proof tweet', () => {
+  it('ends with where it’s from, and still proves the key', () => {
+    const npub = npubOf(PK[0]!);
+    const text = proofTweetText(npub);
+    expect(text).toBe(`Verifying that I control the following Nostr public key: ${npub}\n\ntry it on: XMRadar.app`);
+    expect(containsNpub(text, npub)).toBe(true);
   });
 });

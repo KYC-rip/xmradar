@@ -17,8 +17,11 @@ export interface KeyStore {
   delete(): Promise<void>;
 }
 
-/** xo and its deletion, Xap receipts and confirmations, profile name, relay list, Monero address, X proof. */
-export const MANAGED_KINDS: ReadonlySet<number> = new Set([17, 5, KIND_RECEIPT, KIND_CONFIRMATION, 0, 10002, KIND_PAYTO, KIND_IDENTITIES]);
+/**
+ * xo and its deletion, Xap receipts and confirmations, profile name, relay list, Monero address, X proof, and
+ * the xmr.bio listing request (27235, built only by `registerTemplate`).
+ */
+export const MANAGED_KINDS: ReadonlySet<number> = new Set([17, 5, KIND_RECEIPT, KIND_CONFIRMATION, 0, 10002, KIND_PAYTO, KIND_IDENTITIES, 27235]);
 
 export class KindNotAllowed extends Error {}
 

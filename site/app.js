@@ -1,6 +1,6 @@
-// The hero carousel: two slides, switched by the tabs (click or arrow keys), and every 6 s unless it's
+// The hero carousel: its slides, switched by the tabs (click or arrow keys), and every 6 s unless it's
 // paused, the pointer or focus is in it, or the visitor prefers reduced motion. Without this script the
-// first slide shows and the second stays hidden (it's marked up hidden).
+// first slide shows and the others stay hidden (they're marked up hidden).
 (() => {
   const hero = document.getElementById('top');
   const slides = [...hero.querySelectorAll('.slide')];
