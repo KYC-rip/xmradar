@@ -1,7 +1,7 @@
 import { naddrEncode, neventEncode } from 'nostr-tools/nip19';
 import { verifyEvent, type Event, type EventTemplate } from 'nostr-tools/pure';
 import { installBridge } from '../bridge';
-import { normalizeHandle } from '../identity/envelope';
+import { HANDLE_RE, normalizeHandle } from '../identity/envelope';
 import { KIND_IDENTITIES, KIND_PAYTO, moneroPayto, parseTweetProof, poolQuery, twitterClaims, verifyTwitterProof, type ProofResult, validEvent } from '../identity/nostr';
 import { buildMerged, kindFor, newestOwn, setupTargets, tweetUrl, type SetupAction } from '../identity/setup';
 import { validateMoneroAddress } from '../xmr/address';

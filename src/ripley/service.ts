@@ -11,7 +11,7 @@ export const version = typeof __XMRADAR_VERSION__ === 'string' ? __XMRADAR_VERSI
 export { xLookups, REQUEST_TYPES, type XLookups, type XLookupsDeps, type Kv, type RateKey } from '../service/x-lookups';
 export { directoryKeeper, boundedBody, type KeeperDeps };
 // phase 3: xo (Ripley signs, after its own confirm) and the synced marks (Ripley records copies to Nostr)
-export { KIND_XO, XO_CONTENT, xoTemplate, undoTemplate, xoOf, readRelaysFrom, xoRelayOrder } from '../xo/event';
+export { KIND_XO, XO_CONTENT, xoTemplate, xoHandleValue, undoTemplate, xoOf, readRelaysFrom, xoRelayOrder } from '../xo/event';
 export { rememberSent, MAX_SENT, type SentXo } from '../xo/sent';
 export { xoKeeper, freshXoInbox, xoCounts, XO_ALARM, XO_MINUTES, type XoInbox, type XoDeps, type XoItem } from '../xo/inbox';
 export { verifyLiker, knownLiker, rememberLiker, type Liker, type LikerCache } from '../xo/verify';
@@ -20,6 +20,9 @@ export { xoKey } from '../identity/resolve';
 // phase 4: tip receipts, published by RipleyOS after its wallet's send and the user's yes
 export { publishXap, withSent, type PublishDeps, type PublishRequest } from '../xap/service';
 export { recordSynced, syncedLink, MAX_SYNCED, type SyncedPost, type SyncedPosts } from '../nostr/synced';
+// 0.6.15 live inbox: RipleyOS holds the subscription (its own relay pool), XMRadar decides when and for what
+export { liveController, throttledCheck, LIVE_IDLE_MS, type LiveFilter, type ControllerDeps } from '../nostr/live';
+export { KIND_RECEIPT } from '../xap/events';
 
 /**
  * `browser.alarms` for the directory keeper, on timers: the hourly refresh and the retry run while RipleyOS

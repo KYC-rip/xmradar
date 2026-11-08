@@ -125,7 +125,11 @@ describe('the Ripley service bundle (built file)', () => {
   it('exports what Ripley needs to sign xos and record copies itself (phase 3)', async () => {
     const mod = await import(/* @vite-ignore */ `data:text/javascript;base64,${Buffer.from(serviceBundle).toString('base64')}`);
     for (const f of ['xoTemplate', 'undoTemplate', 'xoRelayOrder', 'readRelaysFrom', 'rememberSent', 'xoKeeper', 'freshXoInbox', 'verifyLiker', 'knownLiker', 'rememberLiker', 'recordSynced', 'syncedLink', 'xoKey', 'publishXap', 'withSent']) expect(typeof mod[f]).toBe('function');
-    expect(mod.xoTemplate('123', 'a'.repeat(64), 1)).toMatchObject({ kind: 17, content: 'ɱ❤' });
+    expect(mod.xoTemplate('123', 'a'.repeat(64), 'Alice_1', 1)).toMatchObject({ kind: 17, content: 'ɱ❤' });
+    expect(mod.xoTemplate('123', 'a'.repeat(64), 'Alice_1', 1).tags).toContainEqual(['X', mod.xoHandleValue('Alice_1')]);
+    for (const f of ['liveController', 'throttledCheck', 'xoHandleValue']) expect(typeof mod[f]).toBe('function');
+    expect(mod.LIVE_IDLE_MS).toBe(70_000);
+    expect(mod.KIND_RECEIPT).toBe(9042);
     expect(mod.MAX_SENT).toBeGreaterThan(0);
     expect(mod.MAX_SYNCED).toBeGreaterThan(0);
   });
