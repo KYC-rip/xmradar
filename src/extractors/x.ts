@@ -159,9 +159,16 @@ export const xExtractor: Extractor = {
       .filter((tile) => !tile.parentElement?.closest('[data-testid="tweetPhoto"]'))
       .map((tile) => tileMedia(tile, status))
       .filter((i): i is ExtractedImage => !!i && (!!i.url || !!i.mp4));
+    // a link X draws as a card is left out of the text: its t.co link goes after it, made its destination
+    // when the composer opens (tco.ts). A quoted tweet's card is the quote's, not this tweet's.
+    const cards = [...article.querySelectorAll('[data-testid="card.wrapper"] a[href]')]
+      .filter(own)
+      .map((a) => a.getAttribute('href') ?? '')
+      .filter((href, i, all) => /^https:\/\/t\.co\/[A-Za-z0-9]{4,16}$/.test(href) && all.indexOf(href) === i && !text.includes(href));
+    const withCards = cards.length ? [text.trimEnd(), cards.join('\n')].filter(Boolean).join('\n\n') : text;
     const permalink = ownPermalink(article)?.getAttribute('href');
     // best effort: X may render the shared-article card through a different link
     const articleCard = !!article.querySelector('a[href*="/article/"]');
-    return { site: 'x', text, images, sourceUrl: absUrl(permalink, doc) ?? doc.location.href, ...(articleCard ? { articleCard } : {}) };
+    return { site: 'x', text: withCards, images, sourceUrl: absUrl(permalink, doc) ?? doc.location.href, ...(articleCard ? { articleCard } : {}) };
   },
 };

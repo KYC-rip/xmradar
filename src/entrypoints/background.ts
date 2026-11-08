@@ -18,6 +18,10 @@ import { uploadBlob } from '../nostr/blossom';
 import { liveController, liveSubscription, throttledCheck } from '../nostr/live';
 import { scaledMs } from '../nostr/load-media';
 import { resolveXVideo, type VideoFound } from '../nostr/x-video';
+import { resolveTco } from '../extractors/tco';
+import { writeGate, writeWith, type WriteResult } from '../ai/writing';
+import { aiReady } from '../ai/tags';
+import { aiKeyItem, aiTagsItem, writingOn } from '../settings';
 import { loadMedia } from '../nostr/load-media';
 import { statusIdFromUrl } from '../extractors/x-article';
 import { KIND_ARTICLE, checkBlossomAuth, checkPublishable, checkSigned, dedupeKey, sha256Hex } from '../nostr/event';
@@ -147,6 +151,10 @@ function cacheImage(sha256: string, img: { bytes: ArrayBuffer; mime: string }) {
 }
 // X videos found (PLAN-XVIDEO): at most 8, by tweet and media id, for the worker's life; failures aren't kept
 const videoCache = new Map<string, VideoFound>();
+/** t.co code → destination (found ones only) */
+const tcoCache = new Map<string, string>();
+/** writing help (PLAN-XPROOFREAD): one request per tab at a time */
+const writeGates = writeGate();
 
 
 // Xap (NKIP-0002)
@@ -479,6 +487,7 @@ export default defineBackground(() => {
   browser.tabs.onRemoved.addListener((tabId) => {
     buckets.delete(tabId);
     xapBuckets.delete(tabId);
+    writeGates.closed(tabId);
     receiptChecks.delete(tabId);
     void dropTabState(tabId);
     void shareMenuLast.getValue().then((last) => (tabId in last ? shareMenuLast.setValue(withoutTab(last, tabId)) : undefined));
@@ -661,6 +670,24 @@ async function handle(msg: BgRequest, sender: Browser.runtime.MessageSender): Pr
       cacheImage(sha256, { bytes, mime });
       // a video's size comes from X (the resolver), not from decoding it here
       return { sha256, mime, size: bytes.byteLength, dim: mime.startsWith('video/') ? undefined : await imageDim(bytes, mime) } satisfies ImageInfo;
+    }
+    case 'resolve-tco': {
+      await requireSession(msg.sessionId, sender);
+      const codes = (Array.isArray(msg.codes) ? msg.codes : []).filter((c): c is string => typeof c === 'string').slice(0, 10);
+      const out: Record<string, string | null> = {};
+      await Promise.all(
+        codes.map(async (code) => {
+          if (tcoCache.has(code)) return void (out[code] = tcoCache.get(code)!);
+          const dest = await resolveTco(code);
+          out[code] = dest;
+          // only found ones are kept; a t.co link never changes where it goes
+          if (dest) {
+            if (tcoCache.size >= 200) tcoCache.delete(tcoCache.keys().next().value!);
+            tcoCache.set(code, dest);
+          }
+        }),
+      );
+      return out;
     }
     case 'resolve-video': {
       await requireSession(msg.sessionId, sender);
@@ -876,6 +903,25 @@ async function handle(msg: BgRequest, sender: Browser.runtime.MessageSender): Pr
           .then((m) => xapMarksItem.setValue(withMark(m, markFor(msg.recipient, msg.address, msg.post), null, Date.now())))
           .catch(() => {});
       return res;
+    }
+    case 'ai-write-ready': {
+      if (!isXContentScript(sender)) throw new Error('Not allowed');
+      const ai = await aiTagsItem.getValue();
+      return { ready: writingOn(ai) && aiReady(ai, await aiKeyItem.getValue()), source: ai.source };
+    }
+    case 'ai-write': {
+      // a click in X's composer, in an x.com tab; the key stays here
+      if (!isXContentScript(sender) || sender.tab?.id == null) throw new Error('Not allowed');
+      const ai = await aiTagsItem.getValue();
+      if (!writingOn(ai)) return { status: 'failed', reason: 'Writing help is off in Options' } satisfies WriteResult;
+      const signal = await writeGates.start(sender.tab.id);
+      if (signal.aborted) return { status: 'failed', reason: 'Cancelled' } satisfies WriteResult;
+      return writeWith(ai, await aiKeyItem.getValue(), msg.mode, String(msg.text ?? ''), signal);
+    }
+    case 'ai-write-cancel': {
+      if (!isXContentScript(sender) || sender.tab?.id == null) throw new Error('Not allowed');
+      writeGates.cancel(sender.tab.id);
+      return null;
     }
     case 'x-live': {
       if (!isXContentScript(sender)) throw new Error('Not allowed');

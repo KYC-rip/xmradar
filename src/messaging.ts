@@ -161,6 +161,13 @@ export type BgRequest =
   | { type: 'upload-image'; sessionId: string; url: string; sha256: string; auth: string; kind?: 'video' }
   /** the mp4 behind an X video, found by its tweet and media id (PLAN-XVIDEO) */
   | { type: 'resolve-video'; sessionId: string; statusId: string; mediaId: string }
+  /** writing help in X's composer (PLAN-XPROOFREAD): from x.com content scripts only */
+  | { type: 'ai-write-ready' }
+  | { type: 'ai-write'; mode: import('./ai/writing').WriteMode; text: string }
+  /** the panel closed: its request is dropped */
+  | { type: 'ai-write-cancel' }
+  /** t.co links' destinations, read from t.co's own page (a card's link has only its t.co address) */
+  | { type: 'resolve-tco'; sessionId: string; codes: string[] }
   | { type: 'publish'; sessionId: string; event: Event; sourceUrl: string; text: string }
   /** `sourceUrl`: the post copied, so a retry that is the first to succeed still marks it (PLAN-SYNCEDMARK) */
   | { type: 'republish'; sessionId: string; event: Event; relays: string[]; sourceUrl?: string }
@@ -244,6 +251,12 @@ export type BgResponse<T extends BgRequest['type']> = T extends 'fetch-image'
   ? ImageInfo
   : T extends 'resolve-video'
   ? import('./nostr/x-video').VideoFound
+  : T extends 'ai-write-ready'
+  ? { ready: boolean; source: import('./settings').AiSource }
+  : T extends 'ai-write'
+  ? import('./ai/writing').WriteResult
+  : T extends 'resolve-tco'
+  ? Record<string, string | null>
   : T extends 'upload-image'
     ? { url: string }
     : T extends 'publish'

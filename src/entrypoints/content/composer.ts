@@ -3,7 +3,8 @@ import type { Event, EventTemplate } from 'nostr-tools/pure';
 import type { ContentScriptContext } from 'wxt/utils/content-script-context';
 import { createShadowRootUi } from 'wxt/utils/content-script-ui/shadow-root';
 import { callBridge } from '../../bridge';
-import { extractPost, type ExtractedImage } from '../../extractors';
+import { extractPost, type ExtractedImage, type ExtractedPost } from '../../extractors';
+import { expandTco, tcoCodes } from '../../extractors/tco';
 import { expandTweet, xExtractor, tweetFor } from '../../extractors/x';
 import { statusIdFromUrl } from '../../extractors/x-article';
 import type { VideoFound } from '../../nostr/x-video';
@@ -58,6 +59,14 @@ export async function openComposer(ctx: ContentScriptContext, msg: OpenComposerM
   }
 }
 
+/** Each post's t.co links made their destinations, in place; a link not found stays as it is. */
+async function expandCardLinks(posts: ExtractedPost[], sessionId: string): Promise<void> {
+  const codes = tcoCodes(posts.map((p) => p.text).join('\n'));
+  if (!codes.length) return;
+  const found = await sendToBackground({ type: 'resolve-tco', sessionId, codes }).catch(() => ({}) as Record<string, string | null>);
+  for (const p of posts) p.text = expandTco(p.text, found);
+}
+
 async function mountComposer(ctx: ContentScriptContext, msg: OpenComposerMsg, target: Element | null): Promise<ComposerInstance> {
   // a timeline tweet may be cut behind "Show more"; a selection is taken as it is
   if (!msg.selection?.trim() && xExtractor.matches(document)) target = (await expandTweet(target, document).catch(() => null)) ?? target;
@@ -68,7 +77,10 @@ async function mountComposer(ctx: ContentScriptContext, msg: OpenComposerMsg, ta
   let post = thread?.post ?? single;
   // the opened tweet's quoted post as a picture, taken before anything of the composer shows (PLAN-QUOTESHOT)
   const quoted = !fallback && !msg.selection?.trim() && !msg.srcUrl && !single.article && xExtractor.matches(document) ? tweetFor(target, document) : null;
+  // card links' t.co addresses made their destinations, asked while the quote is pictured
+  const tco = !single.article && xExtractor.matches(document) ? expandCardLinks([single, ...(thread ? [thread.post] : [])], msg.sessionId) : null;
   const shot = quoted ? await takeQuoteShot(quoted, msg.sessionId) : null;
+  await tco;
   const settings = await settingsItem.getValue();
   const previousFocus = document.activeElement as HTMLElement | null;
   let closed = false;

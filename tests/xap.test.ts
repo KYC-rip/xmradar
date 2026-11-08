@@ -652,6 +652,12 @@ describe('external post tips (NKIP-0002, R14–R16)', () => {
       <a href="/XBToshi/status/${ID}/analytics">Views</a><a href="/XBToshi/status/${ID}"><time>1h</time></a>
     </article>`);
     expect(tweetSlot(focal.querySelector('article')!)?.statusId).toBe(ID);
+    // an edited post's own page: its timestamp links to the edit history
+    const edited = makeDoc('https://x.com/XBToshi/status/' + ID, `<article data-testid="tweet">
+      <div data-testid="User-Name"><div><a href="/XBToshi">CyberSatoshi</a></div></div>
+      <a href="/XBToshi/status/${ID}/photo/1"></a><a href="/XBToshi/status/${ID}/history"><time>Last edited 1h</time></a>
+    </article>`);
+    expect(tweetSlot(edited.querySelector('article')!)?.statusId).toBe(ID);
     // an X Article's reading page: author and post from the URL
     const view = makeDoc('https://x.com/XBToshi/article/' + ID, '<article data-testid="twitterArticleReadView"></article>').querySelector('article')!;
     expect(articleViewSlot(view, { hostname: 'x.com', pathname: `/XBToshi/article/${ID}` })).toMatchObject({ handle: 'XBToshi', statusId: ID, article: view });

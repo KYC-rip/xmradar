@@ -53,7 +53,8 @@ export function tweetSlot(article: Element): BadgeSlot | null {
   // the timestamp link: in the name row on timelines; on a tweet's own page X puts it under the text, so
   // take the article's timestamp link outside any quoted tweet, by the same author
   const own = (a: Element) => {
-    const m = /^\/([A-Za-z0-9_]{1,15})\/status\/(\d{1,20})$/.exec(a.getAttribute('href') ?? '');
+    // an edited post's timestamp links to its edit history: `/<handle>/status/<id>/history`
+    const m = /^\/([A-Za-z0-9_]{1,15})\/status\/(\d{1,20})(?:\/history)?$/.exec(a.getAttribute('href') ?? '');
     return m && m[1]!.toLowerCase() === handle.toLowerCase() ? m[2]! : null;
   };
   const inName = name.querySelector('a[href*="/status/"]');

@@ -3,6 +3,12 @@
 What changed in each XMRadar release. Downloads, checksums and build provenance are on the
 [releases page](https://github.com/KYC-rip/xmradar/releases).
 
+## 0.6.16
+
+- **Writing help in X's composer.** A pen next to X's emoji button proofreads your post, shortens it to fit, or puts it into natural English, with the AI you set up for tag suggestions (a local model keeps the text on your computer; Anthropic or an OpenAI-compatible provider gets it with your own key, as tags do). The panel shows the changes word by word, warns if the AI dropped an @mention, #tag, $cashtag or link, and counts characters the way X does. Select part of the draft to work on just that part. Replace puts it in the composer and keeps X's undo; Copy and Keep mine are there too. Switch: Options → AI: tag suggestions and writing help → *Writing help in X's composer*.
+- **Links shown as cards.** When X turns a link into a card, it takes it out of the post's text, so copying to Nostr lost it. XMRadar now adds the card's link back, as the real address: it reads where X's t.co link goes from t.co's own page, without following it, so the linked site is never contacted.
+- An edited post's own page now shows that post's Xaps and its xo button, not your whole profile's Xap total.
+
 ## 0.6.15
 
 - **xos and Xaps within seconds.** While an X tab is open and showing, XMRadar keeps one live connection to your inbox relays (the same relays and the same question as the 30-minute check), so an xo or a Xap shows up, with its notification and the floating hearts, a few seconds after it's sent. It closes about a minute after you leave X; the 30-minute check stays for the rest of the time, and coming back to X catches up at once. Needs *Tell me when I get a Xap or an xo* on.

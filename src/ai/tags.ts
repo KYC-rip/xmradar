@@ -12,7 +12,7 @@ export const ANTHROPIC_MODEL = 'claude-haiku-5-5';
 export const LOCAL_SERVERS = ['http://localhost:11434', 'http://localhost:1234'];
 /** Ollama turns away other origins, extensions included, until they're allowed */
 export const OLLAMA_REFUSED =
-  'The local server refused the extension. Ollama: allow it with OLLAMA_ORIGINS (steps under Tag suggestions in Options), then restart it. LM Studio: turn on CORS in its server settings.';
+  'The local server refused the extension. Ollama: allow it with OLLAMA_ORIGINS (steps in Options, under AI), then restart it. LM Studio: turn on CORS in its server settings.';
 export const SAMPLE_TEXT = 'Monero 0.19 is out: faster sync, better privacy for everyone. Update your node and wallet today.';
 
 export type SuggestResult = { status: 'ok'; tags: string[] } | { status: 'failed'; reason: string };
@@ -34,7 +34,7 @@ export function validBaseUrl(source: AiTagSettings['source'], url: string): bool
   return false;
 }
 
-const base = (url: string) => url.trim().replace(/\/+$/, '');
+export const base = (url: string) => url.trim().replace(/\/+$/, '');
 /** A local server's root: `http://localhost:11434/v1` and `…:11434` ask the same endpoint. */
 export const localRoot = (url: string) => base(url).replace(/\/v1$/, '');
 
@@ -123,14 +123,14 @@ export function parseTagReply(reply: string): string[] | null {
   return null;
 }
 
-const replyText = (source: AiTagSettings['source'], body: unknown): string => {
+export const replyText = (source: AiTagSettings['source'], body: unknown): string => {
   const b = body as { content?: { type?: string; text?: string }[]; choices?: { message?: { content?: unknown } }[] };
   if (source === 'anthropic') return (b.content ?? []).filter((c) => c?.type === 'text').map((c) => c.text ?? '').join('\n');
   const c = b.choices?.[0]?.message?.content;
   return typeof c === 'string' ? c : '';
 };
 
-const statusReason = (code: number, local: boolean) =>
+export const statusReason = (code: number, local: boolean) =>
   local && code === 403 ? OLLAMA_REFUSED : code === 401 || code === 403 ? 'Key rejected' : code === 404 ? 'Model or endpoint not found' : code === 429 ? 'Rate limited; try again later' : `The provider answered ${code}`;
 
 /** Ask once, for tags besides `have`. Errors come back as a short reason that never carries the key. */

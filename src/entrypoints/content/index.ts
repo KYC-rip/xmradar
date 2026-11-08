@@ -8,6 +8,7 @@ import { openTip } from './tip';
 import { startReceipts } from './receipt';
 import { startSiteInfo } from './site';
 import { startBadges } from './x-badges';
+import { startWriting } from './x-write';
 import { startCopyLinks } from './x-copy-links';
 import { startSyncedMarks } from './x-synced';
 import { startSetupCard } from './x-setup-card';
@@ -25,6 +26,8 @@ export default defineContentScript({
 
     const onX = window === window.top && isXHost(location.hostname);
     if (onX) startBadges(ctx);
+    // writing help in X's composer (PLAN-XPROOFREAD): its own switch, not the badges'
+    if (onX) startWriting(ctx);
     // posts copied to Nostr get a small mark; switched live from the options page
     if (onX) startSyncedMarks(ctx);
     // until the Monero identity is set up: a card that opens setup.html (PLAN-XOREACH)

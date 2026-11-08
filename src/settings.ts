@@ -99,7 +99,10 @@ export interface AiTagSettings {
   auto?: boolean;
   /** the answer goes straight into the tags (default tags the model drops stay one click away) */
   autoAdd?: boolean;
+  /** Proofread / Shorten / English in X's composer (PLAN-XPROOFREAD); unset means on */
+  writing?: boolean;
 }
+export const writingOn = (s: Partial<AiTagSettings> | null | undefined) => s?.writing !== false;
 /** Unset means on for a local model (nothing leaves the computer) and off for a provider; a choice always wins. */
 export const autoOn = (s: Partial<AiTagSettings> | null | undefined) => s?.auto ?? s?.source === 'local';
 export const autoAddOn = (s: Partial<AiTagSettings> | null | undefined) => s?.autoAdd ?? s?.source === 'local';

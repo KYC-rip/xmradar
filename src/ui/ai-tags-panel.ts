@@ -1,6 +1,6 @@
 import { ANTHROPIC_MODEL, findLocalModels, localRoot, OLLAMA_REFUSED, SAMPLE_TEXT, suggestTags, validBaseUrl } from '../ai/tags';
 import { cleanTag, MAX_TAGS } from '../nostr/tags';
-import { aiKeyItem, aiTagsItem, autoAddOn, autoOn, DEFAULT_AI_TAGS, hashtagLineOn, patchAiTags, patchSettings, settingsItem, type AiSource, type AiTagSettings } from '../settings';
+import { aiKeyItem, aiTagsItem, autoAddOn, autoOn, DEFAULT_AI_TAGS, hashtagLineOn, patchAiTags, writingOn, patchSettings, settingsItem, type AiSource, type AiTagSettings } from '../settings';
 import { setStatus } from './dom';
 
 type FetchFn = typeof fetch;
@@ -71,6 +71,7 @@ export function mountAiTagsPanel(root: ParentNode, fetchFn: FetchFn = (...a) => 
   const auto = byId<HTMLInputElement>(root, 'ai-auto');
   const autoKey = byId(root, 'ai-auto-key');
   const autoAdd = byId<HTMLInputElement>(root, 'ai-auto-add');
+  const writing = byId<HTMLInputElement>(root, 'ai-writing');
   // the setup steps allow only this extension's own address (a Firefox install has its own UUID)
   for (const o of root.querySelectorAll('.ext-origin')) o.textContent = location.origin;
   let s: AiTagSettings = DEFAULT_AI_TAGS;
@@ -95,6 +96,7 @@ export function mountAiTagsPanel(root: ParentNode, fetchFn: FetchFn = (...a) => 
     base.hidden = s.source !== 'openai';
     auto.checked = autoOn(s);
     autoAdd.checked = autoAddOn(s);
+    writing.checked = writingOn(s);
     autoKey.hidden = local || !autoOn(s);
   };
   const save = async (patch: Partial<AiTagSettings>) => {
@@ -109,6 +111,7 @@ export function mountAiTagsPanel(root: ParentNode, fetchFn: FetchFn = (...a) => 
   on.addEventListener('change', () => void save({ on: on.checked }));
   auto.addEventListener('change', () => void save({ auto: auto.checked }));
   autoAdd.addEventListener('change', () => void save({ autoAdd: autoAdd.checked }));
+  writing.addEventListener('change', () => void save({ writing: writing.checked }));
   for (const r of radios)
     r.addEventListener('change', () => {
       if (r.checked) switchTo(r.value === 'local' ? 'local' : provider.value === 'anthropic' ? 'anthropic' : 'openai');
