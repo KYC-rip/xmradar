@@ -19,7 +19,7 @@
     "@noble/curves": "2.0.1",
     "@noble/hashes": "2.0.1",
     "@scure/base": "2.4.0",
-    "nostr-tools": "2.25.2",
+    "nostr-tools": "2.26.0",
     "openpgp": "6.3.2",
     "qrcode-generator": "2.0.4",
     "tldts": "7.4.19"
