@@ -3,6 +3,10 @@
 What changed in each XMRadar release. Downloads, checksums and build provenance are on the
 [releases page](https://github.com/KYC-rip/xmradar/releases).
 
+## 0.6.17
+
+- The project's plans and design notes now live in the repository, under `docs/`, next to the code they describe. No change to the extension.
+
 ## 0.6.16
 
 - **Writing help in X's composer.** A pen next to X's emoji button proofreads your post, shortens it to fit, or puts it into natural English, with the AI you set up for tag suggestions (a local model keeps the text on your computer; Anthropic or an OpenAI-compatible provider gets it with your own key, as tags do). The panel shows the changes word by word, warns if the AI dropped an @mention, #tag, $cashtag or link, and counts characters the way X does. Select part of the draft to work on just that part. Replace puts it in the composer and keeps X's undo; Copy and Keep mine are there too. Switch: Options → AI: tag suggestions and writing help → *Writing help in X's composer*.
