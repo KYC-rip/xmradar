@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy Policy · XMRadar</title>
+<meta name="description" content="XMRadar's privacy policy: what stays in your browser, what leaves it, where it goes, and how to turn each data flow off.">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" type="image/png" href="logo/icon/32.png">
+<link rel="preload" href="fonts/manrope-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="style.css">
+<style>
+  .policy{padding-top:32px;padding-bottom:56px;display:grid;grid-template-columns:minmax(0,1fr) 260px;gap:48px;align-items:start}
+  @media (max-width:900px){.policy{grid-template-columns:1fr;gap:24px}}
+  .policy main{max-width:760px}
+  .policy h1{font-size:clamp(34px,5vw,52px);margin:0 0 8px}
+  .policy .meta{color:var(--muted);font-size:14px;margin:0 0 28px}
+  .policy h2{font-size:26px;margin:40px 0 12px;scroll-margin-top:24px}
+  .policy h3{font-size:18px;margin:26px 0 8px}
+  .policy p,.policy li{color:var(--fg);text-wrap:pretty}
+  .policy p{margin:0 0 14px}
+  .policy ul,.policy ol{margin:0 0 16px;padding-left:22px}
+  .policy li{margin:0 0 8px}
+  .policy .muted{color:var(--muted)}
+  .policy .note{background:var(--surface);box-shadow:0 0 0 1px var(--border);border-radius:14px;padding:18px 20px;margin:0 0 24px}
+  .policy .note p:last-child{margin-bottom:0}
+  .policy table{width:100%;border-collapse:collapse;margin:8px 0 22px;font-size:14px;display:block;overflow-x:auto}
+  .policy th,.policy td{text-align:left;vertical-align:top;padding:9px 10px;border-bottom:1px solid var(--border)}
+  .policy th{font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);white-space:nowrap}
+  .policy td:first-child{font-weight:700}
+  .policy code{font-size:13px}
+  .policy .toc{position:sticky;top:24px;background:var(--surface);box-shadow:0 0 0 1px var(--border);border-radius:14px;padding:16px 18px;font-size:14px}
+  .policy .toc b{display:block;margin-bottom:8px}
+  .policy .toc a{display:block;color:var(--muted);text-decoration:none;padding:4px 0}
+  .policy .toc a:hover{color:var(--fg)}
+  .policy .back{display:inline-block;margin-top:8px;font-weight:700;text-decoration:none}
+  @media (max-width:900px){.policy .toc{position:static;order:-1}}
+</style>
+</head>
+<body>
+
+<header class="wrap">
+  <a class="brand" href="/"><img src="logo/xmradar.svg" alt=""><span>XMRadar</span></a>
+  <nav aria-label="Main">
+    <a href="/#features">Features</a>
+    <a href="/#proof">Your badge</a>
+    <a href="/#on-x">On X</a>
+    <a href="/#install">Install</a>
+    <a href="https://github.com/KYC-rip/xmradar">GitHub</a>
+  </nav>
+</header>
+
+<div class="policy wrap">
+  <main>
+    <h1>Privacy Policy</h1>
+    <p class="meta">Effective 21 November 2026 · applies to XMRadar 0.6.17 and later</p>
+
+    <div class="note">
+      <p><b>In short.</b> XMRadar has no account, no analytics, no telemetry and no ads. It holds no Monero keys and no funds. Almost everything it learns stays in your browser. Data leaves your browser only to the services a feature needs, only when you use that feature (or, for a few features listed below, when the feature is on and you can switch it off).</p>
+      <p>This policy is written from the source code, which is public at <a href="https://github.com/KYC-rip/xmradar">github.com/KYC-rip/xmradar</a>.</p>
+    </div>
+
+    <h2 id="who">Who runs XMRadar</h2>
+    <p>XMRadar is free, open-source software published by <b>kyc.rip</b>. The same publisher runs the <b>xmr.bio</b> lookup service, the <b>GhostMail</b> burner-email service and the <code>api.kyc.rip</code> price endpoint that XMRadar can use. Those services are described below; their own policies also apply to them.</p>
+    <p>Questions, corrections or deletion requests: open an issue at <a href="https://github.com/KYC-rip/xmradar/issues">github.com/KYC-rip/xmradar/issues</a>.</p>
+
+    <h2 id="local">What stays in your browser</h2>
+    <p>XMRadar stores the following on your device. It is not sent anywhere unless a feature below needs it.</p>
+    <table>
+      <thead><tr><th>Stored</th><th>Where</th><th>Why</th></tr></thead>
+      <tbody>
+        <tr><td>Settings and switches</td><td>Extension storage, synced by your browser</td><td>So your choices follow you to your other signed-in browsers. Your browser's sync provider (for example Google or Mozilla) carries this copy.</td></tr>
+        <tr><td>Your public key, X handle, last popup tab, hashes of posts already copied</td><td>Extension storage, on this device</td><td>To avoid repeating work and to show the right state.</td></tr>
+        <tr><td>Badge, proof, relay-list and directory caches; recent xmr.bio lookups</td><td>Extension storage, on this device</td><td>To answer faster and to reject replays. The directory is the same signed file for everyone.</td></tr>
+        <tr><td>Saved swap receipts and letters of guarantee</td><td>Extension origin's IndexedDB</td><td>So you can show them in a dispute. Kept 90 days by default; change or clear them in Options.</td></tr>
+        <tr><td>Your XMRadar-managed Nostr secret key</td><td>Extension origin's IndexedDB</td><td>Only when you have no NIP-07 signer. It signs only XMRadar's own events (xos, Xap receipts and confirmations, your profile, relay list, Monero address, X link, listing request) and never your posts. Exportable and deletable in Options.</td></tr>
+        <tr><td>Burner inbox address, tier, expiry, seen message ids and access token</td><td>Extension storage + IndexedDB</td><td>To show the inbox and its mail. The token is sent only to GhostMail, to open your own inbox.</td></tr>
+        <tr><td>Short-lived session state</td><td>Extension session storage</td><td>Lost when the browser closes: the last identity check, a pending setup change, open composer sessions, and burner creation state.</td></tr>
+      </tbody>
+    </table>
+    <p>Uninstalling XMRadar removes all of this from your browser.</p>
+
+    <h2 id="leaves">What leaves your browser</h2>
+    <p>Each row says what is sent, when, and whether it happens by default. "Your IP address" is visible to every service your browser contacts, like any web request; it is not repeated in every row.</p>
+
+    <h3 id="update">xmradar.app — update check</h3>
+    <p>Once a day XMRadar asks <code>https://xmradar.app/latest.json</code> for the latest version number. The request carries no version, installation ID, page or account; it is sent without cookies or a referrer. The site (hosted by Cloudflare) sees your IP address and browser, and that XMRadar is in use. It only tells you a newer version exists; nothing is downloaded or installed. <b>On by default; switch it off</b> under Options → Updates.</p>
+
+    <h3 id="xmrclub">xmr.club — signed exchange data</h3>
+    <p>xmr.club publishes a signed list of exchanges and wallets, its signing key, and site logos. XMRadar downloads the list whole and checks its signature on your device, so xmr.club does not learn which listed site you are looking at. The request carries no account information. <b>On by default</b> while site information and warnings are on. If you press <b>Report</b> on a warning page, XMRadar sends xmr.club the bare host and the listing it copies. <b>Only when you press Report.</b></p>
+
+    <h3 id="relays">Nostr relays</h3>
+    <p>Nostr is a public network of relays. XMRadar uses the relays you configure, or your NIP-65 write relays, or its own picks (damus, nos.lol, primal, and others named in Options). Public relays can see your IP address and the events you publish or ask for, and can link that address to your public key.</p>
+    <ul>
+      <li><b>Posts you choose to copy</b> are published as signed events. Their images or videos are uploaded separately to your Blossom server (below). Only posts you choose; never a page you did not act on.</li>
+      <li><b>Your public key</b> is sent when XMRadar reads your relay, address and identity lists, and when you publish them in setup (kinds 10002, 10133, 10011).</li>
+      <li><b>Xos and Xap receipts</b> you create are public events naming the X post, the author's handle and, when known, their public key. They never contain a transaction id, transaction key or payment proof.</li>
+      <li><b>Xap notifications</b> (off by default) ask your relays and three public relays every 30 minutes for receipts to your public key. Those relays can see that this browser watches your key.</li>
+      <li><b>Discovery</b> (off by default) looks up X accounts you view on relays. While it is on, relays can see the handles and public keys of accounts on the pages you view.</li>
+    </ul>
+
+    <h3 id="blossom">Blossom server</h3>
+    <p>When you copy a post with pictures or video, XMRadar uploads the media to the Blossom server set in Options (default <code>blossom.primal.net</code>), with a signed authorization that names your public key, the media hash and a short expiry. That server sees your IP address and the media. Turn re-uploading off in Options to link the original media instead.</p>
+
+    <h3 id="media">The page's own image and video hosts</h3>
+    <p>To copy a post, XMRadar downloads its images from where the page shows them (for X, typically <code>pbs.twimg.com</code> and <code>video.twimg.com</code>). Those hosts see your IP address and which media you asked for.</p>
+
+    <h3 id="xmrbio">xmr.bio and api.kyc.rip — Monero badges</h3>
+    <ul>
+      <li><b>Signed directory (on by default):</b> XMRadar downloads xmr.bio's signed directory of listed profiles about once an hour, the same file for everyone, and matches handles on your device. xmr.bio does not learn which X accounts you view.</li>
+      <li><b>A handle you look up (only when you ask):</b> when you right-click <i>Tip with Monero</i> or <i>Look up on xmr.bio</i>, open a tip for a detected handle, or check your own identity, XMRadar sends <b>one X handle</b> to <code>api.kyc.rip/v1/bio</code>. Your public key is not sent; the signed answer is checked against xmr.bio's pinned key on your device.</li>
+      <li><b>Listing your own profile (on by default once your setup is verified):</b> if your X link and Monero address are verified and xmr.bio does not know your handle, XMRadar sends xmr.bio your <b>X handle, Monero address, Nostr public key and proof-tweet id</b> so your profile can be listed. You can switch this off in Options → Monero identity; on xmr.bio, <i>unlist</i> hides you and <i>delete</i> removes the profile.</li>
+    </ul>
+
+    <h3 id="x">X (Twitter)</h3>
+    <p>To check that a proof tweet really names your public key, XMRadar asks X's public oEmbed endpoint (<code>publish.twitter.com</code>) and, if needed, <code>cdn.syndication.twimg.com</code> about that one tweet. The same embed endpoint is used to find an X video's file when you copy a post with video. X sees your IP address and the tweet id. This happens during your own setup, for badges with discovery on, or when you copy a post.</p>
+
+    <h3 id="ghostmail">GhostMail — burner email</h3>
+    <p>When you create a burner address, XMRadar asks <code>mail-api.kyc.rip</code> for one. On the free tier it sends a random proof-of-work answer; on a paid inbox it sends the inbox token you pasted from kyc.rip/mail. Reading and burning the inbox sends its address and token. GhostMail receives and stores the mail sent to that address and, like any mail provider, can read it. XMRadar never sends GhostMail the page you are on. <b>Only when you create, open, read or burn a burner inbox.</b></p>
+
+    <h3 id="order">Exchange and order pages</h3>
+    <p>On an exchange's order page, XMRadar reads the receipt shown on the page and checks it locally. If a receipt or letter must be fetched, XMRadar asks the order page's own HTTPS site (for example its <code>/.well-known/nkip01.json</code>) or a URL named in the signed xmr.club data. That site sees your IP address and what you fetched. Checked receipts and letters are saved in your browser, not sent to the publisher.</p>
+
+    <h3 id="price">api.kyc.rip — XMR/USD price</h3>
+    <p>When a tip popup opens, XMRadar may fetch the XMR/USD price from <code>api.kyc.rip/v1/price/XMR</code> for the $1/$5/$10/$20 shortcuts. The request carries nothing about you or the recipient. The answer is cached for 5 minutes. <b>Only while a tip popup is open.</b></p>
+
+    <h3 id="ai">Tag suggestions (off by default)</h3>
+    <p>With a local model (Ollama or LM Studio on your computer), the post never leaves your device. If you choose an OpenAI-compatible provider or Anthropic with your own API key, the post text and its current tags are sent directly from your browser to the endpoint you configured, under your key. The key is stored in this browser, is not synced, and is never shown to pages. <b>Off by default; only when you press Suggest or turn on Auto.</b></p>
+
+    <h3 id="chat">chat.xmr.club — side panel</h3>
+    <p>When you open <b>Chat</b>, XMRadar loads <code>chat.xmr.club</code> in Chrome's side panel or Firefox's sidebar. That site's own privacy policy applies to the chat; messages are carried by Nostr relays.</p>
+
+    <h3 id="opened">Pages XMRadar opens for you</h3>
+    <ul>
+      <li>A temporary <code>xmradar.app/signer</code> tab, where your NIP-07 signer approves a signature. That page's scripts can see the request and the signed event — which is public on relays anyway.</li>
+      <li>X's composer with your proof text and npub when you click <i>Post the proof tweet</i>.</li>
+      <li>Links to njump, ros.rip or an exchange's order page when you click them.</li>
+    </ul>
+
+    <h2 id="never">What is never sent</h2>
+    <ul>
+      <li>Private keys, wallet seeds or funds. XMRadar holds none; a NIP-07 signer keeps its key, and a key XMRadar makes for you stays in its own IndexedDB.</li>
+      <li>Transaction ids, transaction keys or payment proofs in public events.</li>
+      <li>Text or images from a page you did not choose to copy. With discovery on, only the handles (and public keys) of accounts on pages you view are looked up.</li>
+      <li>Your data to advertisers, data brokers or analytics services. XMRadar has no analytics, no telemetry and no ads, and does not sell data.</li>
+    </ul>
+
+    <h2 id="choices">Your choices and deletion</h2>
+    <ul>
+      <li><b>Switches:</b> the daily update check, badge discovery, xmr.bio listing, Xap notifications, tag suggestions, site warnings and re-uploading media can each be turned off in Options.</li>
+      <li><b>Local data:</b> clear the receipt and letter list in Options; delete the managed key in Options; uninstall the extension to remove everything.</li>
+      <li><b>Public Nostr events</b> can be asked to be deleted with a NIP-09 deletion request. Relays and other clients may keep copies; XMRadar cannot erase them.</li>
+      <li><b>xmr.bio:</b> unlist or delete your profile on xmr.bio. <b>GhostMail:</b> burn the inbox in XMRadar or on kyc.rip/mail; mail may remain on GhostMail until it expires.</li>
+    </ul>
+
+    <h2 id="retention">Retention</h2>
+    <p>Saved receipts and letters are kept for 90 days by default (adjustable in Options). Caches are replaced as they refresh. Session state is lost when the browser closes. Uninstalling removes everything XMRadar stored locally. Services listed above keep their own records under their own policies.</p>
+
+    <h2 id="children">Children</h2>
+    <p>XMRadar is not directed to children under 13 and does not knowingly collect personal information from them.</p>
+
+    <h2 id="changes">Changes</h2>
+    <p>If this policy changes, the new version will be posted on this page with a new effective date. Material changes will also be noted in the release notes.</p>
+
+    <h2 id="contact">Contact</h2>
+    <p>Open an issue at <a href="https://github.com/KYC-rip/xmradar/issues">github.com/KYC-rip/xmradar/issues</a>.</p>
+
+    <p><a class="back" href="/">← Back to XMRadar</a></p>
+  </main>
+
+  <aside class="toc" aria-label="Contents">
+    <b>Contents</b>
+    <a href="#who">Who runs XMRadar</a>
+    <a href="#local">What stays in your browser</a>
+    <a href="#leaves">What leaves your browser</a>
+    <a href="#update">Update check</a>
+    <a href="#xmrclub">xmr.club</a>
+    <a href="#relays">Nostr relays</a>
+    <a href="#blossom">Blossom</a>
+    <a href="#xmrbio">xmr.bio</a>
+    <a href="#x">X</a>
+    <a href="#ghostmail">GhostMail</a>
+    <a href="#order">Exchange pages</a>
+    <a href="#price">Price</a>
+    <a href="#ai">Tag suggestions</a>
+    <a href="#chat">Chat</a>
+    <a href="#never">What is never sent</a>
+    <a href="#choices">Your choices</a>
+    <a href="#retention">Retention</a>
+    <a href="#changes">Changes</a>
+    <a href="#contact">Contact</a>
+  </aside>
+</div>
+
+<footer class="wrap">
+  <span class="foot-brand"><span><img src="logo/icon/32.png" alt="">XMRadar by kyc.rip</span><span style="font-size:12px">Exchange data © <a href="https://xmr.club">xmr.club</a> contributors, <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>.</span></span>
+  <span class="foot-links"><a href="https://github.com/KYC-rip/xmradar">GitHub</a><a href="https://xmr.club">xmr.club</a><a href="https://pwa.cash/s/xbtoshi">Donate</a><a href="https://kyc.rip">kyc.rip</a><a href="/privacy">Privacy</a></span>
+</footer>
+
+</body>
+</html>
