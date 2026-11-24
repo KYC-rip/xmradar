@@ -59,15 +59,11 @@ diff dist/SHA256SUMS release-SHA256SUMS
 
 ## Install
 
-Until XMRadar is in the stores, install a release zip (or build it yourself):
-
-**Chrome / Brave / Edge:** unzip `xmradar-<version>-chrome.zip`, open `chrome://extensions`, turn on Developer mode, click *Load unpacked*, and pick the unzipped folder (or `output/chrome-mv3` after `pnpm build`).
-
-**Firefox (140+):**
-- Quick test: open `about:debugging#/runtime/this-firefox`, click *Load Temporary Add-on*, and pick `xmradar-<version>-firefox.zip` (or `output/firefox-mv3/manifest.json`). Temporary add-ons are removed when Firefox restarts. Firefox Developer Edition and Nightly can keep it installed with `xpinstall.signatures.required` set to `false`.
-- Permanent: run `pnpm zip` and submit the Firefox zip to AMO as **unlisted** (self-distribution; include the source zip, since the build is bundled). Install the signed `.xpi` you get back.
-- To update, install the new zip the same way (Chrome: replace the folder's contents and click the reload icon on `chrome://extensions`). XMRadar tells you when a new version is out; see **Updates** below.
+**Firefox (140+):** install from [Firefox Add-ons](https://addons.mozilla.org/en-US/firefox/addon/xmradar/).
 - Firefox MV3 doesn't grant site access at install time. Open the extension's options page and click **Grant access**, or enable it under *about:addons → XMRadar → Permissions*.
+- For a local or release zip test: open `about:debugging#/runtime/this-firefox`, click *Load Temporary Add-on*, and pick `xmradar-<version>-firefox.zip` (or `output/firefox-mv3/manifest.json`). Temporary add-ons are removed when Firefox restarts.
+
+**Chrome / Brave / Edge:** not in the Chrome Web Store yet. Download `xmradar-<version>-chrome.zip` from [Releases](https://github.com/KYC-rip/xmradar/releases) (or build it yourself), unzip it, open `chrome://extensions`, turn on Developer mode, click *Load unpacked*, and pick the unzipped folder (or `output/chrome-mv3` after `pnpm build`). To update, replace the folder's contents and click the reload icon on `chrome://extensions`; XMRadar tells you when a new version is out (see **Updates** below).
 
 ## Options
 

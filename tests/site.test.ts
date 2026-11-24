@@ -18,6 +18,12 @@ describe('xmradar.app', () => {
     expect(page).not.toMatch(/on X and Nostr|author's key|always produces|look-alike|[Bb]locks? /);
   });
 
+  it('points Firefox install links to Mozilla Add-ons', () => {
+    expect(read('build.py')).toContain("FIREFOX_ADDON_URL = 'https://addons.mozilla.org/en-US/firefox/addon/xmradar/'");
+    expect(page).toContain('<a class="btn btn-primary" href="{{FIREFOX_URL}}">Add to Firefox</a>');
+    expect(page).not.toMatch(/Chrome or Firefox stores yet/i);
+  });
+
   it('without its script, only the first slide shows', () => {
     expect(page).toMatch(/id="slide-safety"[^>]*aria-hidden="true"[^>]*inert/);
   });

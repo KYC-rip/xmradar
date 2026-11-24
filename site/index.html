@@ -42,12 +42,12 @@
   <div class="slides">
     <div class="slide" id="slide-tips" role="tabpanel" aria-label="Tips">
       <div class="copy">
-        <span class="pill">Browser extension · Chrome and Firefox · early release</span>
+        <span class="pill">Browser extension · Firefox Add-ons &amp; Chrome</span>
         <h1>Monero on the pages you already use.</h1>
         <p class="lede">XMRadar shows who takes Monero on X, lets you tip them from your own wallet or send a Monero like, checks swap sites before you deposit, and copies posts to Nostr.</p>
         <div class="btns">
-          <a class="btn btn-primary" href="{{CHROME_URL}}">Download for Chrome</a>
-          <a class="btn btn-secondary" href="{{FIREFOX_URL}}">Download for Firefox</a>
+          <a class="btn btn-primary" href="{{FIREFOX_URL}}">Add to Firefox</a>
+          <a class="btn btn-secondary" href="{{CHROME_URL}}">Download for Chrome</a>
         </div>
         <span class="fine">Free and <a href="https://github.com/KYC-rip/xmradar">open source</a>. Holds no Monero keys and no funds.</span>
       </div>
@@ -77,8 +77,8 @@
         <h1>Check the swap before you send.</h1>
         <p class="lede">On a swap order page, XMRadar checks the exchange's signed receipt or letter of guarantee against the deposit address the page shows, keeps a copy for disputes, and shows the site's grade on xmr.club.</p>
         <div class="btns">
-          <a class="btn btn-primary" href="{{CHROME_URL}}">Download for Chrome</a>
-          <a class="btn btn-secondary" href="{{FIREFOX_URL}}">Download for Firefox</a>
+          <a class="btn btn-primary" href="{{FIREFOX_URL}}">Add to Firefox</a>
+          <a class="btn btn-secondary" href="{{CHROME_URL}}">Download for Chrome</a>
         </div>
         <span class="fine">Free and <a href="https://github.com/KYC-rip/xmradar">open source</a>. Holds no Monero keys and no funds.</span>
       </div>
@@ -104,8 +104,8 @@
         <h1>Wear a Monero badge on X.</h1>
         <p class="lede">Publish your Monero address, link your X account with one tweet, and XMRadar users see an XMR badge next to your name. No Nostr signer needed: without one, XMRadar makes a Nostr key for you, kept in this browser.</p>
         <div class="btns">
-          <a class="btn btn-primary" href="{{CHROME_URL}}">Download for Chrome</a>
-          <a class="btn btn-secondary" href="{{FIREFOX_URL}}">Download for Firefox</a>
+          <a class="btn btn-primary" href="{{FIREFOX_URL}}">Add to Firefox</a>
+          <a class="btn btn-secondary" href="{{CHROME_URL}}">Download for Chrome</a>
         </div>
         <span class="fine">Free and <a href="https://github.com/KYC-rip/xmradar">open source</a>. Holds no Monero keys and no funds.</span>
       </div>
@@ -210,7 +210,7 @@
       <div class="btns" style="margin-top:8px"><a class="btn btn-primary" href="#install">Install XMRadar</a></div>
     </div>
     <ol class="proof-steps">
-      <li><b>Install XMRadar</b><span class="muted">Chrome or Firefox, below.</span></li>
+      <li><b>Install XMRadar</b><span class="muted">Firefox Add-ons or Chrome, below.</span></li>
       <li><b>Options → Monero identity</b><span class="muted">Your handle, your Monero address, and one tweet XMRadar writes for you.</span></li>
       <li><b>Wear it</b><span class="muted">XMRadar users with badges on see it, and can tip you or send an xo.</span></li>
     </ol>
@@ -280,13 +280,13 @@
   <div class="install-hero">
     <img src="logo/xmradar.svg" alt="">
     <h2>Install XMRadar</h2>
-    <p>Not in the Chrome or Firefox stores yet. Download the zip from GitHub Releases, unzip it, and load it from <code>chrome://extensions</code> (Developer mode → Load unpacked), or in Firefox 140+ from <code>about:debugging</code>.</p>
+    <p>Available on <a href="{{FIREFOX_URL}}">Firefox Add-ons</a> (Firefox 140+; click <b>Grant access</b> on the options page after installing). Not in the Chrome Web Store yet: for Chrome, Brave or Edge, download the zip from GitHub Releases, unzip it, and load it from <code>chrome://extensions</code> (Developer mode → Load unpacked).</p>
     <p>Works with any Monero wallet that opens <code>monero:</code> links. A NIP-07 signer such as Alby or nos2x is optional: without one, XMRadar's own key covers your badge, xo and Xap receipts (when they're on). Copying posts to Nostr needs a signer.</p>
     <div class="btns">
-      <a class="btn btn-primary" href="{{CHROME_URL}}">Download for Chrome</a>
-      <a class="btn btn-secondary" href="{{FIREFOX_URL}}">Download for Firefox</a>
+      <a class="btn btn-primary" href="{{FIREFOX_URL}}">Add to Firefox</a>
+      <a class="btn btn-secondary" href="{{CHROME_URL}}">Download for Chrome</a>
     </div>
-    <span class="fine">Version {{VERSION}} · <a href="{{RELEASE_URL}}">release notes</a></span>
+    <span class="fine">Version {{VERSION}} · <a href="{{RELEASE_URL}}">release notes</a> · <a href="{{FIREFOX_ZIP_URL}}">Firefox zip</a></span>
   </div>
   <div class="panel builds">
     <div class="panel-title">
