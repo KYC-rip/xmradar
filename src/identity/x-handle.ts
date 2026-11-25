@@ -27,6 +27,11 @@ export function handleFromTarget(target: Element | null, loc: { hostname: string
     const h = fromPath(link?.getAttribute('href'));
     if (h) return h;
   }
+  const notif = target?.closest('article[data-testid="notification"]');
+  if (notif) {
+    const slots = notificationSlots(notif);
+    if (slots.length === 1) return slots[0]!.handle;
+  }
   return fromPath(loc.pathname);
 }
 
@@ -36,6 +41,8 @@ export interface BadgeSlot {
   key: string;
   /** where the badge goes */
   anchor: Element;
+  /** explicit avatar element for the xo ring (notifications and quoted posts) */
+  avatar?: HTMLElement;
   /** set for posts, which get a Xap button in the action bar */
   article?: Element;
   /** a post's name row also gets the pill after the name, as X puts its check there (PLAN-NAMEPILL-REPORT);
@@ -45,9 +52,25 @@ export interface BadgeSlot {
   statusId?: string;
 }
 
+/** Avatar-only slot (no pill anchor), used for collapsed actors in grouped notifications ("Alice and 5 others…"). */
+export interface AvatarSlot {
+  handle: string;
+  key: string;
+  avatar: HTMLElement;
+  anchor?: undefined;
+  article?: undefined;
+  pill?: undefined;
+  statusId?: undefined;
+}
+
+export type AnyBadgeSlot = BadgeSlot | AvatarSlot;
+
 /** Author handle and slot for a timeline tweet. */
 export function tweetSlot(article: Element): BadgeSlot | null {
-  const name = article.querySelector('[data-testid="User-Name"]');
+  const name = [...article.querySelectorAll('[data-testid="User-Name"]')].find((el) => {
+    const card = el.closest('div[role="link"]');
+    return !card || !article.contains(card);
+  });
   const handle = fromPath(name?.querySelector('a[href^="/"]')?.getAttribute('href'));
   if (!name || !handle) return null;
   // the timestamp link: in the name row on timelines; on a tweet's own page X puts it under the text, so
@@ -114,7 +137,8 @@ export function hoverCardSlot(card: Element): BadgeSlot | null {
   const link = [...card.querySelectorAll<HTMLAnchorElement>('a[href^="/"][role="link"]')].find((a) => a.getAttribute('tabindex') !== '-1' && fromPath(a.getAttribute('href')) && /^\/[A-Za-z0-9_]{1,15}$/.test(a.getAttribute('href')!));
   const handle = fromPath(link?.getAttribute('href'));
   const row = link?.firstElementChild;
-  return handle && row ? { handle, key: `hover:${handle.toLowerCase()}`, anchor: row } : null;
+  const avatar = card.querySelector<HTMLElement>(`[data-testid^="${AVATAR_PREFIX}"]`) ?? undefined;
+  return handle && row ? { handle, key: `hover:${handle.toLowerCase()}`, anchor: row, ...(avatar ? { avatar } : {}) } : null;
 }
 
 /**
@@ -129,7 +153,74 @@ export function userCellSlot(cell: Element): BadgeSlot | null {
   const link = links.find((a) => a.getAttribute('tabindex') !== '-1' && a.getAttribute('href') === avatar);
   const handle = fromPath(avatar);
   const row = link?.firstElementChild;
-  return handle && row ? { handle, key: `cell:${handle.toLowerCase()}`, anchor: row } : null;
+  const avatarEl = cell.querySelector<HTMLElement>(`[data-testid^="${AVATAR_PREFIX}"]`) ?? undefined;
+  return handle && row ? { handle, key: `cell:${handle.toLowerCase()}`, anchor: row, ...(avatarEl ? { avatar: avatarEl } : {}) } : null;
+}
+
+const AVATAR_PREFIX = 'UserAvatar-Container-';
+
+/**
+ * Quoted posts inside a tweet (`div[role="link"]` or any nested `[data-testid="User-Name"]` beyond the outer author):
+ * X forbids nested `<a>` tags inside the quoted card, so the author handle comes from the card's
+ * avatar container or `@handle` text when no link is present. Gets a pill and xo ring, never an action bar.
+ */
+export function quotedTweetSlots(article: Element): BadgeSlot[] {
+  const out: BadgeSlot[] = [];
+  const outerName = article.querySelector('[data-testid="User-Name"]');
+  for (const name of article.querySelectorAll('[data-testid="User-Name"]')) {
+    if (name === outerName) continue;
+    const card = name.closest('div[role="link"]');
+    const scope = card && article.contains(card) ? card : null;
+    const linkHref = name.querySelector('a[href^="/"]')?.getAttribute('href');
+    const avatarContainer = scope?.querySelector<HTMLElement>(`[data-testid^="${AVATAR_PREFIX}"]`) ?? null;
+    const avatarHandle = avatarContainer?.getAttribute('data-testid')?.slice(AVATAR_PREFIX.length);
+    const textHandle = [...(name.textContent ?? '').matchAll(/@([A-Za-z0-9_]{1,15})(?![A-Za-z0-9_])/g)].map((m) => m[1]).pop();
+    const handle = fromPath(linkHref) ?? fromPath(avatarHandle ? `/${avatarHandle}` : null) ?? fromPath(textHandle ? `/${textHandle}` : null);
+    if (!handle) continue;
+    const row = name.firstElementChild;
+    const anchor = row && row.localName !== 'xmradar-badge' ? row : name;
+    const avatar = scope?.querySelector<HTMLElement>('[data-testid="Tweet-User-Avatar"]') ?? avatarContainer ?? undefined;
+    out.push({ handle, key: `quote:${handle.toLowerCase()}`, anchor, ...(avatar ? { avatar } : {}) });
+  }
+  return out;
+}
+
+/**
+ * Notification rows on `/notifications` (`article[data-testid="notification"]`: likes, reposts, follows).
+ * Named actors get a pill inline inside their name link (`display: flex; flex-direction: row`) plus an xo ring
+ * on their avatar; additional avatars in grouped rows ("Alice and 5 others…") get avatar-only xo ring slots.
+ */
+export function notificationSlots(article: Element): AnyBadgeSlot[] {
+  const avatars = new Map<string, { handle: string; el: HTMLElement }>();
+  for (const el of article.querySelectorAll<HTMLElement>(`[data-testid^="${AVATAR_PREFIX}"]`)) {
+    const raw = el.getAttribute('data-testid')?.slice(AVATAR_PREFIX.length) ?? '';
+    const h = fromPath(`/${raw}`);
+    if (!h) continue;
+    const lower = h.toLowerCase();
+    if (!avatars.has(lower)) avatars.set(lower, { handle: h, el });
+  }
+  const out: AnyBadgeSlot[] = [];
+  const named = new Set<string>();
+  for (const a of article.querySelectorAll<HTMLAnchorElement>('a[href^="/"]')) {
+    if (a.getAttribute('tabindex') === '-1') continue;
+    const href = a.getAttribute('href') ?? '';
+    if (!/^\/[A-Za-z0-9_]{1,15}\/?$/.test(href)) continue;
+    if (!(a.textContent ?? '').trim()) continue;
+    const h = fromPath(href);
+    if (!h) continue;
+    const lower = h.toLowerCase();
+    // Only badge actors represented by the notification's own avatars (never a stray mention in a snippet)
+    if (avatars.size > 0 && !avatars.has(lower)) continue;
+    if (named.has(lower)) continue;
+    named.add(lower);
+    const av = avatars.get(lower)?.el;
+    out.push({ handle: h, key: `notif:${lower}`, anchor: a, ...(av ? { avatar: av } : {}) });
+  }
+  for (const [lower, { handle, el }] of avatars) {
+    if (named.has(lower)) continue;
+    out.push({ handle, key: `notif-av:${lower}`, avatar: el });
+  }
+  return out;
 }
 
 /** The pin icon of X's "Pinned" row; its label is localised, the icon isn't (PLAN-XCLAIMS §8). */
@@ -161,7 +252,7 @@ export function profileClaimScope(doc: Document, loc: { hostname: string; pathna
   const column = doc.querySelector('[data-testid="primaryColumn"]');
   if (!handle || !column) return null;
   const slot = profileSlot(doc, loc);
-  if (!slot || !column.contains(slot.anchor)) return null;
+  if (!slot?.anchor || !column.contains(slot.anchor)) return null;
   const items = column.querySelector('[data-testid="UserProfileHeader_Items"]');
   if (!items) return { handle, bio: null, url: null };
   const desc = column.querySelector('[data-testid="UserDescription"]');

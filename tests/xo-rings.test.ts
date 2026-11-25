@@ -110,6 +110,17 @@ describe('the ring', () => {
     setRing(av, 'k1', 3);
     expect(document.querySelector(`[${RING_ATTR}]`)!.parentElement!.id).toBe('cell');
   });
+  it('climbs above a tight clipping ancestor (e.g. notification avatar UL) so the ring is not sliced off', () => {
+    document.body.innerHTML = `<main data-testid="primaryColumn"><div id="outer"><ul id="tight" style="overflow:hidden"><div id="inner"><div data-testid="UserAvatar-Container-alice" id="av"></div></div></ul></div></main>`;
+    const av = document.getElementById('av')!;
+    rect(av, { left: 62, top: 100, width: 30, height: 30 });
+    rect(document.getElementById('inner')!, { left: 62, top: 100, width: 34, height: 30 });
+    rect(document.getElementById('tight')!, { left: 62, top: 100, width: 350, height: 30 });
+    rect(document.getElementById('outer')!, { left: 62, top: 100, width: 370, height: 30 });
+    expect(ringHost(av)!.id).toBe('outer');
+    setRing(av, 'notif:alice', 5);
+    expect(document.querySelector(`[${RING_ATTR}]`)!.parentElement!.id).toBe('outer');
+  });
   it('one per avatar; redrawn for another key; gone at count 0', () => {
     const { av } = post();
     setRing(av, 'k1', 3);

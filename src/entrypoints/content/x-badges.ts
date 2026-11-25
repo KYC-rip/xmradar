@@ -3,8 +3,8 @@ import { badgeLook, mountBadge, type BadgeLook } from '../../identity/badge-look
 import { PendingQueue } from '../../identity/bucket';
 import { normalizeHandle } from '../../identity/envelope';
 import { xapEntry, xoCountOf, xoKey, xoPostsOf, type Badge } from '../../identity/resolve';
-import { postAvatar, profileAvatar, removeRings, setRing } from './x-xo-ring';
-import { articleViewSlot, hoverCardSlot, pinnedPost, profileClaimScope, profileHeader, profileSlot, tweetSlot, userCellSlot, type BadgeSlot } from '../../identity/x-handle';
+import { postAvatar, profileAvatar, removeRings, RING_ATTR, setRing } from './x-xo-ring';
+import { articleViewSlot, hoverCardSlot, notificationSlots, pinnedPost, profileClaimScope, profileHeader, profileSlot, quotedTweetSlots, tweetSlot, userCellSlot, type AnyBadgeSlot, type BadgeSlot } from '../../identity/x-handle';
 import { emptyClaim, parseClaim, type ClaimPlace } from '../../identity/xclaims';
 import { sendToBackground, type XapTotals } from '../../messaging';
 import { directoryStatusItem, myHandleItem, pubkeyItem, xClaimsChangedItem, xClaimsOn, xmrSettingsItem, xoButtonOn, xoCountsItem, xoRingsOn, xoSentItem, xoSoundOn, xapNotifyOn } from '../../settings';
@@ -55,9 +55,13 @@ export function startBadges(ctx: ContentScriptContext) {
     for (const host of document.querySelectorAll(`${HOST_TAG}, ${XAP_SELECTOR}, ${XO_SELECTOR}`)) host.remove();
     removeRings();
   };
-  /** the ring on this slot's avatar: a post's author, or the profile header's own */
-  const ringFor = (slot: BadgeSlot, badge: Badge | null | undefined) => {
-    if (slot.article) {
+  /** the ring on this slot's avatar: an explicit avatar, a post's author, or the profile header's own */
+  const ringFor = (slot: AnyBadgeSlot, badge: Badge | null | undefined) => {
+    if (slot.avatar) {
+      if (slot.avatar.closest('[data-testid="primaryColumn"], [data-testid="HoverCard"]')) {
+        setRing(slot.avatar, slot.key, badge?.primary ? xoShown(badge) : 0);
+      }
+    } else if (slot.article) {
       const av = postAvatar(slot.article);
       if (av) setRing(av, slot.key, badge?.primary ? xoShown(badge) : 0);
     } else if (slot.key.startsWith('profile:')) {
@@ -144,7 +148,8 @@ export function startBadges(ctx: ContentScriptContext) {
     } else if (Date.now() - pinnedSeen.at >= PINNED_STAY_MS) report(scope.handle, 'pinned', pin.text, pin.tweetId);
   }
 
-  const isOurs = (n: Node) => n instanceof Element && (n.localName === HOST_TAG || n.matches(XAP_SELECTOR) || n.matches(XO_SELECTOR));
+  const isOurs = (n: Node) =>
+    n instanceof Element && (n.localName === HOST_TAG || n.matches(XAP_SELECTOR) || n.matches(XO_SELECTOR) || n.hasAttribute(RING_ATTR));
 
   // Xap totals for the action-bar counts: asked for in batches, only with relay discovery on
   const totals = new Map<string, { t: XapTotals; at: number }>();
@@ -256,6 +261,7 @@ export function startBadges(ctx: ContentScriptContext) {
   }
 
   function insert(slot: BadgeSlot, badge: Badge) {
+    if (!slot.anchor) return;
     const host = document.createElement(HOST_TAG);
     host.dataset.key = slot.key;
     const btn = mountBadge(host, look, slot.handle, xoShown(badge));
@@ -275,10 +281,10 @@ export function startBadges(ctx: ContentScriptContext) {
     wantTotals(pk);
   }
 
-  function apply(slot: BadgeSlot) {
+  function apply(slot: AnyBadgeSlot) {
     const badge = lookup(slot.handle);
     if (badge !== undefined) ringFor(slot, badge);
-    if (slot.article) {
+    if (slot.article && slot.anchor) {
       const pill = slot.pill ? slot.anchor.querySelector<HTMLElement>(`:scope > ${HOST_TAG}`) : null;
       // a recycled tweet node may still hold another author's button and pill
       if (!badge?.primary) {
@@ -292,7 +298,7 @@ export function startBadges(ctx: ContentScriptContext) {
         }
         return applyXap(slot as BadgeSlot & { article: Element }, badge);
       }
-    } else {
+    } else if (slot.anchor) {
       const existing = slot.anchor.querySelector<HTMLElement>(`:scope > ${HOST_TAG}`);
       if (existing?.dataset.key === slot.key) return;
       existing?.remove();
@@ -314,6 +320,16 @@ export function startBadges(ctx: ContentScriptContext) {
     for (const a of articles) {
       const slot = tweetSlot(a);
       if (slot) apply(slot);
+      for (const q of quotedTweetSlots(a)) apply(q);
+    }
+    // notifications on /notifications (likes, reposts, follows)
+    const notifications = new Set<Element>(root.querySelectorAll('article[data-testid="notification"]'));
+    if (root instanceof Element) {
+      const notif = root.closest('article[data-testid="notification"]');
+      if (notif) notifications.add(notif);
+    }
+    for (const n of notifications) {
+      for (const slot of notificationSlots(n)) apply(slot);
     }
     // an X Article's reading page
     const view = root instanceof Element && root.closest('article[data-testid="twitterArticleReadView"]') ? root.closest('article[data-testid="twitterArticleReadView"]') : document.querySelector('article[data-testid="twitterArticleReadView"]');

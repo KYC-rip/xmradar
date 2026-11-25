@@ -15,10 +15,30 @@ const clips = (el: Element) => {
   return [s.overflow, s.overflowX, s.overflowY].some((v) => v && v !== 'visible');
 };
 
-/** The nearest ancestor (up to 4 levels above the avatar) that doesn't clip, or null. */
+/** True when `ancestor` clips overflow and its box is too tight to fit the ring (`GAP + WIDTH`) around `avatar`. */
+const tightlyClips = (ancestor: Element, avatar: Element): boolean => {
+  if (!clips(ancestor)) return false;
+  const a = avatar.getBoundingClientRect();
+  const r = ancestor.getBoundingClientRect();
+  if (!a.width || !a.height || !r.width || !r.height) return false;
+  const pad = GAP + WIDTH;
+  return a.left - pad < r.left || a.top - pad < r.top || a.right + pad > r.right || a.bottom + pad > r.bottom;
+};
+
+/**
+ * The nearest ancestor (up to 4 levels above the avatar) that doesn't clip and sits above any tight clipping
+ * wrapper (such as notification avatar lists or quoted-tweet headers whose `overflow: hidden` matches the avatar's height).
+ */
 export function ringHost(avatar: Element): HTMLElement | null {
-  let el: Element | null = avatar.parentElement;
-  for (let i = 0; i < 4 && el; i++, el = el.parentElement) if (!clips(el)) return el as HTMLElement;
+  const chain: Element[] = [];
+  for (let el = avatar.parentElement; el && chain.length < 4; el = el.parentElement) chain.push(el);
+  let start = 0;
+  for (let i = 0; i < Math.min(3, chain.length); i++) {
+    if (tightlyClips(chain[i]!, avatar)) start = i + 1;
+  }
+  for (let i = start; i < chain.length; i++) {
+    if (!clips(chain[i]!)) return chain[i] as HTMLElement;
+  }
   return null;
 }
 
@@ -31,10 +51,14 @@ function radiusOf(avatar: Element): string {
   return '9999px';
 }
 
-/** The post's author avatar, inside X's main column. */
+/** The post's author avatar, inside X's main column (never a quoted post's avatar inside `div[role="link"]`). */
 export function postAvatar(article: Element): HTMLElement | null {
   if (!article.closest('[data-testid="primaryColumn"]')) return null;
-  return article.querySelector<HTMLElement>('[data-testid="Tweet-User-Avatar"]');
+  for (const av of article.querySelectorAll<HTMLElement>('[data-testid="Tweet-User-Avatar"]')) {
+    const card = av.closest('div[role="link"]');
+    if (!card || !article.contains(card)) return av;
+  }
+  return null;
 }
 
 /**

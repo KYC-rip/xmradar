@@ -25,6 +25,7 @@ import android.util.Log
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewConfiguration
+import android.view.inputmethod.EditorInfo
 import android.widget.Button
 import android.widget.EditText
 import android.widget.FrameLayout
@@ -42,6 +43,8 @@ import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import androidx.core.widget.doAfterTextChanged
+import com.google.android.material.bottomsheet.BottomSheetBehavior
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import java.util.UUID
 import java.util.concurrent.Executors
@@ -1567,28 +1570,72 @@ class MainActivity : AppCompatActivity() {
                 .show()
             return
         }
-        val input = EditText(this).apply {
-            hint = getString(R.string.swap_dialog_hint)
-            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI
-            setText("kyc.rip")
-            setSelection(text.length)
+        val dialog = BottomSheetDialog(this)
+        val view = layoutInflater.inflate(R.layout.dialog_swap, null)
+        dialog.setContentView(view)
+        dialog.behavior.state = BottomSheetBehavior.STATE_EXPANDED
+        dialog.behavior.skipCollapsed = true
+
+        val input = view.findViewById<EditText>(R.id.swap_url_input)
+        val clearBtn = view.findViewById<TextView>(R.id.swap_url_clear)
+        val errorView = view.findViewById<TextView>(R.id.swap_url_error)
+        val openBtn = view.findViewById<Button>(R.id.swap_btn_open)
+        val cancelBtn = view.findViewById<Button>(R.id.swap_btn_cancel)
+
+        input.setText("kyc.rip")
+        input.setSelection(input.text.length)
+
+        fun updateClearVisibility() {
+            clearBtn.visibility = if (input.text.isNullOrEmpty()) View.INVISIBLE else View.VISIBLE
         }
-        AlertDialog.Builder(this)
-            .setTitle(R.string.swap_dialog_title)
-            .setView(input)
-            .setPositiveButton(R.string.swap_dialog_open) { _, _ ->
-                val normalized = NavigationPolicy.normalizeUserSwapInput(input.text.toString())
-                if (normalized == null) {
-                    Toast.makeText(this, "Enter a valid HTTPS host (e.g. trocador.app)", Toast.LENGTH_SHORT).show()
-                    return@setPositiveButton
-                }
-                val (url, host) = normalized
-                val entry = createTab(Compartment.SWAP, openImmediately = true)
-                entry.allowedSwapHosts.add(host)
-                entry.session.loadUri(url)
+        updateClearVisibility()
+        input.doAfterTextChanged {
+            updateClearVisibility()
+            if (errorView.visibility == View.VISIBLE) errorView.visibility = View.GONE
+        }
+        clearBtn.setOnClickListener {
+            input.setText("")
+            input.requestFocus()
+        }
+
+        val chips = listOf(
+            R.id.swap_chip_kycrip to "kyc.rip",
+            R.id.swap_chip_xmrclub to "xmr.club",
+            R.id.swap_chip_xmrbio to "xmr.bio",
+        )
+        for ((chipId, host) in chips) {
+            view.findViewById<TextView>(chipId).setOnClickListener {
+                input.setText(host)
+                input.setSelection(host.length)
+                errorView.visibility = View.GONE
             }
-            .setNegativeButton(R.string.cancel, null)
-            .show()
+        }
+
+        fun submit() {
+            val normalized = NavigationPolicy.normalizeUserSwapInput(input.text.toString())
+            if (normalized == null) {
+                errorView.text = getString(R.string.swap_invalid_host)
+                errorView.visibility = View.VISIBLE
+                return
+            }
+            dialog.dismiss()
+            val (url, host) = normalized
+            val entry = createTab(Compartment.SWAP, openImmediately = true)
+            entry.allowedSwapHosts.add(host)
+            entry.session.loadUri(url)
+        }
+
+        openBtn.setOnClickListener { submit() }
+        cancelBtn.setOnClickListener { dialog.dismiss() }
+        input.setOnEditorActionListener { _, actionId, _ ->
+            if (actionId == EditorInfo.IME_ACTION_GO || actionId == EditorInfo.IME_ACTION_DONE) {
+                submit()
+                true
+            } else {
+                false
+            }
+        }
+        dialog.show()
     }
 
     private fun createTab(

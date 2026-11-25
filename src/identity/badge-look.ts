@@ -73,7 +73,7 @@ export function moneroSymbol(doc: Document, variant: 'mono' | 'color'): SVGSVGEl
 }
 
 export const BADGE_CSS = `
-:host { flex: none; }
+:host { flex: none; align-self: center; }
 .badge {
   all: unset;
   vertical-align: middle;

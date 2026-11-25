@@ -269,5 +269,89 @@ describe('badges on X', () => {
     expect(document.querySelector('#cellrow > xmradar-badge')).not.toBeNull();
     expect(document.querySelector('#mention xmradar-badge')).toBeNull();
   });
+
+  it('notifications get pills on named actors, ignore snippet mentions, and draw xo rings on grouped avatars', async () => {
+    const dirEntry = { source: 'xmrbio', address: ADDR, check: { ok: true, type: 'standard' }, verified: true, method: 'xmrbio:directory', xoCount: 10 };
+    const xbtDir = { handle: 'xbtoshi', primary: dirEntry, entries: [dirEntry], differ: false } as unknown as Badge;
+    const freedo = { handle: 'freedomxmr', primary: { ...dirEntry, xoCount: undefined }, entries: [{ ...dirEntry, xoCount: undefined }], differ: false } as unknown as Badge;
+    const empty = (h: string) => ({ handle: h, primary: null, entries: [], differ: false }) as unknown as Badge;
+    send.mockImplementation(async (m: { type: string; handles?: string[] }) => {
+      if (m.type !== 'resolve-handles') return { totals: [], pending: [] };
+      const map: Record<string, Badge> = { xbtoshi: xbtDir, freedomxmr: freedo };
+      return { badges: (m.handles ?? []).map((h) => [h.toLowerCase(), map[h.toLowerCase()] ?? empty(h.toLowerCase())]), pending: [] };
+    });
+
+    document.body.innerHTML = `<div data-testid="primaryColumn">
+      <article data-testid="notification" id="n-single">
+        <div><ul style="overflow:hidden"><div><div data-testid="UserAvatar-Container-freedoMXMR"><a href="/freedoMXMR" tabindex="-1"></a></div></div></ul></div>
+        <div><a href="/freedoMXMR" role="link" id="clash-link"><span>clash</span></a> reposted your post</div>
+        <div>Snippet mentioning <a href="/XBToshi" role="link" id="snippet-mention">@XBToshi</a></div>
+      </article>
+      <article data-testid="notification" id="n-group">
+        <div id="ring-outer"><ul style="overflow:hidden"><div id="av-wrap"><div data-testid="UserAvatar-Container-D_Rock"></div></div><div id="av-xbt-wrap"><div data-testid="UserAvatar-Container-XBToshi" id="av-xbt"></div></div></ul></div>
+        <div><a href="/D_Rock" role="link"><span>D Rock</span></a> and 5 others reposted your post</div>
+      </article>
+    </div>`;
+    const rect = (el: Element, r: { left: number; top: number; width: number; height: number }) =>
+      (el.getBoundingClientRect = () => ({ ...r, right: r.left + r.width, bottom: r.top + r.height, x: r.left, y: r.top, toJSON: () => r }) as DOMRect);
+    rect(document.getElementById('av-xbt')!, { left: 40, top: 100, width: 30, height: 30 });
+    rect(document.getElementById('av-xbt-wrap')!, { left: 40, top: 100, width: 34, height: 30 });
+    rect(document.querySelector('#n-group ul')!, { left: 0, top: 100, width: 200, height: 30 });
+    rect(document.getElementById('ring-outer')!, { left: 0, top: 100, width: 200, height: 30 });
+
+    startBadges(ctx as never);
+    await vi.waitFor(() => expect(badges()).toBe(1), { timeout: 3000 });
+    expect(document.querySelector('#clash-link > xmradar-badge')?.getAttribute('data-key')).toBe('notif:freedomxmr');
+    // snippet mention is NOT an actor in n-single's avatars, so it gets no badge
+    expect(document.querySelector('#snippet-mention xmradar-badge')).toBeNull();
+    // secondary actor in grouped notification gets an unclipped xo ring mounted above the tight overflow:hidden UL
+    await vi.waitFor(() => expect(document.querySelectorAll('[data-xmradar-ring]').length).toBe(1), { timeout: 3000 });
+    const ring = document.querySelector<HTMLElement>('[data-xmradar-ring]')!;
+    expect(ring.getAttribute('data-xmradar-ring')).toBe('notif-av:xbtoshi');
+    expect(ring.parentElement!.id).toBe('ring-outer');
+    // clicking the notification pill opens tip without following the profile link
+    const ev = new MouseEvent('click', { bubbles: true, cancelable: true });
+    mounted[0]!.dispatchEvent(ev);
+    expect(ev.defaultPrevented).toBe(true);
+    expect(openTip).toHaveBeenCalledWith(ctx, 'freedoMXMR', freedo);
+  });
+
+  it('quoted tweets get a pill and xo ring for the quoted author without touching the outer action bar', async () => {
+    const dirEntry = { source: 'xmrbio', address: ADDR, check: { ok: true, type: 'standard' }, verified: true, method: 'xmrbio:directory', xoCount: 10 };
+    const xbtDir = { handle: 'xbtoshi', primary: dirEntry, entries: [dirEntry], differ: false } as unknown as Badge;
+    send.mockImplementation(async (m: { type: string; handles?: string[] }) => {
+      if (m.type !== 'resolve-handles') return { totals: [], pending: [] };
+      return {
+        badges: (m.handles ?? []).map((h) => [
+          h.toLowerCase(),
+          h.toLowerCase() === 'xbtoshi' ? xbtDir : { handle: h.toLowerCase(), primary: null, entries: [], differ: false },
+        ]),
+        pending: [],
+      };
+    });
+
+    document.body.innerHTML = `<div data-testid="primaryColumn"><article data-testid="tweet">
+      <div data-testid="User-Name"><div><a href="/0xQuantic"><span>Quantic</span></a></div><a href="/0xQuantic/status/99"><time></time></a></div>
+      <div role="link" id="quoted-card">
+        <div id="qt-av-outer"><div style="overflow:hidden" id="qt-av-clip"><div id="qt-av-wrap"><div data-testid="Tweet-User-Avatar" id="qt-av"><div data-testid="UserAvatar-Container-XBToshi"></div></div></div></div></div>
+        <div data-testid="User-Name"><div id="qt-row"><span>CyberSatoshi</span></div><div><span>@XBToshi</span></div></div>
+      </div>
+      <div role="group"><div><button data-testid="reply"></button></div><div><button aria-haspopup="menu"></button></div></div>
+    </article></div>`;
+    const rect = (el: Element, r: { left: number; top: number; width: number; height: number }) =>
+      (el.getBoundingClientRect = () => ({ ...r, right: r.left + r.width, bottom: r.top + r.height, x: r.left, y: r.top, toJSON: () => r }) as DOMRect);
+    rect(document.getElementById('qt-av')!, { left: 20, top: 50, width: 23, height: 23 });
+    rect(document.getElementById('qt-av-wrap')!, { left: 20, top: 50, width: 200, height: 23 });
+    rect(document.getElementById('qt-av-clip')!, { left: 20, top: 50, width: 200, height: 23 });
+    rect(document.getElementById('qt-av-outer')!, { left: 20, top: 50, width: 240, height: 23 });
+
+    startBadges(ctx as never);
+    await vi.waitFor(() => expect(badges()).toBe(1), { timeout: 3000 });
+    expect(document.querySelector('#qt-row > xmradar-badge')?.getAttribute('data-key')).toBe('quote:xbtoshi');
+    expect(xaps().length).toBe(0);
+    const ring = document.querySelector<HTMLElement>('[data-xmradar-ring]')!;
+    expect(ring.getAttribute('data-xmradar-ring')).toBe('quote:xbtoshi');
+    expect(ring.parentElement!.id).toBe('qt-av-outer');
+  });
 });
 
