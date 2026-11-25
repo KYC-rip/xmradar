@@ -96,6 +96,7 @@ def main() -> None:
     chrome, firefox = f'xmradar-{version}-chrome.zip', f'xmradar-{version}-firefox.zip'
     if firefox not in names:
         sys.exit(f'{tag} has no {firefox}')
+    apk = next((n for n in names if n.endswith('-arm64-v8a.apk')), None)
     sums = {}
     for line in gh('release', 'download', tag, '-R', REPO, '-p', 'SHA256SUMS', '-O', '-').splitlines():
         if m := re.fullmatch(r'([0-9a-f]{64})\s+\*?(\S+)', line.strip()):
@@ -105,17 +106,27 @@ def main() -> None:
     commit = need(gh('api', f'repos/{REPO}/commits/{tag}', '--jq', '.sha').strip(), r'[0-9a-f]{40}', 'commit')
 
     dl = f'https://github.com/{REPO}/releases/download/{tag}'
+    sha_android = sums.get(apk, '') if apk else ''
     values = {
         'VERSION': version,
         'RELEASE_URL': r['url'],
         'CHROME_URL': f'{dl}/{chrome}',
         'FIREFOX_URL': FIREFOX_ADDON_URL,
         'FIREFOX_ZIP_URL': f'{dl}/{firefox}',
+        'ANDROID_URL': f'{dl}/{apk}' if apk else f'https://github.com/{REPO}/releases',
+        'ANDROID_APK': apk or 'arm64-v8a APK (next release)',
+        'ANDROID_META': (
+            f'Version {tag.lstrip("v")} · signed arm64-v8a APK · SHA-256 {sha_android[:8]}…{sha_android[-8:]}'
+            if apk and sha_android
+            else 'Signed arm64-v8a APKs are published on GitHub Releases (next tagged release).'
+        ),
         'CHROME_ZIP': chrome,
         'COMMIT': commit,
         'COMMIT_SHORT': commit[:7],
         'SHA_CHROME': sums[chrome],
         'SHA_CHROME_SHORT': f'{sums[chrome][:4]}…{sums[chrome][-4:]}',
+        'SHA_ANDROID': sha_android or 'Published with tagged Android APK releases',
+        'SHA_ANDROID_SHORT': f'{sha_android[:4]}…{sha_android[-4:]}' if sha_android else 'releases →',
     }
 
     latest = latest_json(tag, version)

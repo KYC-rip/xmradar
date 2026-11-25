@@ -128,7 +128,10 @@
     <p>With a local model (Ollama or LM Studio on your computer), the post never leaves your device. If you choose an OpenAI-compatible provider or Anthropic with your own API key, the post text and its current tags are sent directly from your browser to the endpoint you configured, under your key. The key is stored in this browser, is not synced, and is never shown to pages. <b>Off by default; only when you press Suggest or turn on Auto.</b></p>
 
     <h3 id="chat">chat.xmr.club — side panel</h3>
-    <p>When you open <b>Chat</b>, XMRadar loads <code>chat.xmr.club</code> in Chrome's side panel or Firefox's sidebar. That site's own privacy policy applies to the chat; messages are carried by Nostr relays.</p>
+    <p>When you open <b>Chat</b>, XMRadar loads <code>chat.xmr.club</code> in Chrome's side panel, Firefox's sidebar, or its isolated tab on Android. That site's own privacy policy applies to the chat; messages are carried by Nostr relays.</p>
+
+    <h3 id="android">Standalone Android app (GrapheneOS / Android)</h3>
+    <p>The standalone Android app bundles XMRadar's Firefox MV3 WebExtension inside Mozilla GeckoView with zero Google Play Services, zero Firebase/FCM, and zero analytics. X, Chat and Private Swap tabs run in separate GeckoView cookie jars; external links hand off to your system browser. Only <code>INTERNET</code> and optional Android 13+ <code>POST_NOTIFICATIONS</code> (opt-in for XMRadar Xap/xo alerts and X/Chat web notifications while the app runs) are requested — never location, camera, microphone or storage. When paired with a NIP-55 Android signer (such as Amber or Ripley Vault), signing happens entirely on-device via Android Intents and ContentResolver after verifying the signer's app certificate.</p>
 
     <h3 id="opened">Pages XMRadar opens for you</h3>
     <ul>
@@ -184,6 +187,7 @@
     <a href="#price">Price</a>
     <a href="#ai">Tag suggestions</a>
     <a href="#chat">Chat</a>
+    <a href="#android">Android app</a>
     <a href="#never">What is never sent</a>
     <a href="#choices">Your choices</a>
     <a href="#retention">Retention</a>

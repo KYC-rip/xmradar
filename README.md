@@ -1,13 +1,15 @@
 # XMRadar
 
-A browser extension for Chrome and Firefox that brings Monero to the pages you already use. It holds no keys and no funds.
+A browser extension for Firefox and Chrome — plus a standalone GrapheneOS & Android app — that brings Monero to the pages you already use. It holds no Monero keys and no funds.
 
-- **Tip with Monero:** XMR badges on X for people who published a Monero address (via xmr.bio or Nostr), and a tip dialog that opens your own wallet.
+- **Tip with Monero & xo:** XMR badges and xo avatar rings across X (timelines, quoted posts, notifications, people lists, profiles, and hover cards) for people who published a Monero address via xmr.bio or Nostr, with a tip dialog that opens your own wallet.
 - **Your Monero identity:** publish your address on Nostr and link it to your X account, step by step.
 - **Burner email:** a throwaway GhostMail address in one click, for sign-ups.
 - **Swap receipts and letters of guarantee:** on an exchange's order page that carries a signed NKIP-0001 receipt, or whose operator signs a letter of guarantee (PGP or MistProof), a check of the signature and the page's addresses, and a copy saved in your browser for disputes.
 - **Warnings before a copy loads:** a lookalike of a listed exchange or wallet (`www-trocador.app`, a Cyrillic letter, a one-letter typo) or one of xmr.club's confirmed impersonators gets a warning page before any request reaches it.
-- **Copy posts to Nostr:** from X, Bluesky, Mastodon, LinkedIn, Facebook, or any page, with tags and optional tag suggestions from a local model or your own key.
+- **Copy posts to Nostr:** from X (including X's share menu), Bluesky, Mastodon, LinkedIn, Facebook, or any page, signed by your NIP-07 browser signer or NIP-55 Android signer (Amber, Ripley Vault), with optional tag suggestions.
+- **Composer writing helper:** opt-in pen button inside X's composer (desktop and mobile) for proofreading or tightening a draft or highlighted selection using local Ollama / LM Studio or your own API key.
+- **Standalone Android / GrapheneOS app:** hardened Mozilla GeckoView shell (`android/`) with XMRadar's Firefox MV3 extension built in — isolated X, Chat, and Private Swap Guard tabs, native NIP-55 signer bridge, opt-in live notifications, and zero Google Play Services.
 
 Free software under the GNU GPL v3 or later (see `LICENSE`). Releases: https://github.com/KYC-rip/xmradar/releases
 
@@ -38,9 +40,19 @@ pnpm test
 pnpm dev          # Chrome with hot reload; `pnpm dev:firefox` for Firefox
 ```
 
+**Standalone Android APK** (requires JDK 17+ and Android SDK; bundles `output/firefox-mv3` automatically):
+
+```sh
+pnpm wxt build -b firefox
+cd android
+./gradlew testDebugUnitTest assembleDebug      # → app/build/outputs/apk/debug/app-debug.apk
+# Signed release APK (set XMRADAR_KEYSTORE_PATH, XMRADAR_KEYSTORE_PASSWORD, XMRADAR_KEY_ALIAS, XMRADAR_KEY_PASSWORD):
+./gradlew lintVitalRelease assembleRelease     # → app/build/outputs/apk/release/app-release.apk
+```
+
 ## Releases
 
-Releases are made only by CI: push a tag `vX.Y.Z` that matches `package.json` on a commit in `main`, and `.github/workflows/release.yml` builds, tests and attaches `xmradar-<version>-{chrome,firefox,sources}.zip` and `SHA256SUMS` to a GitHub release. The 4th version part is the CI run number (`0.1.0.142`), shown in the options sidebar as `v0.1.0 · build 142 · <commit>`. Local builds say "dev build".
+Releases are made only by CI: push a tag `vX.Y.Z` that matches `package.json` on a commit in `main`, and `.github/workflows/release.yml` builds, tests and attaches `xmradar-<version>-{chrome,firefox,sources}.zip`, the signed `xmradar-<X.Y.Z>-arm64-v8a.apk` (when `XMRADAR_KEYSTORE_*` secrets are configured), and `SHA256SUMS` to a GitHub release. The 4th version part on extension zips is the CI run number (`0.1.0.142`), shown in the options sidebar as `v0.1.0 · build 142 · <commit>`. Local builds say "dev build". `.github/workflows/android.yml` also runs Android unit tests and builds a debug APK artifact on every push to `main` and PR.
 
 `scripts/build-release.sh [dist/…]` makes the same zips from a committed tree (it refuses uncommitted changes and untracked files under `src/` or `public/`). The zips are byte-identical for the same commit on the same OS, Node and zip tool; CI's Ubuntu 24.04 build is the canonical one. To check a release byte for byte:
 
@@ -63,7 +75,18 @@ diff dist/SHA256SUMS release-SHA256SUMS
 - Firefox MV3 doesn't grant site access at install time. Open the extension's options page and click **Grant access**, or enable it under *about:addons → XMRadar → Permissions*.
 - For a local or release zip test: open `about:debugging#/runtime/this-firefox`, click *Load Temporary Add-on*, and pick `xmradar-<version>-firefox.zip` (or `output/firefox-mv3/manifest.json`). Temporary add-ons are removed when Firefox restarts.
 
+**Android / GrapheneOS (`arm64-v8a`):** download the signed `xmradar-<version>-arm64-v8a.apk` from [Releases](https://github.com/KYC-rip/xmradar/releases) (or track releases directly in Obtainium). Zero Google Play Services, zero Firebase, zero trackers. Fastlane store metadata lives under `metadata/rip.kyc.xmradar/`.
+
 **Chrome / Brave / Edge:** not in the Chrome Web Store yet. Download `xmradar-<version>-chrome.zip` from [Releases](https://github.com/KYC-rip/xmradar/releases) (or build it yourself), unzip it, open `chrome://extensions`, turn on Developer mode, click *Load unpacked*, and pick the unzipped folder (or `output/chrome-mv3` after `pnpm build`). To update, replace the folder's contents and click the reload icon on `chrome://extensions`; XMRadar tells you when a new version is out (see **Updates** below).
+
+## Standalone Android / GrapheneOS app
+
+Under `android/`, XMRadar ships a standalone Mozilla GeckoView shell (`rip.kyc.xmradar`) that bundles the built Firefox MV3 WebExtension from `output/firefox-mv3` so GrapheneOS and Android users never need the proprietary X APK:
+
+- **Isolated compartments:** X (`contextId = "x"`), Chat (`chat.xmr.club`), and Private Swap Guard (private browsing session) run in separate GeckoView cookie jars. External links (including `t.co`) hand off to your system browser; `monero:` links prompt before handing off to your wallet app.
+- **Floating XMRadar orb & Private Swap Guard:** a draggable edge-snapping orb opens the navigation sheet (X, XMRadar menu, Chat, Private Swap modal with quick-pick hosts and Swap Guard protections, Options) without crowding X's bottom tab bar.
+- **Native NIP-55 Android signer bridge:** pairs with Android Nostr signers such as **Amber** or **Ripley Vault**, pins the signer's signing certificate, uses the silent background ContentResolver fast-path when pre-authorized (e.g. Blossom media uploads), and opens the signer's interactive approval UI for posts.
+- **Opt-in notifications without FCM:** supports XMRadar Xap/xo alerts and X/Chat web notifications via Android's `NotificationManager` (`POST_NOTIFICATIONS`, Android 13+, strictly denied in private Swap tabs). Only `INTERNET` and optional `POST_NOTIFICATIONS` are requested — no location, camera, microphone, or storage permissions.
 
 ## Options
 
@@ -97,7 +120,7 @@ With **Discover X badges via relays** turned on under **Options → Badges on X*
 - **xmr.bio's directory:** the whole signed list of handles with a Monero address, downloaded every hour (the same file for everyone) and checked against xmr.bio's pinned key, so no lookup reveals which accounts you view.
 - **xo rings:** the directory also carries each account's xo total. xmr.bio reads xos from damus, nos.lol and primal every 10 minutes, checks each sender is a Monero person (a valid Monero address and a proof tweet naming their npub), and counts distinct posts, at most 10 per sender. An account with xos gets a thin orange ring on its avatar and `ɱ❤ N` in its badge. Anyone can recount from the public xo events. A Monero address can be reused and one X account can prove several keys, so the number is a soft signal, not proof of distinct people. Their posts from the last 30 days also show, beside the heart, how many Monero people sent each one an xo (one per person, from the same checked senders; the directory lists 16-hex key prefixes so your own xo isn't counted twice). xmr.bio profile pages show the total too. Switch: *Options → Badges on X → xo rings and counts*.
 - **X profiles:** an address someone posts on their own profile (bio, Website, pinned post) gets a badge too, kept on this device and labelled **not verified**. Switch: **Read addresses from X profiles**.
-- Every post by a badged author shows a small XMR pill after their name. The profile header's badge must match the @handle it shows.
+- Every post by a badged author shows a small XMR pill after their name, including quoted posts, notification rows (`article[data-testid="notification"]`), people lists (`UserCell`), hover cards, and profile headers (whose badge must match the @handle it shows). Avatars in timelines, quoted posts, notifications, people lists, hover cards, and profile headers get the xo ring when the account has directory xos.
 
 ## Xap (NKIP-0002)
 
