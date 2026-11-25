@@ -1,0 +1,5 @@
+- Standalone GrapheneOS / Android release bundling XMRadar Firefox MV3 on GeckoView with isolated X, Chat, and Private Swap Guard tabs.
+- Cert-pinned NIP-55 Android signer bridge (Amber, Ripley Vault) with silent Blossom uploads and interactive post approvals.
+- Enriched Private Swap Guard modal with quick-pick hosts and Swap Guard checklist.
+- Monero pills and unclipped xo avatar rings on X notifications, quoted posts, people lists, and hover cards.
+- Mobile X dark-mode writing helper, Share sheet Copy to Nostr, opt-in notifications, and zero-reload lock/unlock.

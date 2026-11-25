@@ -109,6 +109,7 @@ def main() -> None:
     sha_android = sums.get(apk, '') if apk else ''
     values = {
         'VERSION': version,
+        'VERSION_SHORT': tag.lstrip('v'),
         'RELEASE_URL': r['url'],
         'CHROME_URL': f'{dl}/{chrome}',
         'FIREFOX_URL': FIREFOX_ADDON_URL,

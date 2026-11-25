@@ -14,229 +14,207 @@
 <meta property="og:image:height" content="630">
 <meta property="og:image:alt" content="XMRadar: Monero on the pages you already use. A post with an XMR tip badge, a verified letter and a lookalike-site warning.">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="color-scheme" content="light dark">
+<meta name="color-scheme" content="dark light">
 <link rel="icon" type="image/png" href="logo/icon/32.png">
 <link rel="preload" href="fonts/manrope-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-<header class="wrap">
-  <a class="brand" href="#top"><img src="logo/xmradar.svg" alt=""><span>XMRadar</span></a>
-  <nav aria-label="Main">
-    <a href="#features">Features</a>
-    <a href="#android">Android</a>
-    <a href="#proof">Your badge</a>
-    <a href="#on-x">On X</a>
-    <a href="#privacy">Privacy</a>
-    <a href="https://nkips.org">NKIPs</a>
-    <a href="https://github.com/KYC-rip/xmradar">GitHub</a>
-  </nav>
-  <div class="head-actions">
-    <a class="btn-donate-sm" href="https://pwa.cash/s/xbtoshi">ɱ Donate</a>
-    <a class="btn-install-sm" href="#install">Install</a>
+<header class="site-header">
+  <div class="wrap head-inner">
+    <a class="brand" href="#top"><img src="logo/xmradar.svg" width="28" height="28" alt=""><span>XMRadar</span><code class="ver-pill">v{{VERSION_SHORT}}</code></a>
+    <nav class="pill-nav" aria-label="Main">
+      <a href="#features">Features</a>
+      <a href="#android">Android</a>
+      <a href="#proof">Your badge</a>
+      <a href="#on-x">On X</a>
+      <a href="#privacy">Privacy</a>
+      <a href="https://nkips.org">NKIPs</a>
+      <a href="https://github.com/KYC-rip/xmradar">GitHub</a>
+    </nav>
+    <div class="head-actions">
+      <a class="btn-donate-sm" href="https://pwa.cash/s/xbtoshi">ɱ Donate</a>
+      <a class="btn-install-sm" href="#install">Install</a>
+    </div>
   </div>
 </header>
 
 <main>
 <section id="top" class="wrap hero" aria-roledescription="carousel" aria-label="What XMRadar does">
-  <div class="slides">
-    <div class="slide" id="slide-tips" role="tabpanel" aria-label="Tips">
-      <div class="copy">
-        <span class="pill">Firefox Add-ons · Chrome · Android &amp; GrapheneOS</span>
-        <h1>Monero on the pages you already use.</h1>
-        <p class="lede">XMRadar shows who takes Monero on X, lets you tip them from your own wallet or send a Monero like, checks swap sites before you deposit, and copies posts to Nostr.</p>
-        <div class="btns">
-          <a class="btn btn-primary" href="{{FIREFOX_URL}}">Add to Firefox</a>
-          <a class="btn btn-secondary" href="#android">Android APK</a>
-          <a class="btn btn-secondary" href="{{CHROME_URL}}">Chrome</a>
-        </div>
-        <span class="fine">Free and <a href="https://github.com/KYC-rip/xmradar">open source</a>. Holds no Monero keys and no funds.</span>
+  <div class="hero-grid">
+    <div class="hero-copy">
+      <span class="pill"><span class="pdot" aria-hidden="true"></span>FIREFOX ADD-ONS · CHROME · ANDROID &amp; GRAPHENEOS</span>
+      <h1>Monero on the pages you already <span class="hl">use.</span></h1>
+      <p class="lede">XMRadar shows who takes Monero on X, lets you tip them from your own wallet or send a Monero like, checks swap sites before you deposit, and copies posts to Nostr.</p>
+      <div class="btns">
+        <a class="btn btn-primary" href="{{FIREFOX_URL}}">Add to Firefox</a>
+        <a class="btn btn-secondary" href="#android">Standalone APK</a>
+        <a class="btn btn-secondary" href="{{CHROME_URL}}">Chrome</a>
       </div>
-      <div class="stage" aria-hidden="true">
-        <div class="mock post">
-          <div class="avatar"></div>
-          <div class="post-body">
-            <div class="post-head"><b>satoshi.fan</b><span class="xmr-tag">XMR</span><span class="muted">· 2h</span></div>
-            <span>Ran a node at home for a year. Notes on bandwidth, disk and what broke.</span>
-            <div class="post-actions"><span>Reply</span><span>Repost</span><span class="xap">ɱ 0.006 ✓</span></div>
-          </div>
-        </div>
-        <div class="popup">
-          <div class="popup-head"><img src="logo/icon/32.png" alt=""><b>XMRadar</b><span class="push muted" style="font-size:11px">Tip satoshi.fan</span></div>
-          <div class="popup-body">
-            <div class="amounts"><span>0.0002</span><span class="on">0.001</span><span>0.005</span></div>
-            <span class="wallet">Open in wallet</span>
-            <span class="okline">Address checked, with where it came from</span>
-          </div>
-        </div>
+      <span class="fine"><span class="ok-mark" aria-hidden="true">✓</span> Free and <a href="https://github.com/KYC-rip/xmradar">open source</a> (GPL-3.0). Holds no Monero keys and no funds.</span>
+      <div class="spec-strip">
+        <div class="spec-tile"><span class="kicker">NKIP-0001</span><b>Swap Receipts</b><span class="meta ok">● PGP &amp; MistProof</span></div>
+        <div class="spec-tile"><span class="kicker">NKIP-0002</span><b>Nostr Xaps &amp; xo</b><span class="meta xmr">● ɱ Tips Native</span></div>
+        <div class="spec-tile"><span class="kicker">NIP-55</span><b>GrapheneOS APK</b><span class="meta acc">● Zero GMS / FCM</span></div>
       </div>
     </div>
 
-    <div class="slide" id="slide-safety" role="tabpanel" aria-label="Swap safety" aria-hidden="true" inert>
-      <div class="copy">
-        <span class="pill ok">Swap safety · receipts and letters</span>
-        <h1>Check the swap before you send.</h1>
-        <p class="lede">On a swap order page, XMRadar checks the exchange's signed receipt or letter of guarantee against the deposit address the page shows, keeps a copy for disputes, and shows the site's grade on xmr.club.</p>
-        <div class="btns">
-          <a class="btn btn-primary" href="{{FIREFOX_URL}}">Add to Firefox</a>
-          <a class="btn btn-secondary" href="#android">Android APK</a>
-          <a class="btn btn-secondary" href="{{CHROME_URL}}">Chrome</a>
-        </div>
-        <span class="fine">Free and <a href="https://github.com/KYC-rip/xmradar">open source</a>. Holds no Monero keys and no funds.</span>
+    <div class="console">
+      <div class="console-bar">
+        <span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>
+        <span class="console-title">LIVE STAGE · XMRADAR PREVIEW</span>
+        <span class="chip-ok">NON-CUSTODIAL</span>
       </div>
-      <div class="stage col" aria-hidden="true">
-        <div class="mock order">
-          <div class="order-left">
-            <div class="order-shot">example.swap order</div>
-            <span class="muted" style="font-size:12px">Send 0.5 XMR to</span>
+
+      <div class="slides">
+        <div class="slide" id="slide-tips" role="tabpanel" aria-label="Tips">
+          <div class="mock post">
+            <div class="avatar ringed">SF</div>
+            <div class="post-body">
+              <div class="post-head"><b>satoshi.fan</b><span class="xmr-tag">XMR ɱ❤ 10</span><span class="muted mono">· 2h</span></div>
+              <p class="post-text">Ran a Monero node at home for a year. Notes on bandwidth, disk, and what broke.</p>
+              <div class="post-actions">
+                <span>Reply</span>
+                <span>Repost</span>
+                <span class="xap">ɱ 0.006 ✓</span>
+                <span class="xo-chip">♥ 14</span>
+              </div>
+            </div>
+          </div>
+          <div class="mock gateway">
+            <div class="gateway-head"><img src="logo/icon/32.png" width="16" height="16" alt=""><b>Tip @satoshi.fan</b><span class="push muted mono">xmr.bio · NIP-39</span></div>
+            <div class="amounts"><span>0.0002 ɱ</span><span class="on">0.001 ɱ</span><span>0.005 ɱ</span><span>Custom</span></div>
+            <div class="gateway-foot">
+              <span class="okline">✓ Address checked, with source</span>
+              <span class="wallet">Open in wallet →</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="slide" id="slide-safety" role="tabpanel" aria-label="Swap safety" aria-hidden="true" inert>
+          <div class="mock order">
+            <div class="order-head"><span class="mono muted">example.swap · order page</span><span class="chip-ok">Letter ✓</span></div>
             <div class="addr">8sB7dgX9Lv4DfMJfv9Jb15ryPf1pVzvAgW982E1YtVfQkjZEoRGyH1Juxy3DVLfATCWEmGyfTdT9XMopGPNT6EUnfAqScva</div>
+            <span class="muted small">Signed with the operator's key from xmr.club's list. The deposit address matches. Saved locally.</span>
           </div>
-          <div class="card-pop">
-            <div class="card-pop-head"><img src="logo/icon/32.png" width="14" height="14" fetchpriority="low" alt=""><b style="color:var(--ok)">Letter ✓</b></div>
-            <span class="muted" style="font-size:12px;line-height:1.45">Signed with the operator's key from xmr.club's list. The deposit address matches. Saved in this browser.</span>
-          </div>
+          <div class="mock status-row"><span class="grade" style="background:#c45a1a">B</span><b>example.swap</b><span class="push muted mono">xmr.club grade</span></div>
+          <div class="mock status-row danger-row"><span class="dot danger"></span><b>Address not in the signed letter</b><span class="push mono danger-txt">don't send</span></div>
         </div>
-        <div class="mock status-row"><span class="grade" style="background:#c45a1a">B</span><b>example.swap</b><span class="push muted">grade on xmr.club</span></div>
-        <div class="mock status-row"><span class="dot danger"></span><b>Address not in the signed letter</b><span class="push muted">don't send</span></div>
-      </div>
-    </div>
-    <div class="slide" id="slide-badge" role="tabpanel" aria-label="Your badge" aria-hidden="true" inert>
-      <div class="copy">
-        <span class="pill">Your badge · four steps, in Options</span>
-        <h1>Wear a Monero badge on X.</h1>
-        <p class="lede">Publish your Monero address, link your X account with one tweet, and XMRadar users see an XMR badge next to your name. No Nostr signer needed: without one, XMRadar makes a Nostr key for you, kept in this browser.</p>
-        <div class="btns">
-          <a class="btn btn-primary" href="{{FIREFOX_URL}}">Add to Firefox</a>
-          <a class="btn btn-secondary" href="#android">Android APK</a>
-          <a class="btn btn-secondary" href="{{CHROME_URL}}">Chrome</a>
-        </div>
-        <span class="fine">Free and <a href="https://github.com/KYC-rip/xmradar">open source</a>. Holds no Monero keys and no funds.</span>
-      </div>
-      <div class="stage col" aria-hidden="true">
-        <div class="mock steps">
-          <div class="step-row"><span class="tick">✓</span><b>Nostr key</b><span class="push muted">XMRadar identity</span></div>
-          <div class="step-row"><span class="tick">✓</span><b>Your X handle</b><span class="push muted">@satoshi_fan</span></div>
-          <div class="step-row"><span class="tick">✓</span><b>Monero address</b><span class="push muted">8sB7…Kva</span></div>
-          <div class="step-row"><span class="tick">✓</span><b>X account linked</b><span class="push muted">proof tweet</span></div>
-        </div>
-        <div class="mock status-row"><span class="dot ok"></span><b>Listed on xmr.bio</b><span class="push muted">your badge for XMRadar users</span></div>
-      </div>
-    </div>
-    <div class="slide" id="slide-android" role="tabpanel" aria-label="Android & GrapheneOS" aria-hidden="true" inert>
-      <div class="copy">
-        <span class="pill ok">Standalone Android app · GrapheneOS ready</span>
-        <h1>X with Monero. Without the X app.</h1>
-        <p class="lede">A hardened GeckoView shell with XMRadar built in: isolated X, Chat and private Swap Guard tabs, native NIP-55 Android signer support (Amber, Ripley Vault), and zero Google Play Services.</p>
-        <div class="btns">
-          <a class="btn btn-primary" href="{{ANDROID_URL}}">Download Android APK</a>
-          <a class="btn btn-secondary" href="#android">How it works</a>
-        </div>
-        <span class="fine">arm64-v8a · GPL-3.0 · zero GMS, zero Firebase, zero trackers.</span>
-      </div>
-      <div class="stage col" aria-hidden="true">
-        <div class="mock steps">
-          <div class="step-row"><span class="tick">✓</span><b>Isolated X session</b><span class="push muted">no proprietary X APK</span></div>
-          <div class="step-row"><span class="tick">✓</span><b>Private Swap Guard</b><span class="push muted">separate private tab</span></div>
-          <div class="step-row"><span class="tick">✓</span><b>NIP-55 Android signer</b><span class="push muted">Amber · Ripley Vault</span></div>
-          <div class="step-row"><span class="tick">✓</span><b>Zero GMS / FCM</b><span class="push muted">GrapheneOS ready</span></div>
-        </div>
-        <div class="mock status-row"><img src="logo/icon/32.png" width="16" height="16" fetchpriority="low" alt=""><b>GeckoView + XMRadar MV3</b><span class="push muted">arm64-v8a APK</span></div>
-      </div>
-    </div>
-  </div>
 
-  <div class="tabs" role="tablist" aria-label="Slides">
-    <button role="tab" aria-controls="slide-tips" aria-selected="true">Tips</button>
-    <button role="tab" aria-controls="slide-safety" aria-selected="false" tabindex="-1">Safety</button>
-    <button role="tab" aria-controls="slide-badge" aria-selected="false" tabindex="-1">Your badge</button>
-    <button role="tab" aria-controls="slide-android" aria-selected="false" tabindex="-1">Android</button>
-    <button class="pause" type="button" aria-pressed="false" hidden>Pause</button>
+        <div class="slide" id="slide-badge" role="tabpanel" aria-label="Your badge" aria-hidden="true" inert>
+          <div class="mock steps">
+            <div class="step-row"><span class="tick">✓</span><b>Nostr key</b><span class="push muted mono">signer or XMRadar key</span></div>
+            <div class="step-row"><span class="tick">✓</span><b>Your X handle</b><span class="push muted mono">@satoshi_fan</span></div>
+            <div class="step-row"><span class="tick">✓</span><b>Monero address</b><span class="push muted mono">8sB7…Scva</span></div>
+            <div class="step-row"><span class="tick">✓</span><b>X account linked</b><span class="push muted mono">proof tweet verified</span></div>
+          </div>
+          <div class="mock status-row"><span class="dot ok"></span><b>Listed on xmr.bio</b><span class="push muted mono">satoshi_fan.oa.xmr.bio</span></div>
+        </div>
+
+        <div class="slide" id="slide-android" role="tabpanel" aria-label="Android &amp; GrapheneOS" aria-hidden="true" inert>
+          <div class="mock steps">
+            <div class="step-row"><span class="tick">✓</span><b>Isolated X session</b><span class="push muted mono">no proprietary X APK</span></div>
+            <div class="step-row"><span class="tick">✓</span><b>Private Swap Guard</b><span class="push muted mono">separate private tab</span></div>
+            <div class="step-row"><span class="tick">✓</span><b>NIP-55 Android signer</b><span class="push muted mono">Amber · Ripley Vault</span></div>
+            <div class="step-row"><span class="tick">✓</span><b>Zero GMS / FCM</b><span class="push muted mono">GrapheneOS ready</span></div>
+          </div>
+          <div class="mock status-row"><img src="logo/icon/32.png" width="16" height="16" fetchpriority="low" alt=""><b>GeckoView + XMRadar MV3</b><span class="push muted mono">arm64-v8a APK</span></div>
+        </div>
+      </div>
+
+      <div class="console-foot">
+        <div class="tabs" role="tablist" aria-label="Slides">
+          <button role="tab" aria-controls="slide-tips" aria-selected="true">Tips</button>
+          <button role="tab" aria-controls="slide-safety" aria-selected="false" tabindex="-1">Safety</button>
+          <button role="tab" aria-controls="slide-badge" aria-selected="false" tabindex="-1">Your badge</button>
+          <button role="tab" aria-controls="slide-android" aria-selected="false" tabindex="-1">Android</button>
+          <button class="pause" type="button" aria-pressed="false" hidden>Pause</button>
+        </div>
+      </div>
+    </div>
   </div>
 </section>
 
 <section id="features" class="wrap features">
-  <h2>What it does</h2>
-  <div class="grid">
-    <article class="feature">
-      <span class="kicker">01 · X · NKIP-0002</span>
+  <div class="sec-head">
+    <div>
+      <span class="kicker">SYSTEM CAPABILITIES</span>
+      <h2>What it does</h2>
+    </div>
+    <span class="kicker sec-note">MODULAR PRIVACY INSTRUMENTS</span>
+  </div>
+  <div class="bento">
+    <article class="feature span-6">
+      <div class="feat-top"><span class="kicker-tag">01 · X · NKIP-0002</span><span class="tag-ok">NIP-39 VERIFIED</span></div>
       <h3>Tip badges</h3>
       <p>An XMR badge across timelines, quoted posts, notifications, people lists, profiles and hover cards for anyone who published a Monero address on Nostr or verified it on xmr.bio. Click it to tip from your own wallet; a Xap records the tip on Nostr, separating recipient-confirmed totals from claimed ones.</p>
-      <div class="feature-demo"><span class="xap">ɱ 0.004 ✓</span><span class="claimed">+0.002 claimed</span></div>
+      <div class="term-strip"><span class="xap">ɱ 0.004 ✓</span><span class="muted">+0.002 claimed</span><span class="push ok-txt">monero: wallet hand-off</span></div>
     </article>
 
-    <article class="feature">
-      <span class="kicker">02 · X · NIP-25</span>
+    <article class="feature span-6">
+      <div class="feat-top"><span class="kicker-tag">02 · X · NIP-25</span><span class="tag-xmr">NOSTR NATIVE</span></div>
       <h3>xo, a Monero like</h3>
-      <p>A heart next to the Xap button sends the author a Monero like over Nostr. Hold it (or press Shift+Enter) to like the post on X too. Badge holders who haven't set up XMRadar yet get it too: it waits for them, and counts once they do. Accounts with xos get a thin orange ring on their avatar and the total in their badge, counted by xmr.bio. Received xos count only from Monero people, with a Monero address and a verified X link, and can notify you along with your Xaps.</p>
-      <div class="feature-demo"><span class="xo-demo"><span class="heart">♥</span> 12</span><span class="claimed">hold: also like on X</span></div>
+      <p>A heart next to the Xap button sends the author a Monero like over Nostr. Hold it (or press Shift+Enter) to like the post on X too. Accounts with xos get a thin orange ring on their avatar and the total in their badge, counted by xmr.bio. Received xos count only from Monero people and can notify you along with your Xaps.</p>
+      <div class="term-strip"><span class="xo-chip">♥ xo 12</span><span class="muted">avatar ring on</span><span class="push muted">hold: also like on X</span></div>
     </article>
 
-    <article class="feature">
-      <span class="kicker">03 · Options → Monero identity</span>
+    <article class="feature span-4">
+      <div class="feat-top"><span class="kicker-tag">03 · IDENTITY</span></div>
       <h3>Your own badge</h3>
-      <p>Four steps: a Nostr key, your X handle, your Monero address, and one tweet that links them. No signer? XMRadar makes a Nostr key for you, kept in this browser. Once your link and address check out, XMRadar also lists you on xmr.bio (you can untick it), whose directory XMRadar users with badges on download, so they see your badge too.</p>
-      <div class="feature-demo rows">
-        <div class="row"><span class="dot ok"></span><b>Address published</b></div>
-        <div class="row"><span class="dot ok"></span><b>X account linked</b></div>
-        <div class="row"><span class="dot ok"></span><b>Listed on xmr.bio</b></div>
+      <p>Four steps: a Nostr key, your X handle, your Monero address, and one tweet that links them. No signer? XMRadar makes a Nostr key for you, kept in this browser, and lists you on xmr.bio (optional) with an OpenAlias wallet name.</p>
+      <div class="term-strip col-strip">
+        <span class="ok-txt">✓ Address published &amp; OpenAlias</span>
+        <span class="ok-txt">✓ X account linked via proof tweet</span>
+        <span class="ok-txt">✓ Listed on xmr.bio directory</span>
       </div>
     </article>
 
-    <article class="feature">
-      <span class="kicker">04 · NKIP-0001 · letters of guarantee</span>
-      <h3>Swap guard</h3>
-      <p>On an exchange's order page, XMRadar checks the signed NKIP-0001 receipt, or the operator's letter of guarantee (PGP or MistProof), against the addresses on the page and in what you copy. A verified copy is saved in your browser for disputes. The toolbar shows the site's xmr.club grade, with a warning for open incidents, and a lookalike of a listed exchange or wallet gets a warning page before it loads.</p>
+    <article class="feature span-8">
+      <div class="feat-top"><span class="kicker-tag">04 · NKIP-0001 · SWAP GUARD</span><span class="tag-ok">XMR.CLUB FEED</span></div>
+      <h3>Swap guard &amp; PGP letters of guarantee</h3>
+      <p>On an exchange's order page, XMRadar checks the signed NKIP-0001 receipt, or the operator's letter of guarantee (PGP or MistProof), against the addresses on the page and in what you copy. A verified copy is saved in your browser for disputes. The toolbar shows the site's xmr.club grade, with warnings for open incidents and a warning page before a lookalike site loads.</p>
       <p class="small">Exchange data from <a href="https://xmr.club">xmr.club</a>, licensed <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>.</p>
-      <div class="feature-demo rows">
-        <div class="row"><span class="dot ok"></span><b>Receipt verified</b><span class="muted">example.swap</span></div>
-        <div class="row"><span class="dot ok"></span><b>Letter verified</b><span class="muted">signed with the operator's listed key</span></div>
-        <div class="row"><span class="dot danger"></span><b>Address doesn't match the receipt</b></div>
+      <div class="term-row-3">
+        <div class="term-cell ok-txt">✓ Receipt verified</div>
+        <div class="term-cell ok-txt">✓ Letter PGP matched</div>
+        <div class="term-cell danger-txt">△ Lookalike warning</div>
       </div>
     </article>
 
-    <article class="feature">
-      <span class="kicker">05 · NKIP-0003</span>
+    <article class="feature span-4">
+      <div class="feat-top"><span class="kicker-tag">05 · NKIP-0003</span></div>
       <h3>Sign in with Monero</h3>
-      <p>A <code>monero-signin:</code> link opens XMRadar's own window with the site, the account, the address, where the signature goes and the full message. Links that break the spec, have expired or come from another site are refused. Your wallet signs; step-by-step guides for Feather, Monero GUI, Cake Wallet, the CLI and RPC.</p>
-      <div class="feature-demo rows">
-        <div class="row"><span class="dot ok"></span><b>xmr.bio</b><span class="muted">sign in as @satoshi_fan</span></div>
-      </div>
+      <p>A <code>monero-signin:</code> link opens XMRadar's own window with the site, account, address, callback, and full message. Expired or mismatched links are refused. Your wallet signs; guides for Feather, GUI, Cake, CLI, and RPC included.</p>
+      <div class="term-strip"><span class="muted">xmr.bio · @satoshi_fan</span><span class="push ok-txt">spend key</span></div>
     </article>
 
-    <article class="feature">
-      <span class="kicker">06 · kyc.rip GhostMail</span>
+    <article class="feature span-4">
+      <div class="feat-top"><span class="kicker-tag">06 · GHOSTMAIL</span></div>
       <h3>Burner email</h3>
-      <p>A throwaway address in one click for sign-ups. New mail shows up as a notification with the code already pulled out.</p>
-      <div class="burner"><code>qz4r8m@ghostmail.kyc.rip</code><span class="muted">42 min</span></div>
+      <p>A throwaway address in one click for sign-ups. New mail shows up as a notification with verification codes already pulled out.</p>
+      <div class="term-strip"><code>qz4r8m@ghostmail.kyc.rip</code><span class="push ok-txt">42 min</span></div>
     </article>
 
-    <article class="feature">
-      <span class="kicker">07 · Nostr · NIP-07 &amp; NIP-55</span>
+    <article class="feature span-4">
+      <div class="feat-top"><span class="kicker-tag">07 · NIP-07 &amp; NIP-55</span></div>
       <h3>Copy posts to Nostr</h3>
-      <p>Use X's share menu (<i>Copy to Nostr</i>), right-click a post on X, Bluesky, Mastodon or any page, or press Alt+Shift+N. Text, images, whole X threads, quoted posts as a picture, and up to 5 tags go to your relays, signed by your NIP-07 browser signer or NIP-55 Android signer (Amber, Ripley Vault). Copied X posts get a small <i>Nostr ✓</i>.</p>
-      <div class="keys" aria-label="Alt+Shift+N"><span>Alt</span><span>Shift</span><span>N</span></div>
+      <p>Use X's share menu (<i>Copy to Nostr</i>), right-click a post on X, Bluesky, Mastodon or any page, or press Alt+Shift+N. Text, images, whole X threads, and quoted shots go to relays via your NIP-07 or NIP-55 signer.</p>
+      <div class="term-strip"><span class="keys-inline"><span>Alt</span><span>Shift</span><span>N</span></span><span class="push ok-txt">Nostr ✓</span></div>
     </article>
 
-    <article class="feature">
-      <span class="kicker">08 · chat.xmr.club</span>
-      <h3>Chat</h3>
-      <p>Menu → Chat opens chat.xmr.club in Chrome's side panel, Firefox's sidebar, or its own isolated tab on Android: a lobby, an X room and a room for each site listed on xmr.club.</p>
-      <div class="feature-demo"><span class="claimed"># lobby</span><span class="claimed"># x</span><span class="claimed"># example.swap</span></div>
-    </article>
-
-    <article class="feature">
-      <span class="kicker">09 · X Composer · Local / BYOK AI</span>
-      <h3>Writing helper</h3>
-      <p>An opt-in pen button inside X's composer (desktop and mobile) to proofread, tighten, or adjust tone on your whole draft or highlighted selection. Runs against local Ollama / LM Studio on your machine, or your own API key — off by default.</p>
-      <div class="feature-demo"><span class="claimed">Ollama · LM Studio</span><span class="claimed">BYOK · off by default</span></div>
-    </article>
-
-    <article class="feature">
-      <span class="kicker">10 · Android · GrapheneOS</span>
-      <h3>Standalone Android app</h3>
-      <p>Full XMRadar bundled inside a hardened Mozilla GeckoView shell so you never need the proprietary X APK. Separate cookie jars for X, Chat and Private Swap Guard tabs, native NIP-55 signer bridge, and zero Google Play Services.</p>
-      <div class="feature-demo"><span class="claimed">GeckoView</span><span class="claimed">NIP-55</span><span class="claimed">Zero GMS</span></div>
+    <article class="feature span-12 feat-wide">
+      <div class="feat-wide-copy">
+        <div class="feat-top"><span class="kicker-tag">08 &amp; 09 · COMPOSER WRITING HELPER &amp; CHAT.XMR.CLUB</span></div>
+        <h3>Writing helper &amp; isolated Chat</h3>
+        <p>Opt-in pen button inside X's composer (desktop and mobile) to proofread or tighten a draft or highlighted selection using local Ollama / LM Studio or your own API key — off by default. Plus <b>Menu → Chat</b> opens <code>chat.xmr.club</code> in Chrome's side panel, Firefox's sidebar, or its own isolated tab on Android.</p>
+      </div>
+      <div class="feat-wide-chips">
+        <span class="chip-mono">Ollama · LM Studio</span>
+        <span class="chip-mono">BYOK · off by default</span>
+        <span class="chip-mono">#lobby</span>
+        <span class="chip-mono">#x</span>
+      </div>
     </article>
   </div>
 </section>
@@ -244,28 +222,32 @@
 <section id="android" class="wrap android-section">
   <div class="android-panel">
     <div class="android-copy">
-      <span class="pill ok">Standalone Android · GrapheneOS</span>
+      <span class="pill ok"><span class="pdot" aria-hidden="true"></span>STANDALONE ANDROID · GRAPHENEOS READY</span>
       <h2>X + Monero + Swap Guard in one sandboxed app</h2>
-      <p class="muted">Built on Mozilla GeckoView with XMRadar's Firefox MV3 WebExtension bundled inside. Keep X in its own isolated session, open swap sites in a private Swap Guard tab, and sign Nostr events through your own Android signer — with zero Google Play Services, zero Firebase and zero trackers.</p>
-      <ul class="android-list">
-        <li><b>Isolated compartments</b> — X, Chat and Private Swap tabs run in separate GeckoView cookie jars; external links hand off to your system browser.</li>
-        <li><b>Native NIP-55 signer bridge</b> — Pair with Amber or Ripley Vault for silent Blossom media uploads and explicit post approvals.</li>
-        <li><b>Opt-in live notifications</b> — XMRadar Xap/xo alerts and X/Chat web notifications without FCM or background telemetry.</li>
-        <li><b>No Play Store required</b> — Direct signed <code>arm64-v8a</code> APK from GitHub Releases (works cleanly with Obtainium).</li>
-      </ul>
+      <p class="muted">Built on Mozilla GeckoView with XMRadar's Firefox MV3 WebExtension bundled inside. Keep X in its own isolated session, open swap sites in a private Swap Guard tab, and sign Nostr events through your own Android signer — with zero Google Play Services, zero Firebase, and zero trackers.</p>
+      <ol class="android-list">
+        <li><span class="num">01</span><div><b>Isolated compartments</b> — X, Chat and Private Swap tabs run in separate GeckoView cookie jars; external links hand off to your system browser.</div></li>
+        <li><span class="num">02</span><div><b>Native NIP-55 signer bridge</b> — Pair with Amber or Ripley Vault for silent Blossom media uploads and explicit post approvals.</div></li>
+        <li><span class="num">03</span><div><b>Opt-in live notifications</b> — XMRadar Xap/xo alerts and X/Chat web notifications without FCM or background telemetry.</div></li>
+        <li><span class="num">04</span><div><b>No Play Store required</b> — Direct signed <code>arm64-v8a</code> APK from GitHub Releases (works cleanly with Obtainium).</div></li>
+      </ol>
       <div class="btns">
         <a class="btn btn-primary" href="{{ANDROID_URL}}">Download Android APK</a>
-        <a class="btn btn-secondary" href="https://github.com/KYC-rip/xmradar/releases">GitHub Releases</a>
+        <a class="btn btn-secondary" href="https://github.com/KYC-rip/xmradar/releases">GitHub Releases →</a>
       </div>
-      <span class="fine">{{ANDROID_META}}</span>
+      <span class="fine mono">{{ANDROID_META}}</span>
     </div>
     <div class="android-shots">
       <figure class="phone-shot">
-        <img src="shots/android-x.webp" width="720" height="1603" alt="XMRadar Android app showing X in dark mode with an orange XMR pill and xo ring on a quoted post" loading="lazy">
+        <div class="phone-frame">
+          <img src="shots/android-x.webp" width="720" height="1603" alt="XMRadar Android app showing X in dark mode with an orange XMR pill and xo ring on a quoted post" loading="lazy">
+        </div>
         <figcaption><b>Badges &amp; xo rings on X</b> — timelines, quoted posts and notifications in dark mode.</figcaption>
       </figure>
       <figure class="phone-shot">
-        <img src="shots/android-swap.webp" width="720" height="1603" alt="XMRadar Android Private Swap Guard modal with URL input, quick-pick chips and protection checklist" loading="lazy">
+        <div class="phone-frame">
+          <img src="shots/android-swap.webp" width="720" height="1603" alt="XMRadar Android Private Swap Guard modal with URL input, quick-pick chips and protection checklist" loading="lazy">
+        </div>
         <figcaption><b>Private Swap Guard</b> — isolated private tabs with phishing checks and NKIP-0001 receipts.</figcaption>
       </figure>
     </div>
@@ -273,35 +255,43 @@
 </section>
 
 <section id="proof" class="wrap proof">
-  <div class="panel">
+  <div class="panel proof-panel">
     <div class="panel-title">
       <span class="kicker">SEEN A "VERIFYING THAT I CONTROL…" TWEET?</span>
       <span class="big">That's an X account linking its Nostr key</span>
-      <span class="muted" style="font-size:15px;text-wrap:pretty">The tweet proves the X account and the Nostr key belong together (NIP-39). Once that key also publishes a Monero address, the account can wear an XMR badge: XMRadar shows it to users who look accounts up on Nostr, and, when XMRadar lists the account on xmr.bio, to everyone with badges on through xmr.bio's signed directory. The listing also gives a wallet name, <code>yourhandle.oa.xmr.bio</code>, for OpenAlias wallets. Then anyone can tip them from their own wallet.</span>
-      <div class="btns" style="margin-top:8px"><a class="btn btn-primary" href="#install">Install XMRadar</a></div>
+      <span class="muted" style="font-size:15px;text-wrap:pretty">The tweet proves the X account and the Nostr key belong together (NIP-39). Once that key also publishes a Monero address, the account can wear an XMR badge: XMRadar shows it to users who look accounts up on Nostr, and, when XMRadar lists the account on xmr.bio, to everyone with badges on through xmr.bio's signed directory. The listing also gives a wallet name, <code>yourhandle.oa.xmr.bio</code>, for OpenAlias wallets.</span>
+      <div class="btns" style="margin-top:10px"><a class="btn btn-primary" href="#install">Install XMRadar</a></div>
     </div>
     <ol class="proof-steps">
-      <li><b>Install XMRadar</b><span class="muted">Firefox Add-ons, standalone Android APK, or Chrome below.</span></li>
-      <li><b>Options → Monero identity</b><span class="muted">Your handle, your Monero address, and one tweet XMRadar writes for you.</span></li>
-      <li><b>Wear it</b><span class="muted">XMRadar users with badges on see it, and can tip you or send an xo.</span></li>
+      <li><span class="step-num">1</span><div><b>Install XMRadar</b><span class="muted">Firefox Add-ons, standalone Android APK, or Chrome below.</span></div></li>
+      <li><span class="step-num">2</span><div><b>Options → Monero identity</b><span class="muted">Your handle, your Monero address, and one tweet XMRadar writes for you.</span></div></li>
+      <li><span class="step-num">3</span><div><b>Wear it</b><span class="muted">XMRadar users with badges on see it, and can tip you or send an xo.</span></div></li>
     </ol>
   </div>
 </section>
 
 <section id="on-x" class="wrap shots">
-  <h2>See it on X</h2>
-  <p class="shots-lede">Real screenshots from <a href="https://x.com/XBToshi">@XBToshi</a>'s profile, with XMRadar installed.</p>
+  <div class="sec-head">
+    <div>
+      <span class="kicker">LIVE INTERFACE IN THE WILD</span>
+      <h2>See it on X</h2>
+    </div>
+    <span class="kicker sec-note">REAL SCREENSHOTS FROM <a href="https://x.com/XBToshi">@XBTOSHI</a>'S PROFILE</span>
+  </div>
   <div class="shots-grid">
     <figure class="shot shot-wide">
+      <div class="shot-bar"><span class="mono">x.com/XBToshi</span><span class="tag-ok">XMR_BADGE</span></div>
       <img src="shots/x-profile.webp" width="1100" height="929" alt="An X profile with an orange XMR badge next to the name" loading="lazy">
       <figcaption>An <b>XMR badge</b> next to the name of anyone who published a Monero address and linked it to their X account.</figcaption>
     </figure>
     <div class="shots-col">
       <figure class="shot">
+        <div class="shot-bar"><span class="mono">POST_ACTION_BAR · INLINE XAP</span><span class="tag-xmr">~0.0017 CLAIMED</span></div>
         <img src="shots/x-post.webp" width="1196" height="356" alt="A post whose action bar has a Monero Xap button showing ~0.0017" loading="lazy">
         <figcaption>A <b>Xap</b> button on each of their posts, with the tips so far (<code>~</code> means claimed by the tippers, not yet confirmed).</figcaption>
       </figure>
       <figure class="shot">
+        <div class="shot-bar"><span class="mono">TIP_POPUP · QR &amp; DIRECT WALLET</span><span class="tag-ok">NON-CUSTODIAL</span></div>
         <img src="shots/x-tip.webp" width="1000" height="935" alt="The tip popup with a QR code, the Monero address and an Open in wallet button" loading="lazy">
         <figcaption>Click either one: the address, a QR code and <b>Open in wallet</b>. XMRadar never touches the funds.</figcaption>
       </figure>
@@ -311,45 +301,47 @@
 
 <section id="privacy" class="wrap privacy">
   <div class="privacy-intro">
+    <span class="kicker">ZERO-TRUST ARCHITECTURE</span>
     <h2>What it never touches</h2>
-    <p>XMRadar runs in your browser, with no account. Its own site is asked only for the latest version number; other services are asked only for the features you use, listed below. The code is open, so you can check every claim.</p>
-    <a class="source" href="/privacy"><code>privacy.html</code><span>The full privacy policy →</span></a>
-    <a class="source" href="https://github.com/KYC-rip/xmradar"><code>KYC-rip/xmradar</code><span>Read the source →</span></a>
+    <p>XMRadar runs locally in your browser or GeckoView shell, with no account. Its own site is asked only for the latest version number; other services are asked only for the features you use. The code is open, so you can check every claim.</p>
+    <div class="source-links">
+      <a class="source" href="/privacy"><code>privacy.html</code><span>Full policy →</span></a>
+      <a class="source" href="https://github.com/KYC-rip/xmradar"><code>KYC-rip/xmradar</code><span>Read source →</span></a>
+    </div>
   </div>
   <ul class="checks">
     <li><span class="tick">✓</span><div><b>No Monero keys, no funds</b><span class="body">Tips open in your wallet, and your wallet signs for Sign in with Monero. XMRadar never sends or holds Monero.</span></div></li>
-    <li><span class="tick">✓</span><div><b>Your Nostr key, your choice</b><span class="body">With a NIP-07 signer, events go through it, and it decides what to ask you. Without one, XMRadar makes its own key, kept in the extension's own storage (IndexedDB) that pages and content scripts can't open, exportable and deletable in Options. That key signs only XMRadar's own events without asking each time: xos and their removal, Xap receipts and confirmations, your profile name, relay list, Monero address, X link and the xmr.bio listing request. Never your posts.</span></div></li>
-    <li><span class="tick">✓</span><div><b>xmr.bio listing is your choice</b><span class="body">On by default. Once your X link verifies and you've published a Monero address, and xmr.bio doesn't know your handle yet, XMRadar sends your handle, address, Nostr key and the proof tweet's id to xmr.bio. Your profile and its directory show the handle, address and key; the tweet id stays in the stored proof. Untick it in Options → Monero identity; on xmr.bio, unlist hides you and delete removes the profile.</span></div></li>
-    <li><span class="tick">✓</span><div><b>What an xo shows</b><span class="body">An xo is a public Nostr event naming the X post's link, the author's X handle and, when it's known, their Nostr key, so relays see who liked what. Holding the heart, or the option for a plain click, also likes the post on X.</span></div></li>
-    <li><span class="tick">✓</span><div><b>No transaction ids in public</b><span class="body">Tip receipts never include a transaction id, tx key or payment proof.</span></div></li>
-    <li><span class="tick">✓</span><div><b>xmr.bio's directory comes whole</b><span class="body">While badges are on (the default), XMRadar downloads xmr.bio's signed directory, the same file for everyone, about once an hour, and matches X accounts on your device. xmr.bio doesn't learn which accounts you view.</span></div></li>
+    <li><span class="tick">✓</span><div><b>Your Nostr key, your choice</b><span class="body">With a NIP-07 or NIP-55 signer, it decides what to ask. Without one, XMRadar's IndexedDB key signs only XMRadar events, never your posts.</span></div></li>
+    <li><span class="tick">✓</span><div><b>xmr.bio listing is your choice</b><span class="body">On by default once verified; untick anytime in Options → Monero identity. Unlist or delete on xmr.bio.</span></div></li>
+    <li><span class="tick">✓</span><div><b>What an xo shows</b><span class="body">A public Nostr reaction naming the post, handle, and key (when known). Holding the heart also likes on X.</span></div></li>
+    <li><span class="tick">✓</span><div><b>No transaction ids in public</b><span class="body">Tip receipts never include a transaction id, tx key, or payment proof.</span></div></li>
+    <li><span class="tick">✓</span><div><b>xmr.bio's directory comes whole</b><span class="body">Downloaded whole every hour and matched on your device. xmr.bio never learns which accounts you view.</span></div></li>
     <li><span class="tick">✓</span><div><b>Discovery is off by default</b><span class="body">Looking up X accounts on relays is opt-in, because relays can see which accounts you view.</span></div></li>
-    <li><span class="tick">✓</span><div><b>The site you visit stays in your browser</b><span class="body">xmr.club's signed list is downloaded whole, the same file for everyone, and matched on your device, lookalike warnings included.</span></div></li>
-    <li><span class="tick">✓</span><div><b>Receipts and letters stay local</b><span class="body">Checked and saved in your browser only. A letter is asked for only from the order page's own site, and keys come from xmr.club's signed list, never from the page.</span></div></li>
-    <li><span class="tick">✓</span><div><b>Burner mail stays local</b><span class="body">GhostMail gets only what the inbox needs (its address and token, and a random proof-of-work seed when it's created), nothing about the page you are on.</span></div></li>
-    <li><span class="tick">✓</span><div><b>The update check carries no ID</b><span class="body">Once a day it asks xmradar.app for the latest version number, with no version, ID or page in the request. Like any visit, the site sees your IP address and browser, and that XMRadar is in use. It only tells you; you download and check the new zip yourself. You can switch it off.</span></div></li>
-    <li><span class="tick">✓</span><div><b>Tag suggestions are opt-in</b><span class="body">Off by default. A local model keeps the post on your computer; a provider gets the post's text and tags only with your own key, which no page can read.</span></div></li>
+    <li><span class="tick">✓</span><div><b>The site you visit stays local</b><span class="body">xmr.club's signed list is downloaded whole and matched on your device, lookalike warnings included.</span></div></li>
+    <li><span class="tick">✓</span><div><b>Receipts and letters stay local</b><span class="body">Checked and saved in your browser only. Keys come from xmr.club's signed list, never from the page.</span></div></li>
+    <li><span class="tick">✓</span><div><b>Burner mail stays local</b><span class="body">GhostMail gets only the inbox address, token, and PoW seed — nothing about the page you are on.</span></div></li>
+    <li><span class="tick">✓</span><div><b>The update check carries no ID</b><span class="body">Once a day asks xmradar.app for the latest version number, with no ID or cookies. Switch it off in Options.</span></div></li>
+    <li><span class="tick">✓</span><div><b>AI writing &amp; tags are opt-in</b><span class="body">Off by default. Local Ollama/LM Studio keeps text on your device; external providers require your own key.</span></div></li>
   </ul>
 </section>
 
-<section class="wrap" style="padding-top:24px;padding-bottom:48px">
-  <div class="panel">
-    <div class="panel-title">
-      <span class="kicker">OPEN STANDARDS</span>
-      <span class="big">Built on Non-KYC Improvement Proposals</span>
-      <span class="muted" style="font-size:15px">Any wallet, exchange or client can implement them.</span>
+<section class="wrap nkips-wrap">
+  <div class="nkips-bar">
+    <div>
+      <span class="kicker">NON-KYC IMPROVEMENT PROPOSALS</span>
+      <span class="nkips-title">Built on open standards any wallet or exchange can implement</span>
     </div>
-    <div class="nkips">
-      <a href="https://nkips.org/nkip-0001/"><code>NKIP-0001</code><span class="name">Verifiable deposit receipts</span><span class="muted">→</span></a>
-      <a href="https://nkips.org/nkip-0002/"><code>NKIP-0002</code><span class="name">Verifiable Monero tips on Nostr</span><span class="muted" style="font-size:12px">Draft</span></a>
-      <a href="https://nkips.org/nkip-0003/"><code>NKIP-0003</code><span class="name">Sign in with Monero</span><span class="muted">→</span></a>
+    <div class="nkips-pills">
+      <a href="https://nkips.org/nkip-0001/"><code>NKIP-0001</code><span>Verifiable receipts →</span></a>
+      <a href="https://nkips.org/nkip-0002/"><code class="xmr-txt">NKIP-0002</code><span>Monero tips (Draft) →</span></a>
+      <a href="https://nkips.org/nkip-0003/"><code class="ok-txt">NKIP-0003</code><span>Sign in with Monero →</span></a>
     </div>
   </div>
 </section>
 
 <section id="install" class="wrap install">
   <div class="install-hero">
-    <img src="logo/xmradar.svg" width="56" height="56" alt="">
+    <img src="logo/xmradar.svg" width="52" height="52" alt="">
     <h2>Install XMRadar</h2>
     <p>Works with any Monero wallet that opens <code>monero:</code> links. A Nostr signer (NIP-07 on desktop, NIP-55 such as Amber or Ripley Vault on Android) is optional for badges, xos and Xaps, and required to copy posts to Nostr.</p>
     <div class="install-cards">
@@ -359,7 +351,7 @@
         <p>Official signed listing for Firefox 140+. Click <b>Grant access</b> on Options after installing.</p>
         <div class="install-card-foot">
           <a class="btn btn-primary" href="{{FIREFOX_URL}}">Add to Firefox</a>
-          <span class="fine"><a href="{{FIREFOX_ZIP_URL}}">Direct Firefox zip</a></span>
+          <span class="fine"><a href="{{FIREFOX_ZIP_URL}}">Direct Firefox zip →</a></span>
         </div>
       </article>
       <article class="install-card">
@@ -367,7 +359,7 @@
         <h3>Standalone APK</h3>
         <p>Hardened GeckoView app with isolated X, Chat and Private Swap tabs, NIP-55 signing, and zero GMS.</p>
         <div class="install-card-foot">
-          <a class="btn btn-primary" href="{{ANDROID_URL}}">Download APK</a>
+          <a class="btn btn-emerald" href="{{ANDROID_URL}}">Download APK</a>
           <span class="fine">arm64-v8a · Obtainium friendly</span>
         </div>
       </article>
@@ -377,41 +369,44 @@
         <p>Unzip the GitHub release and load unpacked from <code>chrome://extensions</code> (Developer mode).</p>
         <div class="install-card-foot">
           <a class="btn btn-secondary" href="{{CHROME_URL}}">Download for Chrome</a>
-          <span class="fine"><a href="{{RELEASE_URL}}">Release notes</a></span>
+          <span class="fine"><a href="{{RELEASE_URL}}">Release notes →</a></span>
         </div>
       </article>
     </div>
-    <span class="fine">Version {{VERSION}} · <a href="{{RELEASE_URL}}">release notes</a> · <a href="{{FIREFOX_ZIP_URL}}">Firefox zip</a> · <a href="{{ANDROID_URL}}">Android APK</a></span>
   </div>
-  <div class="panel builds">
-    <div class="panel-title">
-      <span class="kicker">VERIFIABLE BUILDS</span>
-      <span class="big" style="font-size:18px">Every release is built by CI from a public commit</span>
-      <span class="muted" style="font-size:15px;text-wrap:pretty">The build number comes from the CI run. The same commit builds byte-identical zips on the same OS, Node and zip tool (CI's Ubuntu 24.04 build is the canonical one), and each release is signed with a provenance record.</span>
+
+  <div class="builds-bar">
+    <div class="builds-head">
+      <span class="kicker ok-txt">● REPRODUCIBLE CI BUILDS &amp; GITHUB ATTESTATION</span>
+      <span class="kicker">Version {{VERSION}} · Ubuntu 24.04 Canonical</span>
     </div>
-    <div class="builds-right">
+    <div class="builds-grid">
       <div class="kv">
-        <span class="muted">version</span><span>{{VERSION}}</span>
         <span class="muted">commit</span><a href="https://github.com/KYC-rip/xmradar/commit/{{COMMIT}}">{{COMMIT_SHORT}}</a>
         <span class="muted">chrome</span><span class="ellip" title="{{SHA_CHROME}}">{{SHA_CHROME_SHORT}} {{CHROME_ZIP}}</span>
         <span class="muted">android</span><span class="ellip" title="{{SHA_ANDROID}}">{{SHA_ANDROID_SHORT}} {{ANDROID_APK}}</span>
       </div>
-      <code class="cmd">gh attestation verify {{CHROME_ZIP}} -R KYC-rip/xmradar</code>
-      <a class="more" href="https://github.com/KYC-rip/xmradar/releases">All releases and checksums →</a>
+      <div class="builds-cmd">
+        <code class="cmd">gh attestation verify {{CHROME_ZIP}} -R KYC-rip/xmradar</code>
+        <a class="more" href="https://github.com/KYC-rip/xmradar/releases">All releases and SHA256SUMS →</a>
+      </div>
     </div>
   </div>
 </section>
 
 <section id="donate" class="wrap donate">
   <div class="donate-box">
-    <div><b style="font-size:18px">Free, open source, no ads, no tracking</b><span class="muted" style="font-size:15px">If XMRadar is useful to you, a Monero tip keeps it maintained.</span></div>
+    <div>
+      <b>Free, open source, no ads, no tracking</b>
+      <span class="muted">If XMRadar is useful to you, a Monero tip keeps it maintained.</span>
+    </div>
     <a class="btn-donate" href="https://pwa.cash/s/xbtoshi">ɱ Donate Monero</a>
   </div>
 </section>
 </main>
 
 <footer class="wrap">
-  <span class="foot-brand"><span><img src="logo/icon/32.png" alt="">XMRadar by kyc.rip</span><span style="font-size:12px">Exchange data © <a href="https://xmr.club">xmr.club</a> contributors, <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>.</span></span>
+  <span class="foot-brand"><span><img src="logo/icon/32.png" width="16" height="16" alt="">XMRadar by kyc.rip</span><span class="foot-cc">Exchange data © <a href="https://xmr.club">xmr.club</a> contributors, <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>.</span></span>
   <span class="foot-links"><a href="https://github.com/KYC-rip/xmradar">GitHub</a><a href="https://xmr.club">xmr.club</a><a href="https://pwa.cash/s/xbtoshi">Donate</a><a href="https://kyc.rip">kyc.rip</a><a href="https://nkips.org">nkips.org</a><a href="/privacy">Privacy</a></span>
 </footer>
 

@@ -3,6 +3,12 @@
 What changed in each XMRadar release. Downloads, checksums and build provenance are on the
 [releases page](https://github.com/KYC-rip/xmradar/releases).
 
+## 0.6.18
+
+- **Standalone GrapheneOS & Android app (`rip.kyc.xmradar`).** Hardened Mozilla GeckoView shell bundling XMRadar's Firefox MV3 WebExtension with isolated X, Chat, and Private Swap Guard compartments, zero Google Play Services / Firebase, zero-reload lock/unlock, opt-in `POST_NOTIFICATIONS`, an enriched Private Swap Guard modal with quick-pick hosts and protection checklist, and a native cert-pinned **NIP-55** Android signer bridge (Amber, Ripley Vault) supporting silent background Blossom uploads and explicit post approvals.
+- **Notifications, quoted posts & avatars on X.** XMR pills and unclipped xo avatar rings now render on notification rows (`article[data-testid="notification"]`), quoted posts inside tweets, `UserCell` lists, and hover cards across Chrome, Firefox, and Android.
+- **Mobile X composer & Share menu.** Full Mobile X dark-mode composer writing-help support (including `<textarea>` partial selection and high-contrast pen icon), bottom-sheet **Copy to Nostr** above Cancel, and Grok composer button removal.
+
 ## 0.6.17
 
 - The project's plans and design notes now live in the repository, under `docs/`, next to the code they describe. No change to the extension.
