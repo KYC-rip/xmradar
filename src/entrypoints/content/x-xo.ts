@@ -205,6 +205,7 @@ export function setXoState(wrap: HTMLElement, o: Pick<XoOpts, 'own' | 'sent' | '
   btn?.setAttribute('aria-label', l);
   btn?.setAttribute('aria-pressed', String(o.sent));
   if (btn) btn.title = l;
+  wrap.dataset.own = String(o.own);
   wrap.dataset.sent = String(o.sent);
   // the others' count, so a click can redraw with it
   wrap.dataset.count = String(count ?? 0);
@@ -255,20 +256,28 @@ export function insertXo(article: Element, opts: XoOpts): HTMLElement[] {
     btn.addEventListener('pointerleave', () => tint(document.activeElement === btn));
     btn.addEventListener('focus', () => tint(true));
     btn.addEventListener('blur', () => tint(false));
+    btn.style.touchAction = 'manipulation';
+    btn.style.userSelect = 'none';
+    btn.style.setProperty('-webkit-touch-callout', 'none');
     // click: xo (and like on X when switched on); hold 0.5 s or Shift+Enter: xo and like on X
     let hold: { timer: ReturnType<typeof setTimeout>; x: number; y: number; ring: HTMLElement | null } | null = null;
     let charged = false;
+    let chargedReset: ReturnType<typeof setTimeout> | undefined;
     const endHold = () => {
       if (!hold) return;
       clearTimeout(hold.timer);
       hold.ring?.remove();
       hold = null;
     };
+    btn.addEventListener('contextmenu', (e) => {
+      if (hold || charged) e.preventDefault();
+    });
     // the sound's audio starts in the user's gesture, never from the hold's timer (PLAN-XOSOUND)
     const prime = () => wrap.dataset.sound === 'true' && primeXoSound();
     btn.addEventListener('pointerdown', (e) => {
       if (!e.isTrusted || e.button !== 0 || wrap.dataset.sent === 'true' || wrap.dataset.busy === 'true') return;
       prime();
+      clearTimeout(chargedReset);
       charged = false;
       const ring = chargeRing(icon);
       hold = {
@@ -291,8 +300,11 @@ export function insertXo(article: Element, opts: XoOpts): HTMLElement[] {
     for (const ev of ['pointerup', 'pointerleave', 'pointercancel'])
       btn.addEventListener(ev, () => {
         endHold();
-        // the release's click (if any) comes right after this event; anything later is a new click
-        if (charged) setTimeout(() => (charged = false), 0);
+        // On touch browsers, synthetic click can arrive up to ~300 ms after pointerup.
+        if (charged) {
+          clearTimeout(chargedReset);
+          chargedReset = setTimeout(() => (charged = false), 400);
+        }
       });
     btn.addEventListener('click', (e) => {
       // the tweet itself is a link; don't let X navigate
@@ -301,6 +313,7 @@ export function insertXo(article: Element, opts: XoOpts): HTMLElement[] {
       if (!e.isTrusted) return;
       // the click that ends a charged hold was already handled
       if (charged) {
+        clearTimeout(chargedReset);
         charged = false;
         return;
       }
@@ -353,7 +366,11 @@ function chargeRing(icon: SVGSVGElement): HTMLElement | null {
 
 /** The post's own like button on X, found again by its status id (X recycles post nodes while a send is out). */
 export function likeButtonFor(post: string, doc: Document = document): HTMLElement | null | 'liked' {
-  const article = [...doc.querySelectorAll('article[data-testid="tweet"]')].find((a) => ownStatusId(a) === post);
+  let article = [...doc.querySelectorAll('article[data-testid="tweet"]')].find((a) => ownStatusId(a) === post);
+  if (!article) {
+    const m = /^\/[A-Za-z0-9_]{1,15}\/article\/([1-9]\d{0,19})(?:\/|$)/.exec(doc.location?.pathname ?? '');
+    if (m?.[1] === post) article = doc.querySelector('article[data-testid="twitterArticleReadView"]') ?? undefined;
+  }
   const bar = article ? actionBar(article) : null;
   if (!bar) return null;
   if (bar.querySelector('[data-testid="unlike"]')) return 'liked';
@@ -377,9 +394,10 @@ async function toggle(wrap: HTMLElement, icon: SVGSVGElement, opts: XoOpts, also
   if (wrap.dataset.busy === 'true') return;
   wrap.dataset.busy = 'true';
   const was = wrap.dataset.sent === 'true';
+  const own = wrap.dataset.own === 'true';
   const others = Number(wrap.dataset.count) || 0;
   // the change shows at once; a refusal puts it back
-  setXoState(wrap, { ...opts, sent: !was }, others);
+  setXoState(wrap, { ...opts, own, sent: !was }, others);
   if (was) unbloom(icon);
   else {
     bloom(icon, alsoLike);
@@ -398,7 +416,7 @@ async function toggle(wrap: HTMLElement, icon: SVGSVGElement, opts: XoOpts, also
       if (btn) btn.title = 'xo sent, but X’s like couldn’t be pressed on this post.';
     }
   } catch (e) {
-    setXoState(wrap, { ...opts, sent: was }, others);
+    setXoState(wrap, { ...opts, own, sent: was }, others);
     const btn = wrap.querySelector('button');
     const msg = (e as Error).message === 'RATE_LIMITED' ? 'One at a time' : (e as Error).message;
     if (btn) btn.title = `${was ? 'Couldn’t take it back' : 'Not sent'}: ${msg}`;
@@ -468,6 +486,7 @@ export function xoManager(initial: XoState, save: (seen: Record<string, number>)
   /** The stored state changed: every button on the page follows. */
   function update(next: Partial<XoState>, doc: Document = document) {
     state = { ...state, ...next };
+    const toCelebrate: HTMLElement[] = [];
     for (const wrap of doc.querySelectorAll<HTMLElement>(XO_SELECTOR)) {
       if (!state.on) {
         wrap.remove();
@@ -480,11 +499,16 @@ export function xoManager(initial: XoState, save: (seen: Record<string, number>)
       if (wrap.dataset.busy !== 'true') setXoState(wrap, o, o.count);
       wrap.dataset.alsoLike = String(!!state.alsoLike);
       wrap.dataset.sound = String(state.sound !== false);
-      // a new xo while the post is on screen celebrates right away
-      if (o.own && next.counts) {
-        const r = wrap.getBoundingClientRect();
-        if (r.bottom > 0 && r.top < (doc.defaultView?.innerHeight ?? 0)) maybeCelebrate(wrap);
-      }
+      if (o.own && next.counts) toCelebrate.push(wrap);
+    }
+    // Batch layout reads after all DOM writes to avoid layout thrashing across timeline buttons.
+    if (toCelebrate.length) {
+      const vh = doc.defaultView?.innerHeight ?? 0;
+      const visible = toCelebrate.filter((w) => {
+        const r = w.getBoundingClientRect();
+        return r.bottom > 0 && r.top < vh;
+      });
+      for (const w of visible) maybeCelebrate(w);
     }
   }
 

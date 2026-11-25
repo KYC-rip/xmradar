@@ -36,9 +36,14 @@ export function handleFromNav(doc: Document): string | null {
 export function findProofTweet(doc: Document, handle: string, npub: string): string | null {
   const want = normalizeHandle(handle);
   for (const a of doc.querySelectorAll(TWEET)) {
-    const author = a.querySelector<HTMLAnchorElement>('[data-testid="User-Name"] a[href^="/"]')?.getAttribute('href')?.split('/')[1] ?? '';
+    const isOwn = (el: Element) => {
+      const quote = el.closest('div[role="link"]');
+      return !quote || !a.contains(quote);
+    };
+    const name = [...a.querySelectorAll('[data-testid="User-Name"]')].find(isOwn);
+    const author = name?.querySelector<HTMLAnchorElement>('a[href^="/"]')?.getAttribute('href')?.split('/')[1] ?? '';
     if (normalizeHandle(author) !== want) continue;
-    const text = a.querySelector('[data-testid="tweetText"]')?.textContent ?? '';
+    const text = [...a.querySelectorAll('[data-testid="tweetText"]')].filter(isOwn).map((t) => t.textContent ?? '').join('\n');
     if (!containsNpub(text, npub)) continue;
     const id = ownStatusId(a);
     if (id) return id;
@@ -48,23 +53,35 @@ export function findProofTweet(doc: Document, handle: string, npub: string): str
 
 const STYLE = `
 :host { all: initial; position: fixed; right: 20px; bottom: 84px; z-index: 2147483000; }
-.card { font: 14px/1.4 system-ui, -apple-system, sans-serif; width: 300px; box-sizing: border-box; padding: 14px 16px; border-radius: 16px;
-  background: #fff; color: #0f1419; border: 1px solid rgba(0,0,0,.08); box-shadow: 0 8px 28px rgba(0,0,0,.18); position: relative; }
-@media (prefers-color-scheme: dark) { .card { background: #16181c; color: #e7e9ea; border-color: rgba(255,255,255,.12); } }
+.card { font: 14px/1.4 system-ui, -apple-system, sans-serif; width: min(300px, calc(100vw - 24px)); box-sizing: border-box; padding: 14px 16px; border-radius: 16px;
+  background: var(--bg, #fff); color: var(--fg, #0f1419); border: 1px solid var(--line, rgba(0,0,0,.08)); box-shadow: 0 8px 28px rgba(0,0,0,.18); position: relative; }
 strong { display: block; font-size: 15px; margin: 0 22px 4px 0; }
 p { margin: 0 0 12px; opacity: .85; }
 .row { display: flex; gap: 8px; align-items: center; }
 button { font: inherit; cursor: pointer; border-radius: 999px; border: 0; padding: 7px 14px; }
-.go { background: #f26822; color: #fff; font-weight: 700; }
-.later { background: transparent; color: inherit; opacity: .75; }
-.x { position: absolute; top: 8px; right: 8px; background: transparent; color: inherit; padding: 4px 8px; opacity: .6; }
+button:focus-visible { outline: 2px solid #a77bf5; outline-offset: 2px; }
+.go { background: #c2410c; color: #fff; font-weight: 700; }
+.later { background: transparent; color: inherit; opacity: .8; }
+.x { position: absolute; top: 8px; right: 8px; background: transparent; color: inherit; padding: 4px 8px; opacity: .7; }
+@media (max-width: 600px) { :host { right: 12px; left: 12px; bottom: 72px; } .card { width: 100%; } }
 `;
+
+function isDarkPage(doc: Document): boolean {
+  const m = /rgba?\((\d+),\s*(\d+),\s*(\d+)/.exec(doc.defaultView?.getComputedStyle(doc.body).backgroundColor ?? '');
+  if (m) return Number(m[1]) + Number(m[2]) + Number(m[3]) < 384;
+  return typeof matchMedia === 'function' && matchMedia('(prefers-color-scheme: dark)').matches;
+}
 
 function cardEl(doc: Document, text: { title: string; body: string }, on: { go(): void; later(): void; close(): void }): HTMLElement {
   const host = doc.createElement(CARD_TAG);
   const root = host.attachShadow({ mode: 'closed' });
+  const dark = isDarkPage(doc);
   const style = doc.createElement('style');
-  style.textContent = STYLE;
+  style.textContent =
+    STYLE +
+    (dark
+      ? '.card { --bg: #16181c; --fg: #e7e9ea; --line: rgba(255,255,255,.12); }'
+      : '.card { --bg: #fff; --fg: #0f1419; --line: rgba(0,0,0,.08); }');
   const card = doc.createElement('div');
   card.className = 'card';
   card.setAttribute('role', 'dialog');
@@ -151,22 +168,31 @@ export function startSetupCard(ctx: ContentScriptContext) {
     });
   ctx.setTimeout(() => void check(), SHOW_AFTER_MS);
   // setup finished elsewhere (setup.html, Options): the card goes
-  const recheck = () =>
+  const recheck = () => {
+    if (!ctx.isValid) return;
     void sendToBackground({ type: 'setup-card-state' }).then(async (r) => {
+      if (!ctx.isValid) return;
       complete = r.complete;
       if (r.complete) return remove();
       const [s, pref] = await Promise.all([xmrSettingsItem.getValue(), setupCardItem.getValue()]);
-      if (cardAllowed(xoButtonOn(s), pref, Date.now())) show(CARD_TEXT);
+      if (ctx.isValid && cardAllowed(xoButtonOn(s), pref, Date.now())) show(CARD_TEXT);
     }, () => {});
-  myHandleItem.watch(recheck);
-  pubkeyItem.watch(recheck);
+  };
+  const unwatchHandle = myHandleItem.watch(recheck);
+  const unwatchPubkey = pubkeyItem.watch(recheck);
+  ctx.onInvalidated(() => {
+    unwatchHandle();
+    unwatchPubkey();
+    remove();
+    showNudge = null;
+  });
 
   // the proof tweet spotter: only while the handle isn't proven, and only for the current key and handle
   let told = '';
   ctx.setInterval(() => {
-    if (document.hidden || complete !== false) return;
+    if (document.hidden || complete !== false || !ctx.isValid) return;
     void Promise.all([pubkeyItem.getValue(), myHandleItem.getValue()]).then(([pk, mine]) => {
-      if (!pk || !mine || mine.proven) return;
+      if (!ctx.isValid || !pk || !/^[0-9a-f]{64}$/.test(pk) || !mine || mine.proven) return;
       const id = findProofTweet(document, mine.handle, npubEncode(pk));
       if (!id || id === told) return;
       told = id;

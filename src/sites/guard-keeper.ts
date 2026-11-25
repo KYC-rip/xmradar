@@ -200,25 +200,27 @@ export function guardKeeper(deps: {
    * coin listing, with rules and a token in place, and not for a host the user continued to. `go` runs inside
    * the serial chain (a Continue can't slip in between) and must re-check that the tab is still on `url`.
    */
-  const afterLoad = (url: string, on: boolean, feed: { index: LookalikeIndex; issuedAt: number } | null, go: (to: string) => Promise<void>) =>
-    serial(async (): Promise<string | null> => {
-      if (!dnr || !on || !feed) return null;
-      let u: URL;
-      try {
-        u = new URL(url);
-      } catch {
-        return null;
-      }
-      if (u.protocol !== 'http:' && u.protocol !== 'https:') return null;
+  const afterLoad = (url: string, on: boolean, feed: { index: LookalikeIndex; issuedAt: number } | null, go: (to: string) => Promise<void>): Promise<string | null> => {
+    if (!dnr || !on || !feed) return Promise.resolve(null);
+    let u: URL;
+    try {
+      u = new URL(url);
+    } catch {
+      return Promise.resolve(null);
+    }
+    if (u.protocol !== 'http:' && u.protocol !== 'https:') return Promise.resolve(null);
+    // Cheap local match FIRST: avoids serializing tens of thousands of DNR typo domains over IPC on every normal navigation.
+    if (!shouldGuard(lookalikeOf(feed.index, u.hostname))) return Promise.resolve(null);
+    return serial(async (): Promise<string | null> => {
       const t = await deps.tokens.getValue();
       const inPlace = (await dnr.getDynamicRules()).filter(inRange(NAME_RULE_FIRST, TYPO_RULE_FIRST - 1));
       if (!t || !inPlace.length) return null;
-      if (!shouldGuard(lookalikeOf(feed.index, u.hostname))) return null;
       if ((await allowance(feed.index)).covers(u.hostname.replace(/\.$/, ''))) return null;
       const to = `${deps.guardUrl()}#t=${t.current}&u=${u.href}`;
       await go(to);
       return to;
     });
+  };
 
   return { apply, check, continue: cont, afterLoad };
 }

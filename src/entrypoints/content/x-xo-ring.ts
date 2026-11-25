@@ -16,8 +16,8 @@ const clips = (el: Element) => {
 };
 
 /** True when `ancestor` clips overflow and its box is too tight to fit the ring (`GAP + WIDTH`) around `avatar`. */
-const tightlyClips = (ancestor: Element, avatar: Element): boolean => {
-  if (!clips(ancestor)) return false;
+const tightlyClips = (ancestor: Element, avatar: Element, isClipped: boolean): boolean => {
+  if (!isClipped) return false;
   const a = avatar.getBoundingClientRect();
   const r = ancestor.getBoundingClientRect();
   if (!a.width || !a.height || !r.width || !r.height) return false;
@@ -32,12 +32,13 @@ const tightlyClips = (ancestor: Element, avatar: Element): boolean => {
 export function ringHost(avatar: Element): HTMLElement | null {
   const chain: Element[] = [];
   for (let el = avatar.parentElement; el && chain.length < 4; el = el.parentElement) chain.push(el);
+  const clipped = chain.map((el) => clips(el));
   let start = 0;
   for (let i = 0; i < Math.min(3, chain.length); i++) {
-    if (tightlyClips(chain[i]!, avatar)) start = i + 1;
+    if (tightlyClips(chain[i]!, avatar, clipped[i]!)) start = i + 1;
   }
   for (let i = start; i < chain.length; i++) {
-    if (!clips(chain[i]!)) return chain[i] as HTMLElement;
+    if (!clipped[i]) return chain[i] as HTMLElement;
   }
   return null;
 }
@@ -129,6 +130,8 @@ export function setRing(avatar: HTMLElement, key: string, count: number) {
   if (count <= 0) return existing && dropRing(existing);
   if (existing?.getAttribute(RING_ATTR) === key) return void place(existing, avatar, existing.parentElement!);
   if (existing) dropRing(existing);
+  const avRect = avatar.getBoundingClientRect();
+  if (!avRect.width || !avRect.height) return;
   const host = ringHost(avatar);
   if (!host) return;
   const ring = host.ownerDocument.createElement('span');
@@ -147,10 +150,29 @@ export function setRing(avatar: HTMLElement, key: string, count: number) {
     host.style.position = 'relative';
     host.setAttribute(RELATIVE_ATTR, '');
   }
-  if (!place(ring, avatar, host)) return;
+  if (!place(ring, avatar, host)) {
+    if (host.hasAttribute(RELATIVE_ATTR) && !host.querySelector(`:scope > [${RING_ATTR}]`)) {
+      host.style.position = '';
+      host.removeAttribute(RELATIVE_ATTR);
+    }
+    return;
+  }
   owners.set(ring, avatar);
   host.append(ring);
 }
+
+/** Removes any ring owned by `avatar` that belongs to a different slot `key` (e.g. recycled tweet/cell DOM). */
+export function clearForeignRing(avatar: Element, key: string) {
+  const existing = ringOf(avatar);
+  if (existing && existing.getAttribute(RING_ATTR) !== key) dropRing(existing);
+}
+
+export const removeRingsFor = (handle: string, root: ParentNode = document) => {
+  const suffix = `:${handle.toLowerCase()}`;
+  for (const r of root.querySelectorAll<HTMLElement>(`[${RING_ATTR}]`)) {
+    if (r.getAttribute(RING_ATTR)?.toLowerCase().endsWith(suffix)) dropRing(r);
+  }
+};
 
 export const removeRings = (root: ParentNode = document) => {
   for (const r of root.querySelectorAll<HTMLElement>(`[${RING_ATTR}]`)) dropRing(r);

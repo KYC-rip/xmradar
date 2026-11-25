@@ -41,7 +41,7 @@
 </header>
 
 <main>
-<section id="top" class="wrap hero" aria-roledescription="carousel" aria-label="What XMRadar does">
+<section id="top" class="wrap hero">
   <div class="hero-grid">
     <div class="hero-copy">
       <span class="pill"><span class="pdot" aria-hidden="true"></span>FIREFOX ADD-ONS · CHROME · ANDROID &amp; GRAPHENEOS</span>
@@ -60,7 +60,7 @@
       </div>
     </div>
 
-    <div class="console">
+    <div class="console" aria-roledescription="carousel" aria-label="What XMRadar does">
       <div class="console-bar">
         <span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>
         <span class="console-title">LIVE STAGE · XMRADAR PREVIEW</span>
@@ -125,12 +125,12 @@
 
       <div class="console-foot">
         <div class="tabs" role="tablist" aria-label="Slides">
-          <button role="tab" aria-controls="slide-tips" aria-selected="true">Tips</button>
-          <button role="tab" aria-controls="slide-safety" aria-selected="false" tabindex="-1">Safety</button>
-          <button role="tab" aria-controls="slide-badge" aria-selected="false" tabindex="-1">Your badge</button>
-          <button role="tab" aria-controls="slide-android" aria-selected="false" tabindex="-1">Android</button>
-          <button class="pause" type="button" aria-pressed="false" hidden>Pause</button>
+          <button type="button" role="tab" aria-controls="slide-tips" aria-selected="true">Tips</button>
+          <button type="button" role="tab" aria-controls="slide-safety" aria-selected="false" tabindex="-1">Safety</button>
+          <button type="button" role="tab" aria-controls="slide-badge" aria-selected="false" tabindex="-1">Your badge</button>
+          <button type="button" role="tab" aria-controls="slide-android" aria-selected="false" tabindex="-1">Android</button>
         </div>
+        <button class="pause" type="button" aria-pressed="false" hidden>Pause</button>
       </div>
     </div>
   </div>

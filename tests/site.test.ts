@@ -24,6 +24,13 @@ describe('xmradar.app', () => {
     expect(page).not.toMatch(/Chrome or Firefox stores yet/i);
   });
 
+  it('privacy.html uses the shared site header and loads nothing from another host', () => {
+    const privacy = read('privacy.html');
+    expect(privacy).toContain('<header class="site-header">');
+    expect(privacy).toContain('class="pill-nav"');
+    for (const m of privacy.matchAll(/<(script|link|img|source)\b[^>]*\b(?:src|href)="([^"]+)"/g)) expect(m[2], m[0]).not.toMatch(/^(https?:)?\/\//);
+  });
+
   it('without its script, only the first slide shows', () => {
     expect(page).toMatch(/id="slide-safety"[^>]*aria-hidden="true"[^>]*inert/);
   });

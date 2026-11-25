@@ -10,14 +10,17 @@ import { lostEntities, xLength, WRITE_MAX_CHARS, type WriteMode, type WriteResul
 
 export const WRITE_BUTTON = 'xmradar-write-btn';
 export const GROK_HIDE_STYLE_ID = 'xmradar-hide-composer-grok';
-const GROK_HIDE_CSS = [
-  '[data-testid="toolBar"] [role="presentation"]:has([aria-label*="Grok" i], [data-testid*="grok" i], [href*="grok.com" i], [href*="/i/grok" i])',
-  '[data-testid="toolBar"] button[aria-label*="Grok" i]',
-  '[data-testid="toolBar"] a[aria-label*="Grok" i]',
-  '[data-testid="toolBar"] [data-testid*="grok" i]',
-  '[data-testid="toolBar"] a[href*="grok.com" i]',
-  '[data-testid="toolBar"] a[href*="/i/grok" i]',
-].join(',\n') + ' { display: none !important; }';
+const GROK_HIDE_CSS =
+  [
+    '[data-testid="toolBar"] [role="presentation"]:has([aria-label*="Grok" i], [data-testid*="grok" i], [href*="grok.com" i], [href*="/i/grok" i])',
+    '[data-testid="toolBar"] button[aria-label*="Grok" i]',
+    '[data-testid="toolBar"] a[aria-label*="Grok" i]',
+    '[data-testid="toolBar"] [data-testid*="grok" i]',
+    '[data-testid="toolBar"] a[href*="grok.com" i]',
+    '[data-testid="toolBar"] a[href*="/i/grok" i]',
+  ].join(',\n') +
+  ' { display: none !important; }\n' +
+  `.${WRITE_BUTTON} button:focus-visible { outline: 2px solid rgb(29,155,240); outline-offset: 1px; }`;
 
 /** Hides X's Grok shortcut inside the composer toolbar without mutating React-owned DOM nodes. */
 export function hideComposerGrok(doc: Document = document): () => void {
@@ -353,27 +356,29 @@ function showPanel(anchor: Element, t: WriteTarget, deps: PanelDeps) {
   }
 
   let busy = false;
-  const close = () => {
+  const close = (restoreFocus = true) => {
     seq++;
     if (busy) deps.cancel();
     host.remove();
     document.removeEventListener('keydown', onKey, true);
     document.removeEventListener('pointerdown', onOutside, true);
     removeEventListener('resize', place);
+    window.visualViewport?.removeEventListener('resize', place);
+    window.visualViewport?.removeEventListener('scroll', place);
     if (openPanel === handle) openPanel = null;
-    t.editor.focus();
+    if (restoreFocus) t.editor.focus();
   };
   const onKey = (e: KeyboardEvent) => {
     if (e.key === 'Escape') {
       e.stopPropagation();
-      close();
+      close(true);
     }
   };
   const onOutside = (e: PointerEvent) => {
-    if (!e.composedPath().includes(host) && !e.composedPath().includes(anchor)) close();
+    if (!e.composedPath().includes(host) && !e.composedPath().includes(anchor)) close(false);
   };
-  x.addEventListener('click', close);
-  keep.addEventListener('click', close);
+  x.addEventListener('click', () => close(true));
+  keep.addEventListener('click', () => close(true));
   copy.addEventListener('click', () => {
     void navigator.clipboard.writeText(result).then(
       () => (note.textContent = 'Copied'),
@@ -391,7 +396,7 @@ function showPanel(anchor: Element, t: WriteTarget, deps: PanelDeps) {
     }
     replace.disabled = true;
     const ok = await putBack(t, result).catch(() => false);
-    if (ok) return close();
+    if (ok) return close(true);
     await navigator.clipboard.writeText(result).catch(() => {});
     note.textContent = "Couldn't put it in: it's copied, paste it with Ctrl/⌘ V";
     note.className = 'err';
@@ -400,9 +405,12 @@ function showPanel(anchor: Element, t: WriteTarget, deps: PanelDeps) {
   document.addEventListener('keydown', onKey, true);
   document.addEventListener('pointerdown', onOutside, true);
   addEventListener('resize', place);
-  const handle = { close };
+  window.visualViewport?.addEventListener('resize', place);
+  window.visualViewport?.addEventListener('scroll', place);
+  const handle = { close: () => close(false) };
   openPanel = handle;
   void run('proofread');
+  modeBtns[0]?.b.focus({ preventScroll: true });
 }
 
 // ---- the buttons ----
@@ -441,6 +449,7 @@ const defaultDeps: WriteDeps = {
 /** The pen next to X's emoji button, in every composer toolbar, while writing help is set up and on. */
 export function startWriting(ctx: { onInvalidated(cb: () => void): void }, deps: WriteDeps = defaultDeps, doc: Document = document) {
   const unhideGrok = hideComposerGrok(doc);
+  let alive = true;
   let source: keyof typeof SOURCE_LABEL = 'local';
   let on = false;
   let observer: MutationObserver | null = null;
@@ -521,13 +530,16 @@ export function startWriting(ctx: { onInvalidated(cb: () => void): void }, deps:
   const refresh = async () => {
     // the background briefly unreachable: keep things as they are until the next change
     const r = await deps.ready().catch(() => ({ ready: on, source }));
+    if (!alive) return;
     source = r.source;
     if (r.ready === on) return;
     on = r.ready;
     if (on) {
-      observer = new MutationObserver(schedule);
-      observer.observe(doc.body, { childList: true, subtree: true });
-      doc.addEventListener('focusin', onFocus, true);
+      if (!observer) {
+        observer = new MutationObserver(schedule);
+        observer.observe(doc.body, { childList: true, subtree: true });
+        doc.addEventListener('focusin', onFocus, true);
+      }
       scan();
     } else {
       observer?.disconnect();
@@ -539,9 +551,11 @@ export function startWriting(ctx: { onInvalidated(cb: () => void): void }, deps:
   void refresh();
   const unwatch = deps.watch(() => void refresh());
   ctx.onInvalidated(() => {
+    alive = false;
     unhideGrok();
     unwatch();
     observer?.disconnect();
+    observer = null;
     clearTimeout(timer);
     doc.removeEventListener('focusin', onFocus, true);
     removeAll();
@@ -551,10 +565,20 @@ export function startWriting(ctx: { onInvalidated(cb: () => void): void }, deps:
 /** A short note under the button, gone after a few seconds. */
 function flash(btn: HTMLElement, text: string) {
   const a = btn.getBoundingClientRect();
-  const tip = el('div', {
-    role: 'status',
-    style: `position:fixed;z-index:2147483000;left:${Math.max(8, a.left - 8)}px;top:${a.bottom + 6}px;max-width:300px;padding:6px 10px;border-radius:8px;background:#0f1419;color:#fff;font:13px/1.3 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;box-shadow:0 4px 14px rgba(0,0,0,.3)`,
-  }, text);
+  const vv = window.visualViewport;
+  const vw = vv?.width ?? innerWidth;
+  const vh = vv?.height ?? innerHeight;
+  const topOff = vv?.offsetTop ?? 0;
+  const left = Math.max(8, Math.min(a.left - 8, vw - 308));
+  const top = Math.max(topOff + 8, Math.min(a.bottom + 6, topOff + vh - 48));
+  const tip = el(
+    'div',
+    {
+      role: 'status',
+      style: `position:fixed;z-index:2147483000;left:${left}px;top:${top}px;max-width:min(300px,calc(100vw - 16px));padding:6px 10px;border-radius:8px;background:#0f1419;color:#fff;font:13px/1.3 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;box-shadow:0 4px 14px rgba(0,0,0,.3)`,
+    },
+    text,
+  );
   document.body.append(tip);
   setTimeout(() => tip.remove(), 2500);
 }

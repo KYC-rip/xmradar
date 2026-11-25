@@ -97,16 +97,20 @@ def main() -> None:
     if firefox not in names:
         sys.exit(f'{tag} has no {firefox}')
     apk = next((n for n in names if n.endswith('-arm64-v8a.apk')), None)
+    if apk:
+        apk = need(apk, r'xmradar-\d+\.\d+\.\d+(?:\.\d+)?-arm64-v8a\.apk', 'Android APK')
     sums = {}
     for line in gh('release', 'download', tag, '-R', REPO, '-p', 'SHA256SUMS', '-O', '-').splitlines():
         if m := re.fullmatch(r'([0-9a-f]{64})\s+\*?(\S+)', line.strip()):
             sums[m[2]] = m[1]
     if chrome not in sums:
         sys.exit(f'SHA256SUMS of {tag} has no {chrome}')
+    if apk and apk not in sums:
+        sys.exit(f'SHA256SUMS of {tag} has no {apk}')
     commit = need(gh('api', f'repos/{REPO}/commits/{tag}', '--jq', '.sha').strip(), r'[0-9a-f]{40}', 'commit')
 
     dl = f'https://github.com/{REPO}/releases/download/{tag}'
-    sha_android = sums.get(apk, '') if apk else ''
+    sha_android = sums[apk] if apk else ''
     values = {
         'VERSION': version,
         'VERSION_SHORT': tag.lstrip('v'),
@@ -127,7 +131,7 @@ def main() -> None:
         'SHA_CHROME': sums[chrome],
         'SHA_CHROME_SHORT': f'{sums[chrome][:4]}…{sums[chrome][-4:]}',
         'SHA_ANDROID': sha_android or 'Published with tagged Android APK releases',
-        'SHA_ANDROID_SHORT': f'{sha_android[:4]}…{sha_android[-4:]}' if sha_android else 'releases →',
+        'SHA_ANDROID_SHORT': f'{sha_android[:4]}…{sha_android[-4:]}' if sha_android else 'pending',
     }
 
     latest = latest_json(tag, version)

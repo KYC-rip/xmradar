@@ -203,6 +203,7 @@ export function notificationSlots(article: Element): AnyBadgeSlot[] {
   const named = new Set<string>();
   for (const a of article.querySelectorAll<HTMLAnchorElement>('a[href^="/"]')) {
     if (a.getAttribute('tabindex') === '-1') continue;
+    if (a.closest('[data-testid="tweetText"]')) continue;
     const href = a.getAttribute('href') ?? '';
     if (!/^\/[A-Za-z0-9_]{1,15}\/?$/.test(href)) continue;
     if (!(a.textContent ?? '').trim()) continue;

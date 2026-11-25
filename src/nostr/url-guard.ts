@@ -11,12 +11,13 @@ export function assertFetchableImageUrl(raw: string): void {
     return;
   }
   if (u.protocol !== 'https:' && u.protocol !== 'http:') throw new Error(`Refusing to fetch ${u.protocol} URL`);
-  const host = u.hostname.replace(/^\[|\]$/g, '').replace(/\.$/, '').toLowerCase();
+  const host = u.hostname.replace(/^\[|\]$/g, '').replace(/\.+$/, '').toLowerCase();
   if (
+    (!host.includes('.') && !host.includes(':')) ||
     host === 'localhost' ||
     /\.(local|localhost|internal|lan|home\.arpa)$/.test(host) ||
-    /^(127\.|10\.|0\.|169\.254\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(host) ||
-    /^(::1?$|::ffff:|f[cd][0-9a-f]{2}:|fe[89ab][0-9a-f]:|fec0:)/.test(host)
+    /^(127\.|10\.|0\.|169\.254\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.)/.test(host) ||
+    /^(::1?$|::ffff:|f[cd][0-9a-f]{0,2}:|fe[89ab][0-9a-f]?:|fec0:)/.test(host)
   ) {
     throw new Error('Refusing to fetch an image from a local/private address');
   }

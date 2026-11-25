@@ -15,13 +15,14 @@ export interface LiveDeps {
 
 export function liveHeartbeat(ctx: { onInvalidated(cb: () => void): void }, deps: LiveDeps) {
   const doc = deps.doc ?? document;
+  let alive = true;
   let on = false;
   let timer: ReturnType<typeof setInterval> | undefined;
   const beat = () => {
-    if (on && doc.visibilityState === 'visible') void deps.send().catch(() => {});
+    if (alive && on && doc.visibilityState === 'visible') void deps.send().catch(() => {});
   };
   const set = (next: boolean) => {
-    if (next === on) return;
+    if (!alive || next === on) return;
     on = next;
     clearInterval(timer);
     timer = undefined;
@@ -35,7 +36,9 @@ export function liveHeartbeat(ctx: { onInvalidated(cb: () => void): void }, deps
   void deps.initial.then(set, () => {});
   const unwatch = deps.watch(set);
   ctx.onInvalidated(() => {
+    alive = false;
     clearInterval(timer);
+    timer = undefined;
     doc.removeEventListener('visibilitychange', onVisibility);
     unwatch();
   });

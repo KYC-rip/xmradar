@@ -247,16 +247,19 @@ export function directoryKeeper(deps: KeeperDeps) {
 
   /** Badges switched on (or the worker started with them on), or switched off. */
   async function apply(on: boolean) {
-    generation++;
+    const gen = ++generation;
     inFlight?.abort.abort();
     inFlight = null;
     if (on) {
       // made again only when missing or set with another period, since making it restarts its countdown
       // and the worker starts often
       if ((await deps.alarms.get(DIRECTORY_ALARM))?.periodInMinutes !== DIRECTORY_HOURS * 60) {
+        if (gen !== generation) return;
         await deps.alarms.create(DIRECTORY_ALARM, { periodInMinutes: DIRECTORY_HOURS * 60 });
       }
+      if (gen !== generation) return;
       const [held, st] = await Promise.all([deps.held.getValue(), deps.status.getValue()]);
+      if (gen !== generation) return;
       const fresh = held && now() - held.fetchedAt < DIRECTORY_HOURS * 3600_000;
       // a failed or unpublished try is retried by its own alarm, not on every worker start
       const retrying = st && st.state !== 'ok' && now() - st.at < DIRECTORY_RETRY_MINUTES * 60_000;
@@ -268,10 +271,12 @@ export function directoryKeeper(deps: KeeperDeps) {
       return;
     }
     await Promise.all([deps.alarms.clear(DIRECTORY_ALARM), deps.alarms.clear(DIRECTORY_RETRY_ALARM)]);
+    if (gen !== generation) return;
     const had = await deps.held.getValue();
+    if (gen !== generation) return;
     await Promise.all([deps.held.removeValue(), deps.status.removeValue()]);
     lookup = null;
-    if (had) await deps.changed();
+    if (had && gen === generation) await deps.changed();
   }
 
   const onAlarm = (name: string) => (name === DIRECTORY_ALARM || name === DIRECTORY_RETRY_ALARM ? refresh() : undefined);

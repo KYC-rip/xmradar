@@ -153,9 +153,14 @@ describe('extractor order and selection', () => {
     expect(post.text).toBe('just this');
     expect(post.article).toBeUndefined();
   });
-  it('flags a tweet that shares an article card', () => {
+  it('flags a tweet that shares an article card, but ignores a quoted tweet article card', () => {
     const doc = makeDoc('https://x.com/home', `<article data-testid="tweet"><div data-testid="tweetText">read</div><a href="/me/article/1">card</a></article>`);
     expect(extractPost(doc.querySelector('[data-testid="tweetText"]')!, doc).post.articleCard).toBe(true);
+    const quoted = makeDoc(
+      'https://x.com/home',
+      `<article data-testid="tweet"><div data-testid="tweetText">comment</div><div role="link"><a href="/other/article/2">quoted card</a></div></article>`,
+    );
+    expect(extractPost(quoted.querySelector('[data-testid="tweetText"]')!, quoted).post.articleCard).toBeUndefined();
   });
 });
 
@@ -201,6 +206,11 @@ describe('htmlToMarkdown escaping and safety', () => {
   });
   it('numbers nested ordered lists separately', () => {
     expect(md('<ol><li>a<ol><li>x</li><li>y</li></ol></li><li>b</li></ol>').markdown).toBe('1. a\n   1. x\n   2. y\n2. b');
+  });
+  it('keeps link text and URL when a link contains a Twemoji img', () => {
+    expect(md('<p><a href="https://example.com/hot">Hot <img src="https://abs-0.twimg.com/emoji/v2/svg/1f525.svg" alt="🔥"> deal</a></p>').markdown).toBe(
+      '[Hot 🔥 deal](<https://example.com/hot>)',
+    );
   });
   it('escapeText covers every special character', () => {
     expect(escapeText('\\`*_[]<>&|~')).toBe('\\\\\\`\\*\\_\\[\\]\\<\\>\\&\\|\\~');

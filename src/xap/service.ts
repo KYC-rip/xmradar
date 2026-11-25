@@ -118,13 +118,18 @@ export class FreshTotals {
 
   get(pk: string): Promise<XapTotals> {
     const hit = this.recent.get(pk);
-    if (hit && this.now() - hit.at < FRESH_REUSE_MS) return Promise.resolve(hit);
+    if (hit) {
+      if (this.now() - hit.at < FRESH_REUSE_MS) return Promise.resolve(hit);
+      this.recent.delete(pk);
+    }
     let p = this.inflight.get(pk);
     if (!p) {
       p = this.fetchOne(pk).then(
         (t) => {
           this.inflight.delete(pk);
+          this.recent.delete(pk);
           this.recent.set(pk, t);
+          if (this.recent.size > 200) this.recent.delete(this.recent.keys().next().value!);
           return t;
         },
         (e) => {

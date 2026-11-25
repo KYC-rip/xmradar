@@ -281,18 +281,26 @@ export function xoKeeper(deps: XoDeps) {
   }
 
   async function apply() {
-    generation++;
+    const gen = ++generation;
     inFlight = null;
     const [on, pubkey] = await Promise.all([deps.enabled(), deps.pubkey()]);
+    if (gen !== generation) return;
     if (!on || !pubkey) {
       await Promise.all([deps.alarms.clear(XO_ALARM), deps.held.removeValue(), deps.counts.setValue({}), deps.clearNotice()]);
       return;
     }
     const held = await deps.held.getValue();
+    if (gen !== generation) return;
     const handle = (await deps.handle())?.toLowerCase() ?? null;
+    if (gen !== generation) return;
     const next = held ? inboxFor(held, pubkey, handle, Math.floor(now() / 1000)) : null;
     if (held && next !== held && next!.baseline === 'pending') await Promise.all([deps.held.setValue(next!), deps.counts.setValue({}), deps.clearNotice()]);
-    if ((await deps.alarms.get(XO_ALARM))?.periodInMinutes !== XO_MINUTES) await deps.alarms.create(XO_ALARM, { periodInMinutes: XO_MINUTES });
+    if (gen !== generation) return;
+    if ((await deps.alarms.get(XO_ALARM))?.periodInMinutes !== XO_MINUTES) {
+      if (gen !== generation) return;
+      await deps.alarms.create(XO_ALARM, { periodInMinutes: XO_MINUTES });
+    }
+    if (gen !== generation) return;
     // a handle read still to run checks now
     const last = next?.pubkey === pubkey && !(handle && next.handleSinceAt == null) ? next.checkedAt : null;
     if (last === null || now() - last >= XO_MINUTES * 60_000) await check();

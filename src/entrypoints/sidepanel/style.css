@@ -19,6 +19,7 @@ header {
 }
 .room {
   font-weight: 700;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -32,7 +33,18 @@ header {
 .actions button {
   padding: 4px 10px;
 }
+#site {
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 #new-tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  min-height: 28px;
   color: var(--accent);
   text-decoration: none;
   font-weight: 700;

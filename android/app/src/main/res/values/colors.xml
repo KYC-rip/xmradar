@@ -6,5 +6,7 @@
     <color name="muted">#5D6273</color>
     <color name="border">#E3E6EC</color>
     <color name="accent">#7B3FE4</color>
+    <color name="accent_solid">#7B3FE4</color>
+    <color name="error">#C62828</color>
     <color name="xmr">#F26822</color>
 </resources>

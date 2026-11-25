@@ -2,6 +2,7 @@ package rip.kyc.xmradar
 
 import android.Manifest
 import android.app.Activity
+import android.app.Dialog
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -46,8 +47,11 @@ import androidx.core.view.WindowInsetsControllerCompat
 import androidx.core.widget.doAfterTextChanged
 import com.google.android.material.bottomsheet.BottomSheetBehavior
 import com.google.android.material.bottomsheet.BottomSheetDialog
+import java.io.ByteArrayOutputStream
 import java.util.UUID
 import java.util.concurrent.Executors
+import java.util.concurrent.RejectedExecutionException
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.abs
 import org.json.JSONObject
 import org.mozilla.geckoview.AllowOrDeny
@@ -93,10 +97,12 @@ class MainActivity : AppCompatActivity() {
         const val X_AUTH_FLOW_TTL_MS = 10 * 60_000L
         const val NEW_SESSION_GESTURE_WINDOW_MS = 1_500L
         const val NIP55_INTERACTIVE_TIMEOUT_MS = 125_000L
+        const val MAX_DOWNLOAD_BYTES = 16 * 1024 * 1024
 
         // GeckoRuntime and live GeckoSessions are process-wide so Activity recreation
         // (e.g. lock/unlock or display config changes) re-attaches the exact live X tab
         // with zero reload and never calls GeckoRuntime.create() twice.
+        @Volatile private var currentActivity: MainActivity? = null
         @Volatile private var sharedRuntime: GeckoRuntime? = null
         @Volatile private var sharedExtension: WebExtension? = null
         @Volatile private var sharedExtensionBaseUrl: String? = null
@@ -172,6 +178,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     // Pending download save callback for ContentDelegate.onExternalResponse (SIWM message / receipt exports)
+    private val downloadExecutor = Executors.newSingleThreadExecutor()
     private var pendingDownloadBytes: ByteArray? = null
     private val createDocumentLauncher = registerForActivityResult(ActivityResultContracts.CreateDocument("*/*")) { uri ->
         val bytes = pendingDownloadBytes
@@ -191,6 +198,7 @@ class MainActivity : AppCompatActivity() {
     private data class SignerAppInfo(val packageName: String, val label: String)
     private val nip55Executor = Executors.newSingleThreadExecutor()
     private val mainHandler = Handler(Looper.getMainLooper())
+    private var signerPickerInFlight = false
     private var pendingNip55Callback: ((Int, Intent?) -> Unit)? = null
     private var pendingNip55Timeout: Runnable? = null
     private val nip55Launcher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { res ->
@@ -228,8 +236,58 @@ class MainActivity : AppCompatActivity() {
     private var pendingNotificationTap: NotificationBridge.ActiveNotification? = null
     private val pendingNotifPermCallbacks = mutableListOf<(Boolean) -> Unit>()
     private val pendingOriginNotifResults = mutableMapOf<String, MutableList<GeckoResult<Int>>>()
-    private val activeNotifDialogs = mutableListOf<AlertDialog>()
+    private val activeDialogs = mutableListOf<Dialog>()
     private var notifPermRequestInFlight = false
+
+    private fun showTrackedDialog(dialog: Dialog, onDismissExtra: (() -> Unit)? = null): Boolean {
+        if (isFinishing || isDestroyed) return false
+        dialog.setOnDismissListener {
+            activeDialogs.remove(dialog)
+            onDismissExtra?.invoke()
+        }
+        activeDialogs.add(dialog)
+        dialog.show()
+        return true
+    }
+
+    private fun applySheetBottomInsets(view: View) {
+        val baseBottom = view.paddingBottom
+        ViewCompat.setOnApplyWindowInsetsListener(view) { v, insets ->
+            val bottom = insets.getInsets(
+                WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.ime(),
+            ).bottom
+            v.setPadding(v.paddingLeft, v.paddingTop, v.paddingRight, baseBottom + bottom)
+            insets
+        }
+        ViewCompat.requestApplyInsets(view)
+    }
+
+    private fun <T> completeOnce(result: GeckoResult<T>): (T) -> Unit {
+        val done = AtomicBoolean(false)
+        return { value ->
+            if (done.compareAndSet(false, true)) {
+                result.complete(value)
+            }
+        }
+    }
+
+    private fun runOnNip55(onRejected: () -> Unit, task: () -> Unit) {
+        if (isFinishing || isDestroyed || nip55Executor.isShutdown) {
+            onRejected()
+            return
+        }
+        try {
+            nip55Executor.execute {
+                if (isFinishing || isDestroyed) {
+                    onRejected()
+                    return@execute
+                }
+                task()
+            }
+        } catch (_: RejectedExecutionException) {
+            onRejected()
+        }
+    }
     private val notificationPermissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
             notifPermRequestInFlight = false
@@ -314,6 +372,7 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+        currentActivity = this
         // Consume verified in-process notification taps before scrubbing external intent data.
         pendingNotificationTap = extractNotificationTap(intent)
         // Security: never honor arbitrary external data/URLs pushed into MainActivity via Intent.
@@ -455,6 +514,15 @@ class MainActivity : AppCompatActivity() {
         fabContainer.y = (rootContainer.paddingTop + h * yRatio).coerceIn(minY, maxY)
     }
 
+    private fun toggleXOrMenu() {
+        if (isFinishing || isDestroyed) return
+        if (activeTab?.compartment == Compartment.X) {
+            openExtensionUi("popup.html")
+        } else {
+            openOrFocusCompartment(Compartment.X, X_HOME_URL)
+        }
+    }
+
     private fun setupFloatingButton() {
         val touchSlop = ViewConfiguration.get(this).scaledTouchSlop
         val marginPx = (12 * resources.displayMetrics.density).toInt()
@@ -463,6 +531,15 @@ class MainActivity : AppCompatActivity() {
         // Restore saved edge & vertical position once laid out.
         rootContainer.post { repositionFab() }
 
+        // Accessibility / TalkBack click & long-click delegates.
+        fabContainer.setOnClickListener {
+            if (!isFinishing && !isDestroyed) showNavSheet()
+        }
+        fabContainer.setOnLongClickListener {
+            toggleXOrMenu()
+            true
+        }
+
         var downRawX = 0f
         var downRawY = 0f
         var startX = 0f
@@ -470,14 +547,10 @@ class MainActivity : AppCompatActivity() {
         var dragging = false
         var longPressed = false
         val longPressRunnable = Runnable {
-            if (!dragging) {
+            if (!dragging && !isFinishing && !isDestroyed) {
                 longPressed = true
                 // Long-press quick-toggles between X and XMRadar menu.
-                if (activeTab?.compartment == Compartment.X) {
-                    openExtensionUi("popup.html")
-                } else {
-                    openOrFocusCompartment(Compartment.X, X_HOME_URL)
-                }
+                toggleXOrMenu()
             }
         }
 
@@ -526,7 +599,6 @@ class MainActivity : AppCompatActivity() {
                         prefs.edit().putBoolean(PREF_FAB_RIGHT, snapRight).putFloat(PREF_FAB_Y_RATIO, ratio).apply()
                     } else if (!longPressed && event.actionMasked == MotionEvent.ACTION_UP) {
                         v.performClick()
-                        showNavSheet()
                     }
                     true
                 }
@@ -536,6 +608,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showNavSheet() {
+        if (isFinishing || isDestroyed) return
         val dialog = BottomSheetDialog(this)
         val view = layoutInflater.inflate(R.layout.sheet_nav, null)
         dialog.setContentView(view)
@@ -631,7 +704,9 @@ class MainActivity : AppCompatActivity() {
             dialog.dismiss()
             openExtensionUi("options.html")
         }
-        dialog.show()
+        if (showTrackedDialog(dialog)) {
+            applySheetBottomInsets(view)
+        }
     }
 
     /** Consumes a single recent OS touch gesture token (prevents multi-popup spam from one tap). */
@@ -1034,13 +1109,15 @@ class MainActivity : AppCompatActivity() {
                 { err ->
                     Log.e(TAG, "Failed to grant <all_urls> host permissions", err)
                     runOnUiThread {
-                        AlertDialog.Builder(this)
+                        if (isFinishing || isDestroyed) return@runOnUiThread
+                        val dlg = AlertDialog.Builder(this)
                             .setTitle("Site access required")
                             .setMessage("XMRadar could not enable site access for its built-in extension. Swap Guard and X badges cannot run without it.")
                             .setCancelable(false)
                             .setPositiveButton("Retry") { _, _ -> onExtensionReady(rt, ext) }
                             .setNegativeButton("Exit") { _, _ -> finish() }
-                            .show()
+                            .create()
+                        showTrackedDialog(dlg)
                     }
                 }
             )
@@ -1056,11 +1133,15 @@ class MainActivity : AppCompatActivity() {
                 val url = rawUrl ?: "about:blank"
                 val isOwnExt = ownExtensionBaseUrl != null && url.startsWith(ownExtensionBaseUrl!!, ignoreCase = true)
                 val isBlank = rawUrl.isNullOrBlank() || url.equals("about:blank", ignoreCase = true)
+                val parsedUri = try { Uri.parse(url) } catch (_: Exception) { null }
+                val host = parsedUri
+                    ?.takeIf { it.scheme.equals("https", ignoreCase = true) }
+                    ?.host?.lowercase()?.trimEnd('.')
                 val targetCompartment = when {
                     isOwnExt || isBlank -> Compartment.EXTENSION
-                    url.startsWith("https://chat.xmr.club", ignoreCase = true) -> Compartment.CHAT
-                    url.startsWith("https://x.com", ignoreCase = true) ||
-                        url.startsWith("https://twitter.com", ignoreCase = true) -> Compartment.X
+                    host == "chat.xmr.club" -> Compartment.CHAT
+                    host == "x.com" || host == "www.x.com" || host == "mobile.x.com" ||
+                        host == "twitter.com" || host == "www.twitter.com" || host == "mobile.twitter.com" -> Compartment.X
                     else -> Compartment.SWAP
                 }
                 val shouldFocus = createDetails.active != false
@@ -1188,13 +1269,28 @@ class MainActivity : AppCompatActivity() {
             onChosen(signers[0].packageName)
             return
         }
+        if (isFinishing || isDestroyed || signerPickerInFlight) {
+            onChosen(null)
+            return
+        }
+        signerPickerInFlight = true
+        val done = AtomicBoolean(false)
+        val finish: (String?) -> Unit = { pkg ->
+            if (done.compareAndSet(false, true)) {
+                signerPickerInFlight = false
+                onChosen(pkg)
+            }
+        }
         val labels = signers.map { "${it.label} (${it.packageName})" }.toTypedArray()
-        AlertDialog.Builder(this)
+        val dlg = AlertDialog.Builder(this)
             .setTitle("Choose Nostr signer")
-            .setItems(labels) { _, which -> onChosen(signers[which].packageName) }
-            .setNegativeButton(R.string.cancel) { _, _ -> onChosen(null) }
-            .setOnCancelListener { onChosen(null) }
-            .show()
+            .setItems(labels) { _, which -> finish(signers[which].packageName) }
+            .setNegativeButton(R.string.cancel) { _, _ -> finish(null) }
+            .setOnCancelListener { finish(null) }
+            .create()
+        if (!showTrackedDialog(dlg) { finish(null) }) {
+            finish(null)
+        }
     }
 
     private fun handleNativeSignerMessage(msg: JSONObject): GeckoResult<Any> {
@@ -1310,7 +1406,9 @@ class MainActivity : AppCompatActivity() {
 
         val pinned = validPinnedSignerPackage(signers)
         if (pinned != null) {
-            nip55Executor.execute {
+            runOnNip55(
+                onRejected = { result.complete(nativeReply(JSONObject().put("error", "App is closing"))) },
+            ) {
                 val hex = queryNip55GetPublicKeyContentResolver(pinned)
                 if (hex != null) {
                     result.complete(nativeReply(JSONObject().put("pubkey", hex).put("package", pinned)))
@@ -1403,7 +1501,9 @@ class MainActivity : AppCompatActivity() {
                 // Public posts and articles (kinds 1, 30023) always require explicit interactive approval in Amber.
                 launchInteractive(targetPkg)
             } else {
-                nip55Executor.execute {
+                runOnNip55(
+                    onRejected = { result.complete(nativeReply(JSONObject().put("error", "App is closing"))) },
+                ) {
                     val bgParsed = queryNip55SignEventContentResolver(targetPkg, req)
                     when (bgParsed) {
                         is Nip55Bridge.ParsedSignResponse.SignedEvent -> {
@@ -1537,10 +1637,11 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showSwapUrlDialog() {
+        if (isFinishing || isDestroyed) return
         if (!privateBrowsingReady) {
             val rt = runtime
             val ext = extension
-            AlertDialog.Builder(this)
+            val dlg = AlertDialog.Builder(this)
                 .setTitle("Swap Guard unavailable")
                 .setMessage("XMRadar could not enable its extension inside private Swap tabs. Retry before visiting a swap site.")
                 .setPositiveButton("Retry") { _, _ ->
@@ -1556,18 +1657,23 @@ class MainActivity : AppCompatActivity() {
                                 }
                                 privateBrowsingReady = true
                                 sharedPrivateBrowsingReady = true
-                                runOnUiThread { showSwapUrlDialog() }
+                                runOnUiThread {
+                                    if (!isFinishing && !isDestroyed) showSwapUrlDialog()
+                                }
                             },
                             {
                                 runOnUiThread {
-                                    Toast.makeText(this, "Could not enable private Swap Guard.", Toast.LENGTH_LONG).show()
+                                    if (!isFinishing && !isDestroyed) {
+                                        Toast.makeText(this, "Could not enable private Swap Guard.", Toast.LENGTH_LONG).show()
+                                    }
                                 }
                             }
                         )
                     }
                 }
                 .setNegativeButton(R.string.cancel, null)
-                .show()
+                .create()
+            showTrackedDialog(dlg)
             return
         }
         val dialog = BottomSheetDialog(this)
@@ -1635,7 +1741,9 @@ class MainActivity : AppCompatActivity() {
                 false
             }
         }
-        dialog.show()
+        if (showTrackedDialog(dialog)) {
+            applySheetBottomInsets(view)
+        }
     }
 
     private fun createTab(
@@ -1863,20 +1971,56 @@ class MainActivity : AppCompatActivity() {
             }
 
             override fun onExternalResponse(session: GeckoSession, response: WebResponse) {
-                // Supports SIWM "Save message as file" and receipt/letter JSON exports.
+                // Supports SIWM "Save message as file" and receipt/letter JSON exports off the main thread.
                 val body = response.body ?: return
-                val bytes = try {
-                    body.use { it.readBytes() }
-                } catch (e: Exception) {
-                    Log.w(TAG, "Failed reading download response", e)
-                    return
-                }
                 val disposition = response.headers["Content-Disposition"] ?: response.headers["content-disposition"]
                 val suggestedName = Regex("filename=\"?([^\";]+)\"?").find(disposition ?: "")?.groupValues?.getOrNull(1)
                     ?: "xmradar-export.txt"
-                runOnUiThread {
-                    pendingDownloadBytes = bytes
-                    createDocumentLauncher.launch(suggestedName)
+                if (isFinishing || isDestroyed || downloadExecutor.isShutdown) {
+                    try { body.close() } catch (_: Exception) {}
+                    return
+                }
+                try {
+                    downloadExecutor.execute {
+                        val bytes = try {
+                            body.use { stream ->
+                                val out = ByteArrayOutputStream()
+                                val buf = ByteArray(8192)
+                                var total = 0
+                                while (true) {
+                                    val n = stream.read(buf)
+                                    if (n < 0) break
+                                    total += n
+                                    if (total > MAX_DOWNLOAD_BYTES) {
+                                        Log.w(TAG, "Refused download larger than $MAX_DOWNLOAD_BYTES bytes")
+                                        return@use null
+                                    }
+                                    out.write(buf, 0, n)
+                                }
+                                out.toByteArray()
+                            }
+                        } catch (e: Exception) {
+                            Log.w(TAG, "Failed reading download response", e)
+                            null
+                        }
+                        runOnUiThread {
+                            if (isFinishing || isDestroyed) return@runOnUiThread
+                            if (bytes == null) {
+                                Toast.makeText(this@MainActivity, "Download failed or too large", Toast.LENGTH_SHORT).show()
+                                return@runOnUiThread
+                            }
+                            pendingDownloadBytes = bytes
+                            try {
+                                createDocumentLauncher.launch(suggestedName)
+                            } catch (e: ActivityNotFoundException) {
+                                pendingDownloadBytes = null
+                                Log.w(TAG, "No document picker available", e)
+                                Toast.makeText(this@MainActivity, "Could not open file saver", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    }
+                } catch (_: RejectedExecutionException) {
+                    try { body.close() } catch (_: Exception) {}
                 }
             }
         }
@@ -1887,13 +2031,21 @@ class MainActivity : AppCompatActivity() {
                 prompt: GeckoSession.PromptDelegate.AlertPrompt,
             ): GeckoResult<GeckoSession.PromptDelegate.PromptResponse> {
                 val result = GeckoResult<GeckoSession.PromptDelegate.PromptResponse>()
+                val finish = completeOnce(result)
                 runOnUiThread {
-                    AlertDialog.Builder(this@MainActivity)
+                    if (isFinishing || isDestroyed) {
+                        finish(prompt.dismiss())
+                        return@runOnUiThread
+                    }
+                    val dlg = AlertDialog.Builder(this@MainActivity)
                         .setTitle(prompt.title ?: getString(R.string.app_name))
                         .setMessage(prompt.message ?: "")
-                        .setPositiveButton(android.R.string.ok) { _, _ -> result.complete(prompt.dismiss()) }
-                        .setOnCancelListener { result.complete(prompt.dismiss()) }
-                        .show()
+                        .setPositiveButton(android.R.string.ok) { _, _ -> finish(prompt.dismiss()) }
+                        .setOnCancelListener { finish(prompt.dismiss()) }
+                        .create()
+                    if (!showTrackedDialog(dlg) { finish(prompt.dismiss()) }) {
+                        finish(prompt.dismiss())
+                    }
                 }
                 return result
             }
@@ -1903,18 +2055,26 @@ class MainActivity : AppCompatActivity() {
                 prompt: GeckoSession.PromptDelegate.ButtonPrompt,
             ): GeckoResult<GeckoSession.PromptDelegate.PromptResponse> {
                 val result = GeckoResult<GeckoSession.PromptDelegate.PromptResponse>()
+                val finish = completeOnce(result)
                 runOnUiThread {
-                    AlertDialog.Builder(this@MainActivity)
+                    if (isFinishing || isDestroyed) {
+                        finish(prompt.dismiss())
+                        return@runOnUiThread
+                    }
+                    val dlg = AlertDialog.Builder(this@MainActivity)
                         .setTitle(prompt.title ?: getString(R.string.app_name))
                         .setMessage(prompt.message ?: "")
                         .setPositiveButton(android.R.string.ok) { _, _ ->
-                            result.complete(prompt.confirm(GeckoSession.PromptDelegate.ButtonPrompt.Type.POSITIVE))
+                            finish(prompt.confirm(GeckoSession.PromptDelegate.ButtonPrompt.Type.POSITIVE))
                         }
                         .setNegativeButton(android.R.string.cancel) { _, _ ->
-                            result.complete(prompt.confirm(GeckoSession.PromptDelegate.ButtonPrompt.Type.NEGATIVE))
+                            finish(prompt.confirm(GeckoSession.PromptDelegate.ButtonPrompt.Type.NEGATIVE))
                         }
-                        .setOnCancelListener { result.complete(prompt.dismiss()) }
-                        .show()
+                        .setOnCancelListener { finish(prompt.dismiss()) }
+                        .create()
+                    if (!showTrackedDialog(dlg) { finish(prompt.dismiss()) }) {
+                        finish(prompt.dismiss())
+                    }
                 }
                 return result
             }
@@ -1924,22 +2084,30 @@ class MainActivity : AppCompatActivity() {
                 prompt: GeckoSession.PromptDelegate.TextPrompt,
             ): GeckoResult<GeckoSession.PromptDelegate.PromptResponse> {
                 val result = GeckoResult<GeckoSession.PromptDelegate.PromptResponse>()
+                val finish = completeOnce(result)
                 runOnUiThread {
+                    if (isFinishing || isDestroyed) {
+                        finish(prompt.dismiss())
+                        return@runOnUiThread
+                    }
                     val input = EditText(this@MainActivity).apply {
                         setText(prompt.defaultValue ?: "")
                     }
-                    AlertDialog.Builder(this@MainActivity)
+                    val dlg = AlertDialog.Builder(this@MainActivity)
                         .setTitle(prompt.title ?: getString(R.string.app_name))
                         .setMessage(prompt.message ?: "")
                         .setView(input)
                         .setPositiveButton(android.R.string.ok) { _, _ ->
-                            result.complete(prompt.confirm(input.text.toString()))
+                            finish(prompt.confirm(input.text.toString()))
                         }
                         .setNegativeButton(android.R.string.cancel) { _, _ ->
-                            result.complete(prompt.dismiss())
+                            finish(prompt.dismiss())
                         }
-                        .setOnCancelListener { result.complete(prompt.dismiss()) }
-                        .show()
+                        .setOnCancelListener { finish(prompt.dismiss()) }
+                        .create()
+                    if (!showTrackedDialog(dlg) { finish(prompt.dismiss()) }) {
+                        finish(prompt.dismiss())
+                    }
                 }
                 return result
             }
@@ -1949,16 +2117,24 @@ class MainActivity : AppCompatActivity() {
                 prompt: GeckoSession.PromptDelegate.ChoicePrompt,
             ): GeckoResult<GeckoSession.PromptDelegate.PromptResponse> {
                 val result = GeckoResult<GeckoSession.PromptDelegate.PromptResponse>()
+                val finish = completeOnce(result)
                 val choices = prompt.choices
                 val labels = choices.map { it.label }.toTypedArray()
                 runOnUiThread {
-                    AlertDialog.Builder(this@MainActivity)
+                    if (isFinishing || isDestroyed) {
+                        finish(prompt.dismiss())
+                        return@runOnUiThread
+                    }
+                    val dlg = AlertDialog.Builder(this@MainActivity)
                         .setTitle(prompt.title ?: getString(R.string.app_name))
                         .setItems(labels) { _, which ->
-                            result.complete(prompt.confirm(choices[which]))
+                            finish(prompt.confirm(choices[which]))
                         }
-                        .setOnCancelListener { result.complete(prompt.dismiss()) }
-                        .show()
+                        .setOnCancelListener { finish(prompt.dismiss()) }
+                        .create()
+                    if (!showTrackedDialog(dlg) { finish(prompt.dismiss()) }) {
+                        finish(prompt.dismiss())
+                    }
                 }
                 return result
             }
@@ -1968,16 +2144,29 @@ class MainActivity : AppCompatActivity() {
                 prompt: GeckoSession.PromptDelegate.FilePrompt,
             ): GeckoResult<GeckoSession.PromptDelegate.PromptResponse> {
                 val result = GeckoResult<GeckoSession.PromptDelegate.PromptResponse>()
+                val finish = completeOnce(result)
                 val mime = prompt.mimeTypes?.firstOrNull()?.takeIf { it.isNotBlank() } ?: "*/*"
                 runOnUiThread {
+                    if (isFinishing || isDestroyed) {
+                        finish(prompt.dismiss())
+                        return@runOnUiThread
+                    }
+                    // Dismiss any prior unresolved file prompt before replacing the callback.
+                    pendingFileCallback?.invoke(null)
                     pendingFileCallback = { uri ->
                         if (uri != null) {
-                            result.complete(prompt.confirm(this@MainActivity, uri))
+                            finish(prompt.confirm(this@MainActivity, uri))
                         } else {
-                            result.complete(prompt.dismiss())
+                            finish(prompt.dismiss())
                         }
                     }
-                    filePickerLauncher.launch(mime)
+                    try {
+                        filePickerLauncher.launch(mime)
+                    } catch (e: ActivityNotFoundException) {
+                        pendingFileCallback = null
+                        Log.w(TAG, "No file picker available", e)
+                        finish(prompt.dismiss())
+                    }
                 }
                 return result
             }
@@ -2067,9 +2256,9 @@ class MainActivity : AppCompatActivity() {
                 }
                 .setOnCancelListener { completeAll(deny) }
                 .create()
-            dlg.setOnDismissListener { activeNotifDialogs.remove(dlg) }
-            activeNotifDialogs.add(dlg)
-            dlg.show()
+            if (!showTrackedDialog(dlg) { completeAll(deny) }) {
+                completeAll(deny)
+            }
         }
         return result
     }
@@ -2112,6 +2301,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showMoneroConfirmation(parsed: MoneroUriParser.ParsedMoneroUri) {
+        if (isFinishing || isDestroyed) return
         val shortAddr = "${parsed.address.take(12)}…${parsed.address.takeLast(12)}"
         val msg = buildString {
             append("Type: ${parsed.type.name.lowercase()}\n")
@@ -2121,14 +2311,15 @@ class MainActivity : AppCompatActivity() {
             parsed.recipientName?.let { append("\nRecipient: $it") }
             parsed.description?.let { append("\nNote: $it") }
         }
-        AlertDialog.Builder(this)
+        val dlg = AlertDialog.Builder(this)
             .setTitle(R.string.monero_confirm_title)
             .setMessage(msg)
             .setPositiveButton(R.string.monero_confirm_open) { _, _ ->
                 openExternalIntent(Uri.parse(parsed.rawUri), R.string.monero_no_wallet)
             }
             .setNegativeButton(R.string.cancel, null)
-            .show()
+            .create()
+        showTrackedDialog(dlg)
     }
 
     private fun openExternalIntent(uri: Uri, missingResId: Int) {
@@ -2273,6 +2464,14 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
+        if (currentActivity === this) {
+            extension?.let { ext ->
+                ext.tabDelegate = null
+                ext.setActionDelegate(null)
+                ext.setMessageDelegate(null, Nip55Bridge.NATIVE_APP_ID)
+            }
+            currentActivity = null
+        }
         if (screenUnlockReceiverRegistered) {
             try {
                 unregisterReceiver(screenUnlockReceiver)
@@ -2282,13 +2481,17 @@ class MainActivity : AppCompatActivity() {
         }
         cancelPendingNip55Request()
         pendingNotificationTap = null
-        for (dlg in activeNotifDialogs.toList()) {
+        pendingDownloadBytes = null
+        val staleFileCb = pendingFileCallback
+        pendingFileCallback = null
+        staleFileCb?.invoke(null)
+        for (dlg in activeDialogs.toList()) {
             try {
                 dlg.dismiss()
             } catch (_: Exception) {
             }
         }
-        activeNotifDialogs.clear()
+        activeDialogs.clear()
         if (pendingOriginNotifResults.isNotEmpty()) {
             val deny = GeckoSession.PermissionDelegate.ContentPermission.VALUE_DENY
             val allPending = pendingOriginNotifResults.values.flatten()
@@ -2302,6 +2505,7 @@ class MainActivity : AppCompatActivity() {
             for (cb in stale) cb(false)
         }
         nip55Executor.shutdownNow()
+        downloadExecutor.shutdownNow()
         geckoView.releaseSession()
         if (isFinishing) {
             for (t in tabs) t.session.close()

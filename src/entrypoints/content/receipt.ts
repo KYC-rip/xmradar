@@ -35,6 +35,7 @@ export function pageLetterText(doc: Document = document): string {
 
 export function startReceipts(ctx: ContentScriptContext) {
   if (window !== window.top || isXHost(location.hostname)) return;
+  let alive = true;
   let on = false;
   let card: ReceiptCard | null = null;
   const checks = new Map<string, PageCheck>();
@@ -170,14 +171,19 @@ export function startReceipts(ctx: ContentScriptContext) {
     render();
   };
 
-  function start() {
-    if (observer) return;
+  function attachObserver() {
+    if (observer || !on || !alive || document.hidden) return;
     // a receipt can arrive late: the exchange releases it once the record is witnessed (R15)
     observer = new MutationObserver(() => schedule());
     // href too: a download link whose letter is filled in later (PLAN-LOGLINK); nothing else that changes attributes
     observer.observe(document.documentElement, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ['href'] });
+  }
+
+  function start() {
+    if (!alive) return;
+    attachObserver();
     document.addEventListener('copy', onCopy, true);
-    void scan();
+    if (!document.hidden) void scan();
     // the order-page match also says whether a receipt is expected here: check again once it's known
     startLetters();
   }
@@ -212,6 +218,8 @@ export function startReceipts(ctx: ContentScriptContext) {
   }
 
   const apply = (next: boolean) => {
+    if (!alive) return;
+    if (next === on) return;
     on = next;
     if (on) start();
     else stop();
@@ -220,6 +228,7 @@ export function startReceipts(ctx: ContentScriptContext) {
   const unwatch = settingsItem.watch((s) => apply(receiptsOn(s)));
   // site info switched while the page is open: letters stop, or start, with it
   const unwatchSite = xmrSettingsItem.watch((x) => {
+    if (!alive) return;
     const next = siteInfoOn(x);
     if (next === siteInfo) return;
     siteInfo = next;
@@ -233,14 +242,29 @@ export function startReceipts(ctx: ContentScriptContext) {
     if (next) startLetters();
     render();
   });
-  void xmrSettingsItem.getValue().then((x) => (siteInfo ??= siteInfoOn(x)));
+  void xmrSettingsItem.getValue().then((x) => {
+    if (alive) siteInfo ??= siteInfoOn(x);
+  });
+  ctx.addEventListener(document, 'visibilitychange', () => {
+    if (!on || !alive) return;
+    if (document.hidden) {
+      observer?.disconnect();
+      observer = null;
+      clearTimeout(timer);
+      timer = undefined;
+    } else {
+      attachObserver();
+      void scan();
+    }
+  });
   // a single-page app moving to another order: start over
   ctx.addEventListener(window, 'wxt:locationchange', () => {
-    if (!on) return;
+    if (!on || !alive) return;
     stop();
     start();
   });
   ctx.onInvalidated(() => {
+    alive = false;
     unwatch();
     unwatchSite();
     on = false;

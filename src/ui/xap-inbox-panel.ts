@@ -97,6 +97,8 @@ export async function mountXapInbox(root: HTMLElement) {
     xoList.replaceChildren(...(xos?.pubkey === pubkey ? xos.items : []).map(xoLine));
     status.textContent = inboxStatus(st);
     const asked = st?.relays ?? [];
+    const relaysDetails = relaysSummary.closest('details');
+    if (relaysDetails) relaysDetails.hidden = !asked.length;
     relaysSummary.textContent = asked.length ? `Asking ${asked.length} relays` : '';
     relays.textContent = asked.join(', ');
     markRead(st);
@@ -111,9 +113,14 @@ export async function mountXapInbox(root: HTMLElement) {
   check.addEventListener('click', async () => {
     check.disabled = true;
     status.textContent = 'Checking…';
-    await sendToBackground({ type: 'xap-inbox-check' }).catch(() => {});
-    check.disabled = false;
-    await render();
+    try {
+      await sendToBackground({ type: 'xap-inbox-check' });
+      await render();
+    } catch (e) {
+      status.textContent = (e as Error).message || 'Could not check inbox.';
+    } finally {
+      check.disabled = false;
+    }
   });
   xmrSettingsItem.watch(() => void render());
   pubkeyItem.watch(() => void render());

@@ -12,12 +12,18 @@
       <section id="paste" hidden>
         <p class="hint">Paste a <code>monero-signin:</code> link from a site's sign-in page. XMRadar checks it and shows what you'd sign; your own wallet signs.</p>
         <textarea id="paste-uri" rows="5" spellcheck="false" aria-label="Sign-in link"></textarea>
-        <button id="paste-check" type="button" class="primary">Check link</button>
+        <div class="row">
+          <button id="paste-check" type="button" class="primary">Check link</button>
+          <span id="paste-status" class="row-hint error" role="status" aria-live="polite"></span>
+        </div>
       </section>
 
       <section id="refused" class="card pad refused" hidden>
         <strong>XMRadar won't help sign this.</strong>
         <span id="refused-why"></span>
+        <div class="row" id="refused-actions" hidden>
+          <button id="refused-retry" type="button">Try another link</button>
+        </div>
       </section>
 
       <section id="consent" hidden>

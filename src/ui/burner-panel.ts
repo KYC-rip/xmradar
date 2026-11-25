@@ -105,8 +105,12 @@ export function mountBurnerPanel(root: HTMLElement) {
   createBtn.addEventListener('click', () => guard('Getting an address…', create));
   copyBtn.addEventListener('click', async () => {
     if (!current) return;
-    await navigator.clipboard.writeText(current.email);
-    setStatus(statusEl, 'Address copied', 'ok');
+    try {
+      await navigator.clipboard.writeText(current.email);
+      setStatus(statusEl, 'Address copied', 'ok');
+    } catch {
+      setStatus(statusEl, 'Could not copy automatically — select the address above.', 'error');
+    }
   });
   burnBtn.addEventListener('click', () => {
     if (!burnArmed) {

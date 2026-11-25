@@ -3,7 +3,7 @@ import { badgeLook, mountBadge, type BadgeLook } from '../../identity/badge-look
 import { PendingQueue } from '../../identity/bucket';
 import { normalizeHandle } from '../../identity/envelope';
 import { xapEntry, xoCountOf, xoKey, xoPostsOf, type Badge } from '../../identity/resolve';
-import { postAvatar, profileAvatar, removeRings, RING_ATTR, setRing } from './x-xo-ring';
+import { clearForeignRing, postAvatar, profileAvatar, removeRings, removeRingsFor, RING_ATTR, setRing } from './x-xo-ring';
 import { articleViewSlot, hoverCardSlot, notificationSlots, pinnedPost, profileClaimScope, profileHeader, profileSlot, quotedTweetSlots, tweetSlot, userCellSlot, type AnyBadgeSlot, type BadgeSlot } from '../../identity/x-handle';
 import { emptyClaim, parseClaim, type ClaimPlace } from '../../identity/xclaims';
 import { sendToBackground, type XapTotals } from '../../messaging';
@@ -40,6 +40,7 @@ export function startBadges(ctx: ContentScriptContext) {
     return undefined;
   };
   const queue = new PendingQueue(500);
+  let alive = true;
   let timer: ReturnType<typeof setTimeout> | undefined;
   let inflight = false;
   let enabled = false;
@@ -55,28 +56,28 @@ export function startBadges(ctx: ContentScriptContext) {
     for (const host of document.querySelectorAll(`${HOST_TAG}, ${XAP_SELECTOR}, ${XO_SELECTOR}`)) host.remove();
     removeRings();
   };
+  const slotAvatar = (slot: AnyBadgeSlot): HTMLElement | null => {
+    if (slot.avatar) {
+      return slot.avatar.closest('[data-testid="primaryColumn"], [data-testid="HoverCard"]') ? slot.avatar : null;
+    }
+    if (slot.article) return postAvatar(slot.article);
+    if (slot.key.startsWith('profile:')) return profileAvatar(document, slot.handle);
+    return null;
+  };
   /** the ring on this slot's avatar: an explicit avatar, a post's author, or the profile header's own */
   const ringFor = (slot: AnyBadgeSlot, badge: Badge | null | undefined) => {
-    if (slot.avatar) {
-      if (slot.avatar.closest('[data-testid="primaryColumn"], [data-testid="HoverCard"]')) {
-        setRing(slot.avatar, slot.key, badge?.primary ? xoShown(badge) : 0);
-      }
-    } else if (slot.article) {
-      const av = postAvatar(slot.article);
-      if (av) setRing(av, slot.key, badge?.primary ? xoShown(badge) : 0);
-    } else if (slot.key.startsWith('profile:')) {
-      const av = profileAvatar(document, slot.handle);
-      if (av) setRing(av, slot.key, badge?.primary ? xoShown(badge) : 0);
-    }
+    const av = slotAvatar(slot);
+    if (av) setRing(av, slot.key, badge?.primary ? xoShown(badge) : 0);
   };
 
   // xo (PLAN-MONEROLIKE): the buttons follow the switch, the user's sent xos and their own posts' counts
   const xoSeenItem = storage.defineItem<Record<string, number>>('local:xoSeen', { fallback: {} });
   const xo = xoManager({ on: false, me: null, sent: {}, counts: {}, seen: {} }, (seen) => void xoSeenItem.setValue(seen).catch(() => {}));
   const keyPrefix = (pk: string | null | undefined) => (pk && /^[0-9a-f]{64}$/.test(pk) ? pk.slice(0, 16) : undefined);
-  void Promise.all([xmrSettingsItem.getValue(), myHandleItem.getValue(), xoSentItem.getValue(), xoCountsItem.getValue(), xoSeenItem.getValue(), pubkeyItem.getValue()]).then(([s, me, sent, counts, seen, pk]) =>
-    xo.update({ on: xoButtonOn(s), alsoLike: s.xoAlsoLike === true, sound: xoSoundOn(s), me, sent, counts, seen, myKey: keyPrefix(pk) }),
-  );
+  void Promise.all([xmrSettingsItem.getValue(), myHandleItem.getValue(), xoSentItem.getValue(), xoCountsItem.getValue(), xoSeenItem.getValue(), pubkeyItem.getValue()]).then(([s, me, sent, counts, seen, pk]) => {
+    if (!alive) return;
+    xo.update({ on: xoButtonOn(s), alsoLike: s.xoAlsoLike === true, sound: xoSoundOn(s), me, sent, counts, seen, myKey: keyPrefix(pk) });
+  });
   const unwatchXo = [
     xmrSettingsItem.watch((s, old) => {
       xo.update({ on: xoButtonOn(s), alsoLike: s.xoAlsoLike === true, sound: xoSoundOn(s) });
@@ -89,15 +90,18 @@ export function startBadges(ctx: ContentScriptContext) {
     xoCountsItem.watch((counts) => xo.update({ counts: counts ?? {} })),
   ];
   ctx.onInvalidated(() => {
+    alive = false;
     unwatchXo.forEach((u) => u());
     xo.stop();
   });
   // the live inbox (PLAN-LIVEINBOX): a heartbeat while this X tab is visible and notifications are on
   liveHeartbeat(ctx, { initial: xmrSettingsItem.getValue().then(xapNotifyOn), watch: (cb) => xmrSettingsItem.watch((s) => cb(xapNotifyOn(s))), send: () => sendToBackground({ type: 'x-live' }) });
-  /** one handle's badges and Xap buttons; slot keys end in `:<handle>` */
+  /** one handle's badges, Xap/xo buttons, and avatar rings; slot keys end in `:<handle>` */
   const removeFor = (handle: string) => {
-    for (const el of document.querySelectorAll<HTMLElement>(`${HOST_TAG}, ${XAP_SELECTOR}`)) if (el.dataset.key?.endsWith(`:${handle}`)) el.remove();
-    for (const el of document.querySelectorAll<HTMLElement>(XO_SELECTOR)) if (el.dataset.handle?.toLowerCase() === handle.toLowerCase()) el.remove();
+    const lower = normalizeHandle(handle);
+    for (const el of document.querySelectorAll<HTMLElement>(`${HOST_TAG}, ${XAP_SELECTOR}`)) if (el.dataset.key?.toLowerCase().endsWith(`:${lower}`)) el.remove();
+    for (const el of document.querySelectorAll<HTMLElement>(XO_SELECTOR)) if (el.dataset.handle?.toLowerCase() === lower) el.remove();
+    removeRingsFor(lower);
   };
 
   // X self-claims (PLAN-XCLAIMS): what the profile you're on shows in its bio, Website field and pinned
@@ -283,7 +287,13 @@ export function startBadges(ctx: ContentScriptContext) {
 
   function apply(slot: AnyBadgeSlot) {
     const badge = lookup(slot.handle);
-    if (badge !== undefined) ringFor(slot, badge);
+    if (badge !== undefined) {
+      ringFor(slot, badge);
+    } else {
+      // Clear any stale ring left over from a previous author on a recycled DOM node while lookup is pending.
+      const av = slotAvatar(slot);
+      if (av) clearForeignRing(av, slot.key);
+    }
     if (slot.article && slot.anchor) {
       const pill = slot.pill ? slot.anchor.querySelector<HTMLElement>(`:scope > ${HOST_TAG}`) : null;
       // a recycled tweet node may still hold another author's button and pill
@@ -331,8 +341,13 @@ export function startBadges(ctx: ContentScriptContext) {
     for (const n of notifications) {
       for (const slot of notificationSlots(n)) apply(slot);
     }
-    // an X Article's reading page
-    const view = root instanceof Element && root.closest('article[data-testid="twitterArticleReadView"]') ? root.closest('article[data-testid="twitterArticleReadView"]') : document.querySelector('article[data-testid="twitterArticleReadView"]');
+    // an X Article's reading page (only query document-wide when on an /article/ route)
+    const view =
+      root instanceof Element && root.closest('article[data-testid="twitterArticleReadView"]')
+        ? root.closest('article[data-testid="twitterArticleReadView"]')
+        : location.pathname.includes('/article/')
+          ? document.querySelector('article[data-testid="twitterArticleReadView"]')
+          : null;
     const viewSlot = view ? articleViewSlot(view, location) : null;
     if (viewSlot) apply(viewSlot);
     const cells = new Set<Element>(root.querySelectorAll('[data-testid="UserCell"]'));
@@ -397,31 +412,61 @@ export function startBadges(ctx: ContentScriptContext) {
     if (queue.size) schedule(retryPending ? PENDING_RETRY_MS : BATCH_DELAY_MS);
   }
 
+  const pendingNodes = new Set<Element>();
+  let pendingHeader = false;
+  let rafId: number | undefined;
+
+  function flushMutations() {
+    rafId = undefined;
+    const header = pendingHeader;
+    pendingHeader = false;
+    const nodes = [...pendingNodes];
+    pendingNodes.clear();
+    if (!enabled || !observer) return;
+    // Skip nodes that are disconnected or contained inside another queued ancestor node.
+    const roots = nodes.filter((n) => n.isConnected && !nodes.some((other) => other !== n && other.contains(n)));
+    for (const n of roots) scan(n);
+    if (header) scanProfile();
+    scheduleClaims();
+  }
+
   function connect() {
     if (observer || !enabled || document.hidden) return;
     observer = new MutationObserver((records) => {
-      let header = false;
+      let dirty = false;
       for (const r of records) {
         for (const n of r.addedNodes) {
-          if (n instanceof Element && !isOurs(n)) scan(n);
+          if (n instanceof Element && !isOurs(n)) {
+            pendingNodes.add(n);
+            dirty = true;
+          }
         }
         // X swaps the header's text in place when moving between profiles
         const el = r.target instanceof Element ? r.target : r.target.parentElement;
-        if (!header && el && !isOurs(el) && el.closest('[data-testid="UserName"]')) header = true;
+        if (!pendingHeader && el && !isOurs(el) && el.closest('[data-testid="UserName"]')) {
+          pendingHeader = true;
+          dirty = true;
+        }
       }
-      if (header) scanProfile();
-      // a bio or pinned post can change in place, with no new element
-      scheduleClaims();
+      if (dirty || claimsOn) {
+        rafId ??= requestAnimationFrame(flushMutations);
+      }
     });
     // body survives X's client-side navigation, so one observer covers every page
     observer.observe(document.body, { childList: true, subtree: true, characterData: true });
     scan(document);
-    if (totalsQueue.size) totalsTimer ??= setTimeout(() => void flushTotals(), BATCH_DELAY_MS);
+    if (totalsQueue.size || postQueue.size) totalsTimer ??= setTimeout(() => void flushTotals(), BATCH_DELAY_MS);
   }
 
   function disconnect() {
     observer?.disconnect();
     observer = null;
+    if (rafId !== undefined) {
+      cancelAnimationFrame(rafId);
+      rafId = undefined;
+    }
+    pendingNodes.clear();
+    pendingHeader = false;
   }
 
   function setEnabled(on: boolean) {
@@ -434,6 +479,8 @@ export function startBadges(ctx: ContentScriptContext) {
     totalsTimer = undefined;
     clearTimeout(claimsTimer);
     claimsTimer = undefined;
+    clearTimeout(scrollTimer);
+    scrollTimer = undefined;
     removeAll();
   }
 
@@ -461,6 +508,7 @@ export function startBadges(ctx: ContentScriptContext) {
   });
 
   void xmrSettingsItem.getValue().then((s) => {
+    if (!alive) return;
     rings = xoRingsOn(s);
     look = badgeLook(s);
     discovery = s.nostrDiscovery;

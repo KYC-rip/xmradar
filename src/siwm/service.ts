@@ -154,15 +154,21 @@ export function siwmService(d: SiwmDeps) {
     /** A consent window was closed: forget what it showed. */
     windowClosed: (windowId: number) =>
       queued(async () => {
-        const s = fresh(await d.store.getValue());
-        await d.store.setValue(Object.fromEntries(Object.entries(s).filter(([, e]) => e.windowId !== windowId)));
+        const raw = await d.store.getValue();
+        const s = fresh(raw);
+        const next = Object.fromEntries(Object.entries(s).filter(([, e]) => e.windowId !== windowId));
+        if (Object.keys(next).length === Object.keys(raw).length) return;
+        await d.store.setValue(next);
       }),
 
     /** A consent tab (Android / GeckoView fallback) was closed: forget what it showed. */
     tabClosed: (tabId: number) =>
       queued(async () => {
-        const s = fresh(await d.store.getValue());
-        await d.store.setValue(Object.fromEntries(Object.entries(s).filter(([, e]) => e.tabId !== tabId)));
+        const raw = await d.store.getValue();
+        const s = fresh(raw);
+        const next = Object.fromEntries(Object.entries(s).filter(([, e]) => e.tabId !== tabId));
+        if (Object.keys(next).length === Object.keys(raw).length) return;
+        await d.store.setValue(next);
       }),
 
     /** Checks everything again from the stored link, then posts the signature to the verifier. */

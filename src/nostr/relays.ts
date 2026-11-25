@@ -3,6 +3,7 @@ import { Relay } from 'nostr-tools/relay';
 import type { Filter } from 'nostr-tools/filter';
 import type { Event } from 'nostr-tools/pure';
 import type { RelayResult } from '../messaging';
+import { safeRelay } from '../receipts/guards';
 
 export const PUBLISH_TIMEOUT_MS = 6000;
 
@@ -42,7 +43,7 @@ export async function fetchWriteRelays(pubkey: string, lookupRelays: string[]): 
   try {
     const events = await pool.querySync(lookupRelays, { kinds: [10002], authors: [pubkey] }, { maxWait: 4000 });
     const newest = events.sort((a, b) => b.created_at - a.created_at)[0] ?? null;
-    return writeRelaysFrom(newest);
+    return writeRelaysFrom(newest).filter(safeRelay).slice(0, 10);
   } finally {
     pool.close(lookupRelays);
   }

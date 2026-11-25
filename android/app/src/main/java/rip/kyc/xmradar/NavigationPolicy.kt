@@ -95,7 +95,7 @@ object NavigationPolicy {
                     // may only navigate top-level to guard.html (from DNR redirect).
                     if (compartment == Compartment.EXTENSION) return Decision.AllowInApp
                     val rel = trimmed.substring(ownExtensionBaseUrl.length)
-                    if (rel.startsWith("guard.html")) return Decision.AllowInApp
+                    if (rel == "guard.html" || rel.startsWith("guard.html?") || rel.startsWith("guard.html#")) return Decision.AllowInApp
                     return Decision.Deny("non-extension compartment cannot navigate directly to $rel")
                 }
                 return Decision.Deny("foreign moz-extension origin")

@@ -11,11 +11,14 @@
   --border: #e3e6ec;
   --chip: #e6e8ee;
   --track: #cfd3dc;
-  --accent: #7b3fe4;
+  --accent: #6d31d8;
+  --accent-btn: #7b3fe4;
   --accent-soft: #ece4fb;
-  --ok: #2e9d5a;
-  --warn: #b26a00;
+  --ok: #1d7a42;
+  --ok-btn: #1d7a42;
+  --warn: #9a5b00;
   --danger: #c62828;
+  --danger-btn: #c62828;
   --on-accent: #ffffff;
   --knob: #ffffff;
   --shadow: rgb(0 0 0 / 0.08);
@@ -32,11 +35,14 @@
     --border: #2c2e36;
     --chip: #262830;
     --track: #3a3d47;
-    --accent: #9b6bff;
+    --accent: #a77bf5;
+    --accent-btn: #7c3aed;
     --accent-soft: #2a2140;
     --ok: #5cc98a;
+    --ok-btn: #166534;
     --warn: #f0b429;
-    --danger: #ff6b5e;
+    --danger: #ff7b70;
+    --danger-btn: #b91c1c;
     --on-accent: #ffffff;
     --knob: #ffffff;
     --shadow: rgb(0 0 0 / 0.4);
@@ -48,7 +54,7 @@ h1, h2, h3 { margin: 0; font-weight: 700; }
 p { margin: 0; }
 a { color: var(--accent); }
 code, .mono { font-family: var(--mono); font-size: 12.5px; word-break: break-all; }
-.hidden { display: none !important; }
+.hidden, [hidden] { display: none !important; }
 
 /* text */
 .hint, .row-hint { color: var(--muted); font-size: 12.5px; }
@@ -66,9 +72,9 @@ button, .btn {
 button:hover:not(:disabled) { border-color: var(--track); }
 button:disabled { opacity: 0.55; cursor: default; }
 button:focus-visible, input:focus-visible, a:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-button.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+button.primary { background: var(--accent-btn); border-color: var(--accent-btn); color: var(--on-accent); }
 button.soft { background: var(--accent-soft); border-color: transparent; color: var(--accent); }
-button.danger, button.armed { background: var(--danger); border-color: var(--danger); color: var(--on-accent); }
+button.danger, button.armed { background: var(--danger-btn); border-color: var(--danger-btn); color: var(--on-accent); }
 button.link { border: 0; padding: 0; background: none; color: var(--accent); font-weight: 600; }
 button.link.danger { color: var(--danger); background: none; }
 
@@ -78,7 +84,7 @@ input[type='text'], input[type='url'], input[type='password'], textarea {
 }
 /* a select drawn like the other controls, with its own chevron */
 select {
-  appearance: none; flex: none; font: 600 13px/1.2 var(--font); padding: 8px 32px 8px 12px; border: 1px solid var(--border);
+  appearance: none; flex: none; max-width: 100%; font: 600 13px/1.2 var(--font); padding: 8px 32px 8px 12px; border: 1px solid var(--border);
   border-radius: 8px; color: var(--fg); cursor: pointer;
   background-color: var(--surface);
   background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%);
@@ -100,8 +106,13 @@ input.switch::after {
   content: ''; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%;
   background: var(--knob); transition: transform 0.15s;
 }
-input.switch:checked { background: var(--accent); }
+input.switch:checked { background: var(--accent-btn); }
 input.switch:checked::after { transform: translateX(16px); }
+input.switch:disabled { opacity: 0.45; cursor: not-allowed; }
+label.setting:has(input.switch:disabled) { opacity: 0.65; cursor: default; }
+@media (pointer: coarse) {
+  button:not(.link):not(.icon), .btn, select { min-height: 40px; }
+}
 
 /* surfaces */
 .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; }

@@ -3,6 +3,7 @@ import { SimplePool } from 'nostr-tools/pool';
 import type { Event } from 'nostr-tools/pure';
 import { KIND_PAYTO, validEvent } from '../identity/nostr';
 import { allRelaysFrom } from '../nostr/relays';
+import { safeRelay } from '../receipts/guards';
 import { validateMoneroAddress } from '../xmr/address';
 import { KIND_CONFIRMATION, KIND_DELETION, KIND_RECEIPT } from './events';
 
@@ -66,7 +67,7 @@ export async function fetchProfiles(pubkeys: string[], relays: string[], query: 
   const out: Profiles = { addresses: new Map(), relays: new Map() };
   for (const pk of pubkeys) {
     out.addresses.set(pk, currentAddress(events, pk));
-    out.relays.set(pk, allRelaysFrom(newest(events, 10002, pk)).filter((r) => r.startsWith('wss://')).slice(0, MAX_INBOX));
+    out.relays.set(pk, allRelaysFrom(newest(events, 10002, pk)).filter(safeRelay).slice(0, MAX_INBOX));
   }
   return out;
 }

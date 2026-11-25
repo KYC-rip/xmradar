@@ -10,10 +10,11 @@ h1 { font-size: 20px; margin: 0 0 4px; }
 .import-box { display: flex; flex-direction: column; gap: 8px; padding-top: 6px; border-top: 1px solid var(--border); }
 .warn-text { color: var(--danger); }
 .marker { width: 22px; height: 22px; border-radius: 50%; display: inline-grid; place-items: center; font-size: 12px; font-weight: 700; background: var(--chip); }
-[data-state='done'] .marker { background: var(--ok); color: var(--on-accent); }
-[data-state='current'] .marker { background: var(--accent); color: var(--on-accent); }
+[data-state='done'] .marker { background: var(--ok-btn); color: var(--on-accent); font-size: 0; }
+[data-state='done'] .marker::before { content: '✓'; font-size: 13px; }
+[data-state='current'] .marker { background: var(--accent-btn); color: var(--on-accent); }
 [data-state='done'] .body, [data-state='todo'] .body { display: none; }
-[data-state='todo'] { opacity: 0.6; }
+[data-state='todo'] .head > strong { color: var(--muted); }
 .body { display: flex; flex-direction: column; gap: 10px; }
 .field { display: flex; flex-direction: column; align-items: stretch; gap: 4px; font-size: 13px; }
 .field input { width: 100%; box-sizing: border-box; }

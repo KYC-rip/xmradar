@@ -82,21 +82,24 @@ export function startSyncedMarks(ctx: ContentScriptContext, doc = document) {
   };
   const ours = (n: Node) => n instanceof Element && n.localName === SYNCED_TAG;
   const apply = () => {
-    if (on && !observer) {
+    const shouldObserve = on && Object.keys(synced).length > 0 && !doc.hidden;
+    if (shouldObserve && !observer) {
       observer = new MutationObserver((records) => {
         // our own insertions don't need another pass; a mark X took away does
         if (records.every((r) => r.removedNodes.length === 0 && [...r.addedNodes].every(ours))) return;
         schedule();
       });
       observer.observe(doc.body, { childList: true, subtree: true });
-    } else if (!on && observer) {
+    } else if (!shouldObserve && observer) {
       observer.disconnect();
       observer = null;
     }
-    if (on) schedule();
-    else clearMarks(doc);
+    if (on && !doc.hidden) schedule();
+    else if (!on) clearMarks(doc);
   };
+  ctx.addEventListener(doc, 'visibilitychange', apply);
   void Promise.all([settingsItem.getValue(), syncedPostsItem.getValue()]).then(([s, m]) => {
+    if (!ctx.isValid) return;
     on = syncedMarkOn(s);
     synced = m ?? {};
     apply();
@@ -107,7 +110,7 @@ export function startSyncedMarks(ctx: ContentScriptContext, doc = document) {
   });
   const unwatchSynced = syncedPostsItem.watch((m) => {
     synced = m ?? {};
-    if (on) schedule();
+    apply();
   });
   ctx.onInvalidated(() => {
     unwatchSettings();
