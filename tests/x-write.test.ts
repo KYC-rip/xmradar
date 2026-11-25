@@ -269,4 +269,16 @@ describe('the button', () => {
     expect(await putBack(partial, 'GM')).toBe(true);
     expect(ta.value).toBe('GM world today');
   });
+  it('dark mode: ignores near-black sampled SVG color so the pen icon never looks disabled', async () => {
+    document.body.style.backgroundColor = 'rgb(0, 0, 0)';
+    document.body.innerHTML = `<div class="composer">
+      <textarea data-testid="tweetTextarea_0"></textarea>
+      <div data-testid="toolBar"><nav><div role="tablist"><div role="presentation"><button data-testid="gifSearchButton" aria-label="Add a GIF"><svg style="color:rgb(51, 54, 57)"></svg></button></div></div></nav></div>
+    </div>`;
+    startWriting(ctx(), { ready: async () => ({ ready: true, source: 'local' }), ask: vi.fn(), watch: () => () => {} });
+    await vi.waitFor(() => expect(document.querySelectorAll(`.${WRITE_BUTTON}`)).toHaveLength(1));
+    const btn = document.querySelector<HTMLButtonElement>(`.${WRITE_BUTTON} button`)!;
+    expect(btn.style.color).toBe('rgb(29, 155, 240)');
+    document.body.style.backgroundColor = '';
+  });
 });

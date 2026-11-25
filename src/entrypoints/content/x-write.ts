@@ -465,11 +465,22 @@ export function startWriting(ctx: { onInvalidated(cb: () => void): void }, deps:
       style: 'all:unset;cursor:pointer;display:flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:999px;color:rgb(29,155,240);touch-action:manipulation',
     });
     btn.innerHTML = PEN;
-    // X's own icons' colour (theme and accent), from a button that's enabled: a disabled one (location, a
-    // full poll) is drawn faded, and the pen would look disabled too
-    const enabled = 'button[aria-label]:not([disabled]):not([aria-disabled="true"]) svg';
-    const theirs = toolbar.querySelector(enabled.replace('button[aria-label]', 'button[aria-label="Add emoji"]')) ?? toolbar.querySelector(enabled);
-    if (theirs) btn.style.color = getComputedStyle(theirs).color;
+    // Match X's own enabled toolbar icon colour when it has usable contrast against the page;
+    // on Mobile X dark mode X's SVG `color` resolves to near-black rgb(51,54,57), which makes
+    // the pen look disabled unless we keep the default X accent blue rgb(29,155,240).
+    const enabled = 'button[aria-label]:not([disabled]):not([aria-disabled="true"]):not([aria-label="Previous"]):not([aria-label="Next"]) svg';
+    const theirs =
+      toolbar.querySelector('button[aria-label="Add emoji"]:not([disabled]):not([aria-disabled="true"]) svg') ??
+      toolbar.querySelector('button[data-testid="gifSearchButton"]:not([disabled]):not([aria-disabled="true"]) svg') ??
+      toolbar.querySelector(enabled);
+    if (theirs) {
+      const c = getComputedStyle(theirs).color;
+      const m = /rgba?\((\d+),\s*(\d+),\s*(\d+)/.exec(c);
+      const luma = m ? Number(m[1]) * 0.299 + Number(m[2]) * 0.587 + Number(m[3]) * 0.114 : 128;
+      const isDark = darkPage();
+      const legible = isDark ? luma >= 110 : luma <= 185;
+      if (legible) btn.style.color = c;
+    }
     let target: WriteTarget | null = null;
     // keep the editor's selection on desktop mouse; never preventDefault touch pointerdown
     // (doing so cancels synthetic click events on Android / GeckoView).
