@@ -1,10 +1,10 @@
-# Builds and unit-tests the standalone Android / GrapheneOS GeckoView APK.
+# Builds and unit-tests the standalone Android / GrapheneOS GeckoView APK on pushes and PRs.
+# Signed tag release APKs are built and attached to GitHub Releases by .github/workflows/release.yml.
 name: Android
 
 on:
   push:
     branches: [main]
-    tags: ['v*.*.*']
     paths:
       - 'android/**'
       - 'src/**'
@@ -49,37 +49,12 @@ jobs:
         working-directory: android
         run: ./gradlew testDebugUnitTest --no-daemon
 
-      - name: Build debug APK (PR / branch)
-        if: "!startsWith(github.ref, 'refs/tags/v')"
+      - name: Build debug APK
         working-directory: android
         run: |
           ./gradlew assembleDebug --no-daemon
           mkdir -p dist-apk
           cp app/build/outputs/apk/debug/*.apk dist-apk/
-          (cd dist-apk && sha256sum *.apk > SHA256SUMS && cat SHA256SUMS)
-
-      - name: Build signed release APK (tag)
-        if: "startsWith(github.ref, 'refs/tags/v')"
-        working-directory: android
-        env:
-          # Tagged releases use offset 0 so versionCode matches metadata/rip.kyc.xmradar/en-US/changelogs/<versionCode>.txt
-          XMRADAR_BUILD_OFFSET: '0'
-          XMRADAR_KEYSTORE_BASE64: ${{ secrets.XMRADAR_KEYSTORE_BASE64 }}
-          XMRADAR_KEYSTORE_PASSWORD: ${{ secrets.XMRADAR_KEYSTORE_PASSWORD }}
-          XMRADAR_KEY_ALIAS: ${{ secrets.XMRADAR_KEY_ALIAS }}
-          XMRADAR_KEY_PASSWORD: ${{ secrets.XMRADAR_KEY_PASSWORD }}
-        run: |
-          if [ -z "$XMRADAR_KEYSTORE_BASE64" ] || [ -z "$XMRADAR_KEYSTORE_PASSWORD" ] || [ -z "$XMRADAR_KEY_ALIAS" ] || [ -z "$XMRADAR_KEY_PASSWORD" ]; then
-            echo "Refusing to cut an unsigned release APK: configure XMRADAR_KEYSTORE_* secrets first." >&2
-            exit 1
-          fi
-          echo "$XMRADAR_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/xmradar.jks"
-          export XMRADAR_KEYSTORE_PATH="$RUNNER_TEMP/xmradar.jks"
-          ./gradlew assembleRelease --no-daemon
-          VERSION=$(node -p "require('../package.json').version")
-          mkdir -p dist-apk
-          APK=$(ls app/build/outputs/apk/release/*.apk | head -n 1)
-          cp "$APK" "dist-apk/xmradar-${VERSION}-arm64-v8a.apk"
           (cd dist-apk && sha256sum *.apk > SHA256SUMS && cat SHA256SUMS)
 
       - name: Upload APK artifact

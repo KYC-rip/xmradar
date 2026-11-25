@@ -33,6 +33,11 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: pnpm
+      - uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00 # v4.7.1
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@af1da67850ed9a4cedd57bfd976089dd991e2582 # v4.3.1
 
       - name: Tag must match package.json
         run: |
@@ -53,12 +58,39 @@ jobs:
           WXT_RELEASE_URL: ${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ github.ref_name }}
         run: scripts/build-release.sh dist
 
+      - name: Build signed Android APK
+        working-directory: android
+        env:
+          # Tagged releases use offset 0 so versionCode matches metadata/rip.kyc.xmradar/en-US/changelogs/<versionCode>.txt
+          XMRADAR_BUILD_OFFSET: '0'
+          XMRADAR_KEYSTORE_BASE64: ${{ secrets.XMRADAR_KEYSTORE_BASE64 }}
+          XMRADAR_KEYSTORE_PASSWORD: ${{ secrets.XMRADAR_KEYSTORE_PASSWORD }}
+          XMRADAR_KEY_ALIAS: ${{ secrets.XMRADAR_KEY_ALIAS }}
+          XMRADAR_KEY_PASSWORD: ${{ secrets.XMRADAR_KEY_PASSWORD }}
+        run: |
+          if [ -z "$XMRADAR_KEYSTORE_BASE64" ] || [ -z "$XMRADAR_KEYSTORE_PASSWORD" ] || [ -z "$XMRADAR_KEY_ALIAS" ] || [ -z "$XMRADAR_KEY_PASSWORD" ]; then
+            echo "Refusing to cut an unsigned Android release APK: configure XMRADAR_KEYSTORE_* secrets in the release environment or repo settings." >&2
+            exit 1
+          fi
+          # Uses output/firefox-mv3 produced by scripts/build-release.sh (with WXT_COMMIT / WXT_RELEASE_URL intact)
+          ./gradlew testDebugUnitTest lintVitalRelease --no-daemon
+          echo "$XMRADAR_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/xmradar.jks"
+          export XMRADAR_KEYSTORE_PATH="$RUNNER_TEMP/xmradar.jks"
+          ./gradlew assembleRelease --no-daemon
+          VERSION=$(node -p "require('../package.json').version")
+          APK=$(ls app/build/outputs/apk/release/*.apk | head -n 1)
+          OUT="../dist/xmradar-${VERSION}-arm64-v8a.apk"
+          cp "$APK" "$OUT"
+          (cd ../dist && sha256sum "xmradar-${VERSION}-arm64-v8a.apk" >> SHA256SUMS)
+
       # Artifact attestations need a public repo on the free plan.
       - name: Attest build provenance
         if: env.PUBLIC == 'true'
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
-          subject-path: dist/*.zip
+          subject-path: |
+            dist/*.zip
+            dist/*.apk
 
       - name: Release notes
         run: |
@@ -95,10 +127,10 @@ jobs:
             gh release view "$TAG" --json assets --jq '.assets[].name' | while read -r name; do
               gh release delete-asset "$TAG" "$name" --yes
             done
-            gh release upload "$TAG" dist/*.zip dist/SHA256SUMS
+            gh release upload "$TAG" dist/*.zip dist/*.apk dist/SHA256SUMS
             gh release edit "$TAG" --notes-file dist/NOTES.md --title "XMRadar $TAG (build ${{ github.run_number }})"
           else
-            gh release create "$TAG" dist/*.zip dist/SHA256SUMS --notes-file dist/NOTES.md --title "XMRadar $TAG (build ${{ github.run_number }})"
+            gh release create "$TAG" dist/*.zip dist/*.apk dist/SHA256SUMS --notes-file dist/NOTES.md --title "XMRadar $TAG (build ${{ github.run_number }})"
           fi
 
       # Store uploads use the same zips, so the store copy hashes the same as the release.
