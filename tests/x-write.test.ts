@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanReply, cutShort, entitiesOf, lostEntities, outputTokens, writeGate, writeWith, writingRequest, xLength } from '../src/ai/writing';
-import { captureTarget, editorsFor, putBack, startWriting, wordDiff, WRITE_BUTTON } from '../src/entrypoints/content/x-write';
+import { captureTarget, editorsFor, GROK_HIDE_STYLE_ID, putBack, startWriting, wordDiff, WRITE_BUTTON } from '../src/entrypoints/content/x-write';
 import type { AiTagSettings } from '../src/settings';
 
 // PLAN-XPROOFREAD
@@ -227,5 +227,46 @@ describe('the button', () => {
     await new Promise((r) => setTimeout(r, 300));
     // the composer added after start is found (observer), the bare toolbar never
     expect(document.querySelectorAll(`.${WRITE_BUTTON}`)).toHaveLength(1);
+  });
+  it('mobile composer: finds editor nested inside wrapper & modal, hides Grok, and does not cancel touch pointerdown', async () => {
+    document.body.innerHTML = `<div role="dialog" aria-modal="true">
+      <div class="top"><div data-testid="tweetTextarea_0"><div contenteditable="true" role="textbox"><span>gm mobile</span></div></div></div>
+      <div class="sticky-footer"><div data-testid="toolBar"><nav><div role="tablist"><div role="presentation"><button aria-label="Add emoji"><svg></svg></button></div></div></nav></div></div>
+    </div>`;
+    const tb = document.querySelector('[data-testid="toolBar"]')!;
+    const ed = document.querySelector<HTMLElement>('[contenteditable="true"]')!;
+    expect(editorsFor(tb)).toEqual([ed]);
+    startWriting(ctx(), { ready: async () => ({ ready: true, source: 'openai' }), ask: vi.fn(), watch: () => () => {} });
+    await vi.waitFor(() => expect(document.querySelectorAll(`.${WRITE_BUTTON}`)).toHaveLength(1));
+    const btn = document.querySelector<HTMLButtonElement>(`.${WRITE_BUTTON} button`)!;
+    const touchEv = new Event('pointerdown', { bubbles: true, cancelable: true }) as PointerEvent;
+    Object.defineProperty(touchEv, 'pointerType', { value: 'touch' });
+    btn.dispatchEvent(touchEv);
+    expect(touchEv.defaultPrevented).toBe(false);
+    const grokStyle = document.getElementById(GROK_HIDE_STYLE_ID);
+    expect(grokStyle?.textContent).toContain('[data-testid="toolBar"]');
+    expect(grokStyle?.textContent).toContain('grok');
+    grokStyle?.remove();
+  });
+  it('mobile <textarea> editor: captures whole draft or selection and replaces cleanly', async () => {
+    document.body.innerHTML = `<div class="composer">
+      <textarea data-testid="tweetTextarea_0"></textarea>
+      <div data-testid="toolBar"><nav><div role="tablist"><div role="presentation"><button aria-label="Add a GIF"><svg></svg></button></div></div></nav></div>
+    </div>`;
+    const ta = document.querySelector<HTMLTextAreaElement>('textarea[data-testid="tweetTextarea_0"]')!;
+    const tb = document.querySelector('[data-testid="toolBar"]')!;
+    expect(editorsFor(tb)).toEqual([ta]);
+    ta.value = 'helo wrld today';
+    const whole = captureTarget([ta], ta)!;
+    expect(whole.text).toBe('helo wrld today');
+    expect(await putBack(whole, 'hello world today')).toBe(true);
+    expect(ta.value).toBe('hello world today');
+
+    ta.setSelectionRange(0, 5);
+    const partial = captureTarget([ta], ta)!;
+    expect(partial.text).toBe('hello');
+    expect(partial.textareaRange).toEqual({ start: 0, end: 5 });
+    expect(await putBack(partial, 'GM')).toBe(true);
+    expect(ta.value).toBe('GM world today');
   });
 });

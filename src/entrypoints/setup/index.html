@@ -14,10 +14,19 @@
 
       <ol class="wizard">
         <li class="card pad" data-step="key">
-          <div class="head"><span class="marker">1</span><strong>Your Nostr key</strong><code data-value></code></div>
+          <div class="head"><span class="marker">1</span><strong>Your Nostr key</strong><code data-value></code><button id="key-change" class="link-btn" type="button" hidden>Change key</button></div>
           <div class="body">
-            <p class="hint">If you have a Nostr signer extension (Alby, nos2x…), XMRadar asks it for your key in a temporary tab. If not, XMRadar makes one for you, kept in this browser only.</p>
-            <div class="row"><button id="key-make" class="primary" type="button">Get my key</button></div>
+            <p class="hint">If you have a Nostr signer (Alby, nos2x, Amber…), XMRadar asks it for your key. If not, XMRadar makes one for you, or you can import your own key.</p>
+            <div class="row"><button id="key-make" class="primary" type="button">Get my key</button><button id="key-import-open" type="button">Import my key</button></div>
+          </div>
+          <div id="key-import-box" class="import-box" hidden>
+            <p class="hint warn-text">Stored unencrypted in this browser profile only (not synced or backed up, and unrecoverable if this profile or app is removed). Signs only XMRadar’s own kinds (xos, Xap receipts, Monero address, X proof) — not Copy-to-Nostr posts.</p>
+            <label class="field"><span>Your Nostr private key (nsec1… or 64-char hex)</span><input id="key-nsec" type="password" class="mono" autocomplete="new-password" spellcheck="false" data-lpignore="true" data-1p-ignore="true" placeholder="nsec1…" /></label>
+            <div class="row"><button id="key-import-save" class="primary" type="button">Use this key</button><button id="key-import-cancel" type="button">Cancel</button></div>
+            <div id="key-import-confirm-box" class="review" hidden>
+              <p class="hint warn-text" id="key-import-confirm-text"></p>
+              <div class="row"><button id="key-import-confirm" class="danger" type="button">Replace stored key</button><a href="/options.html#identity" target="_blank">Export current key first</a><button id="key-import-confirm-cancel" type="button">Cancel</button></div>
+            </div>
           </div>
           <p class="status" data-status role="status"></p>
         </li>
@@ -59,6 +68,10 @@
         <span>Monero people can xo your posts, and your xos count. xos sent to your handle before today are on their way: XMRadar tells you once it has checked them.</span>
         <label class="check"><input id="xmrbio-on" type="checkbox" /> Also list me on xmr.bio</label>
         <span class="hint" id="xmrbio-status"></span>
+        <div class="row">
+          <button id="done-back-x" class="primary" type="button">Back to X</button>
+          <a class="button-link" href="/options.html#identity">Monero identity options</a>
+        </div>
       </section>
 
       <p class="hint small">What's public: your Monero address and your X link are Nostr events anyone can read. XMRadar asks relays for xos to your key and your X handle. Everything else is in <a href="/options.html#identity" target="_blank">Options → Monero identity</a>.</p>

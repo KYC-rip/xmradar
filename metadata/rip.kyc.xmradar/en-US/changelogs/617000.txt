@@ -1,0 +1,2 @@
+- Initial standalone GrapheneOS / Android release bundling XMRadar Firefox MV3 on GeckoView.
+- Isolated X, Chat, and private Swap compartments with default-deny navigation and confirmed monero: wallet links.

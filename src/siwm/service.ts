@@ -14,14 +14,17 @@ export interface SiwmEntry {
   pageHost: string | null;
   at: number;
   windowId?: number;
+  tabId?: number;
 }
 export type SiwmStore = Record<string, SiwmEntry>;
+
+export type SiwmWindowHandle = number | { kind: 'window' | 'tab'; id: number } | undefined;
 
 export interface SiwmDeps {
   store: { getValue(): Promise<SiwmStore>; setValue(v: SiwmStore): Promise<void> };
   now(): number;
   randomId(): string;
-  openWindow(id: string): Promise<number | undefined>;
+  openWindow(id: string): Promise<SiwmWindowHandle>;
   /** POST JSON; the status and at most a few KB of the answer */
   post(url: string, body: string): Promise<{ status: number; text: string }>;
 }
@@ -127,18 +130,20 @@ export function siwmService(d: SiwmDeps) {
         await d.store.setValue({ ...Object.fromEntries(kept), [id]: { uri, pageHost, at: d.now() } });
       });
       if (!withWindow) return { id };
-      let windowId: number | undefined;
+      let handle: SiwmWindowHandle;
       try {
-        windowId = await d.openWindow(id);
+        handle = await d.openWindow(id);
       } catch (e) {
         // no window to show it in: forget it at once, and say so to the caller
         await drop(id);
         throw e;
       }
-      if (windowId !== undefined)
+      if (handle !== undefined)
         await queued(async () => {
           const s = await d.store.getValue();
-          if (s[id]) await d.store.setValue({ ...s, [id]: { ...s[id], windowId } });
+          if (!s[id]) return;
+          const patch = typeof handle === 'number' ? { windowId: handle } : handle.kind === 'tab' ? { tabId: handle.id } : { windowId: handle.id };
+          await d.store.setValue({ ...s, [id]: { ...s[id], ...patch } });
         });
       return { id };
     },
@@ -151,6 +156,13 @@ export function siwmService(d: SiwmDeps) {
       queued(async () => {
         const s = fresh(await d.store.getValue());
         await d.store.setValue(Object.fromEntries(Object.entries(s).filter(([, e]) => e.windowId !== windowId)));
+      }),
+
+    /** A consent tab (Android / GeckoView fallback) was closed: forget what it showed. */
+    tabClosed: (tabId: number) =>
+      queued(async () => {
+        const s = fresh(await d.store.getValue());
+        await d.store.setValue(Object.fromEntries(Object.entries(s).filter(([, e]) => e.tabId !== tabId)));
       }),
 
     /** Checks everything again from the stored link, then posts the signature to the verifier. */

@@ -6,6 +6,9 @@ h1 { font-size: 20px; margin: 0 0 4px; }
 .card.pad { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; }
 .head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .head code { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+.link-btn { margin-left: auto; background: transparent; border: 0; color: var(--accent); font-size: 12px; padding: 2px 6px; cursor: pointer; }
+.import-box { display: flex; flex-direction: column; gap: 8px; padding-top: 6px; border-top: 1px solid var(--border); }
+.warn-text { color: var(--danger); }
 .marker { width: 22px; height: 22px; border-radius: 50%; display: inline-grid; place-items: center; font-size: 12px; font-weight: 700; background: var(--chip); }
 [data-state='done'] .marker { background: var(--ok); color: var(--on-accent); }
 [data-state='current'] .marker { background: var(--accent); color: var(--on-accent); }
@@ -23,6 +26,7 @@ h1 { font-size: 20px; margin: 0 0 4px; }
 .status.error { color: var(--danger); }
 .status.ok { color: var(--ok); }
 .done-card { border-color: var(--ok); }
+.button-link { color: var(--accent); font-weight: 600; text-decoration: none; padding: 6px 4px; }
 .check { justify-content: flex-start; }
 .check input { flex: none; }
 .small { font-size: 12px; }

@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
-import { describe, expect, it } from 'vitest';
-import { onCopy, startCopyLinks } from '../src/entrypoints/content/x-copy-links';
+import { describe, expect, it, vi } from 'vitest';
+import { CLEAN_LINKS_ATTR, onCopy, startCopyLinks } from '../src/entrypoints/content/x-copy-links';
+import { installMainWorldLinkCleaner } from '../src/entrypoints/x-clean-links.content';
 import { cleanXLinks, cleanXUrl } from '../src/extractors/x-links';
 
 const POST = 'https://x.com/itsriyapal/status/2116134840290676882';
@@ -140,5 +141,45 @@ describe('copying on x.com', () => {
     expect(onCopy(copy().e, document)).toBe(false);
     select('<p>https://example.com/?s=20</p>');
     expect(onCopy(copy().e, document)).toBe(false);
+  });
+
+  it('MAIN-world cleaner strips tracking from navigator.clipboard.writeText and navigator.share when enabled', async () => {
+    const written: string[] = [];
+    const shared: ShareData[] = [];
+    const fakeWin = {
+      Clipboard: {
+        prototype: {
+          writeText: vi.fn(async (t: string) => {
+            written.push(t);
+          }),
+        },
+      },
+      Navigator: {
+        prototype: {
+          share: vi.fn(async (d?: ShareData) => {
+            if (d) shared.push(d);
+          }),
+        },
+      },
+    };
+    installMainWorldLinkCleaner(fakeWin, document);
+
+    // Disabled by default when CLEAN_LINKS_ATTR is absent
+    document.documentElement.removeAttribute(CLEAN_LINKS_ATTR);
+    await fakeWin.Clipboard.prototype.writeText(`${POST}?s=20&t=abc`);
+    expect(written).toEqual([`${POST}?s=20&t=abc`]);
+
+    // Enabled by startCopyLinks(document)
+    const stop = startCopyLinks(document);
+    await fakeWin.Clipboard.prototype.writeText(`${POST}?s=20&t=abc`);
+    await fakeWin.Clipboard.prototype.writeText(`Look at ${POST}?s=20`);
+    await fakeWin.Navigator.prototype.share({ title: 'Post', url: `${POST}?s=20&t=xyz` });
+    expect(written).toEqual([`${POST}?s=20&t=abc`, POST, `Look at ${POST}?s=20`]);
+    expect(shared).toEqual([{ title: 'Post', url: POST }]);
+
+    // Disabled again when stopped
+    stop();
+    await fakeWin.Clipboard.prototype.writeText(`${POST}?s=20&t=after`);
+    expect(written.at(-1)).toBe(`${POST}?s=20&t=after`);
   });
 });

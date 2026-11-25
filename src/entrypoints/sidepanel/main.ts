@@ -27,5 +27,5 @@ browser.tabs.onActivated.addListener(refresh);
 browser.tabs.onUpdated.addListener((_id, change, tab) => {
   if (tab.active && change.url) refresh();
 });
-browser.windows.onFocusChanged.addListener(refresh);
+browser.windows?.onFocusChanged?.addListener(refresh);
 siteFeedItem.watch(refresh);

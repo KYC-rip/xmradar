@@ -1,6 +1,7 @@
 import '../../ui/base.css';
 import './style.css';
 import { sendToBackground } from '../../messaging';
+import { closeCurrentPage } from '../../platform/compat';
 import { mountConsent } from '../../siwm/consent';
 
 void mountConsent(document, {
@@ -20,7 +21,7 @@ void mountConsent(document, {
     setTimeout(() => URL.revokeObjectURL(url), 60_000);
   },
   setId: (id) => history.replaceState(null, '', `#${id}`),
-  close: () => window.close(),
+  close: () => void closeCurrentPage({ tabs: browser.tabs, closeWindow: () => window.close() }),
   now: Date.now,
 });
 

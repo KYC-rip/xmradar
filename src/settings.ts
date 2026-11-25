@@ -4,6 +4,11 @@ import type { SyncedPosts } from './nostr/synced';
 import type { DirectoryStatus } from './identity/directory';
 import type { InboxState } from './xap/inbox';
 import { storage, type WxtStorageItem } from 'wxt/utils/storage';
+import { browser } from 'wxt/browser';
+import { ensureBrowserStorage } from './platform/storage-compat';
+
+// Ensure sync/session fallback is active before any defineItem runs in any entrypoint (background, popup, options, setup, content).
+ensureBrowserStorage(browser as unknown as Parameters<typeof ensureBrowserStorage>[0]);
 import type { Marks } from './xap/marks';
 import type { UpdateState } from './update/check';
 import type { LogoPack } from './sites/logos';

@@ -14,8 +14,12 @@ import { mountXmrToggles } from '../../ui/xmr-toggles';
 import { mountXapInbox } from '../../ui/xap-inbox-panel';
 import { mountIdentityCard } from '../../ui/identity-card';
 import { initIdentity, testSigner } from './identity';
+import { openExtensionPage, safePermissionsContains, safePermissionsRequest } from '../../platform/compat';
+import { ensureBrowserStorage } from '../../platform/storage-compat';
 import '../../ui/base.css';
 import './style.css';
+
+ensureBrowserStorage(browser as unknown as Parameters<typeof ensureBrowserStorage>[0]);
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const appendEl = $<HTMLInputElement>('append-source');
@@ -37,9 +41,9 @@ async function showPubkey() {
 }
 
 // Firefox MV3 doesn't grant host permissions at install time
-void browser.permissions.contains(ALL_SITES).then((ok) => $('perm').classList.toggle('hidden', ok));
+void safePermissionsContains(browser.permissions, ALL_SITES).then((ok) => $('perm').classList.toggle('hidden', ok));
 $('grant').addEventListener('click', async () => {
-  if (await browser.permissions.request(ALL_SITES)) $('perm').classList.add('hidden');
+  if (await safePermissionsRequest(browser.permissions, ALL_SITES)) $('perm').classList.add('hidden');
 });
 
 // Sign in with Monero (PLAN-SIWM): the link helper's switch, and a window to paste a link into
@@ -53,7 +57,7 @@ siwmEl.addEventListener('change', async () => {
   setStatus($('siwm-saved'), 'Saved', 'ok');
   setTimeout(() => setStatus($('siwm-saved'), ''), 1500);
 });
-$('siwm-paste').addEventListener('click', () => void browser.windows.create({ url: browser.runtime.getURL('/siwm.html'), type: 'popup', width: 520, height: 720 }));
+$('siwm-paste').addEventListener('click', () => void openExtensionPage(browser.runtime.getURL('/siwm.html'), { windows: browser.windows, tabs: browser.tabs }));
 
 // Behaviour: saved on change, each box its own field; disabled until the saved values load
 const boxes: [HTMLInputElement, (on: boolean) => Partial<Settings>][] = [

@@ -336,7 +336,9 @@ async function mountComposer(ctx: ContentScriptContext, msg: OpenComposerMsg, ta
       /** Returns the signer error message, or null on success. */
       const connect = async (): Promise<string | null> => {
         try {
-          pubkey = await callBridge<string>('getPublicKey', undefined, 60_000);
+          pubkey = msg.useBackgroundSigner
+            ? (await sendToBackground({ type: 'composer-pubkey', sessionId: msg.sessionId })).pubkey
+            : await callBridge<string>('getPublicKey', undefined, 60_000);
           signerLine.textContent = `Posting as ${short(npubEncode(pubkey))}`;
           signerLine.className = 'signer';
           return null;
@@ -422,7 +424,9 @@ async function mountComposer(ctx: ContentScriptContext, msg: OpenComposerMsg, ta
 
       const sign = async (template: EventTemplate) => {
         if (!pubkey) throw new Error('Signer not connected');
-        const signed = await callBridge<Event>('signEvent', template);
+        const signed = msg.useBackgroundSigner
+          ? (await sendToBackground({ type: 'composer-sign', sessionId: msg.sessionId, pubkey, template })).event
+          : await callBridge<Event>('signEvent', template);
         checkSigned(template, signed, pubkey);
         return signed;
       };

@@ -22,7 +22,10 @@ export function actionBars(article: Element): Element[] {
   // tweet, so a bar belongs to its nearest tweet; on the article reading page there is no tweet around it
   const owner = (g: Element) => g.closest('article[data-testid="tweet"]') ?? g.closest('article');
   return [...article.querySelectorAll('[role="group"]')].filter(
-    (g) => owner(g) === article && !!g.querySelector('[data-testid="reply"]') && !!g.lastElementChild?.querySelector('button[aria-haspopup="menu"]:not([data-testid])'),
+    (g) =>
+      owner(g) === article &&
+      !!g.querySelector('[data-testid="reply"]') &&
+      !!g.lastElementChild?.querySelector('button[aria-haspopup="menu"]:not([data-testid]), button[aria-label*="share" i]:not([data-testid])'),
   );
 }
 

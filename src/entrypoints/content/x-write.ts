@@ -9,7 +9,27 @@ import { lostEntities, xLength, WRITE_MAX_CHARS, type WriteMode, type WriteResul
  */
 
 export const WRITE_BUTTON = 'xmradar-write-btn';
-const EDITOR = '[data-testid^="tweetTextarea_"][contenteditable="true"]';
+export const GROK_HIDE_STYLE_ID = 'xmradar-hide-composer-grok';
+const GROK_HIDE_CSS = [
+  '[data-testid="toolBar"] [role="presentation"]:has([aria-label*="Grok" i], [data-testid*="grok" i], [href*="grok.com" i], [href*="/i/grok" i])',
+  '[data-testid="toolBar"] button[aria-label*="Grok" i]',
+  '[data-testid="toolBar"] a[aria-label*="Grok" i]',
+  '[data-testid="toolBar"] [data-testid*="grok" i]',
+  '[data-testid="toolBar"] a[href*="grok.com" i]',
+  '[data-testid="toolBar"] a[href*="/i/grok" i]',
+].join(',\n') + ' { display: none !important; }';
+
+/** Hides X's Grok shortcut inside the composer toolbar without mutating React-owned DOM nodes. */
+export function hideComposerGrok(doc: Document = document): () => void {
+  const existing = doc.getElementById(GROK_HIDE_STYLE_ID);
+  if (existing) return () => existing.remove();
+  const style = doc.createElement('style');
+  style.id = GROK_HIDE_STYLE_ID;
+  style.textContent = GROK_HIDE_CSS;
+  (doc.head ?? doc.documentElement)?.append(style);
+  return () => style.remove();
+}
+const EDITOR = '[data-testid^="tweetTextarea_"][contenteditable="true"], [data-testid^="tweetTextarea_"] [contenteditable="true"], textarea[data-testid^="tweetTextarea_"]';
 const MODES: { mode: WriteMode; label: string }[] = [
   { mode: 'proofread', label: 'Proofread' },
   { mode: 'shorten', label: 'Shorten' },
@@ -18,14 +38,22 @@ const MODES: { mode: WriteMode; label: string }[] = [
 const SOURCE_LABEL = { local: 'Local model: the text stays on this computer', anthropic: 'Anthropic, with your key', openai: 'Your provider, with your key' } as const;
 
 /** The draft's text as X shows it (Draft ends with a line break of its own). */
-export const editorText = (editor: Element) => ((editor as HTMLElement).innerText ?? editor.textContent ?? '').replace(/​/g, '').replace(/\n$/, '');
+export const editorText = (editor: Element) => {
+  if (editor instanceof HTMLTextAreaElement) return editor.value.replace(/\u200b/g, '');
+  return ((editor as HTMLElement).innerText ?? editor.textContent ?? '').replace(/\u200b/g, '').replace(/\n$/, '');
+};
 const same = (a: string, b: string) => a.replace(/\s+/g, ' ').trim() === b.replace(/\s+/g, ' ').trim();
 
-/** The composer's editors for a toolbar: the nearest ancestor (up to 10 levels) holding one. */
+/** The composer's editors for a toolbar: nearest ancestor holding one (up to 20 levels or its modal/main container). */
 export function editorsFor(toolbar: Element): HTMLElement[] {
   let up: Element | null = toolbar;
-  for (let i = 0; i < 10 && up; i++, up = up.parentElement) {
+  for (let i = 0; i < 20 && up && up !== toolbar.ownerDocument?.body; i++, up = up.parentElement) {
     const found = [...up.querySelectorAll<HTMLElement>(EDITOR)];
+    if (found.length) return found;
+  }
+  const scope = toolbar.closest('[role="dialog"], [aria-modal="true"], main');
+  if (scope) {
+    const found = [...scope.querySelectorAll<HTMLElement>(EDITOR)];
     if (found.length) return found;
   }
   return [];
@@ -35,13 +63,27 @@ export interface WriteTarget {
   editor: HTMLElement;
   /** the whole draft when asked */
   draft: string;
-  /** the selected part, when there was one inside the editor */
+  /** the selected part, when there was one inside a contenteditable editor */
   range: Range | null;
+  /** the selected offsets, when there was a selection inside a mobile <textarea> editor */
+  textareaRange?: { start: number; end: number } | null;
   text: string;
 }
 
 /** What the button works on: the selection inside one of these editors, or the focused (else first) editor's whole draft. */
 export function captureTarget(editors: HTMLElement[], lastFocused: HTMLElement | null, doc: Document = document): WriteTarget | null {
+  const active = doc.activeElement;
+  const activeTa = active instanceof HTMLTextAreaElement && editors.includes(active) ? active : null;
+  const focusedTa = activeTa ?? (lastFocused instanceof HTMLTextAreaElement && editors.includes(lastFocused) ? lastFocused : null);
+  if (focusedTa) {
+    const draft = editorText(focusedTa);
+    const start = focusedTa.selectionStart ?? 0;
+    const end = focusedTa.selectionEnd ?? 0;
+    if (end > start && draft.slice(start, end).trim()) {
+      return { editor: focusedTa, draft, range: null, textareaRange: { start, end }, text: draft.slice(start, end) };
+    }
+    return { editor: focusedTa, draft, range: null, textareaRange: null, text: draft };
+  }
   const sel = doc.getSelection();
   const r = sel && sel.rangeCount ? sel.getRangeAt(0) : null;
   const inside = r ? editors.find((e) => e.contains(r.commonAncestorContainer)) : undefined;
@@ -49,12 +91,35 @@ export function captureTarget(editors: HTMLElement[], lastFocused: HTMLElement |
   const editor = inside ?? (lastFocused && editors.includes(lastFocused) ? lastFocused : editors[0]);
   if (!editor) return null;
   const draft = editorText(editor);
-  return { editor, draft, range: null, text: draft };
+  if (editor instanceof HTMLTextAreaElement) {
+    const start = editor.selectionStart ?? 0;
+    const end = editor.selectionEnd ?? 0;
+    if (end > start && draft.slice(start, end).trim()) {
+      return { editor, draft, range: null, textareaRange: { start, end }, text: draft.slice(start, end) };
+    }
+  }
+  return { editor, draft, range: null, textareaRange: null, text: draft };
 }
 
 /** Put `text` in place of the range (or the whole draft) as a paste, once Draft has the selection; false when it didn't take. */
 export async function putBack(t: WriteTarget, text: string, doc: Document = document): Promise<boolean> {
   const { editor } = t;
+  if (editor instanceof HTMLTextAreaElement) {
+    const tr = t.textareaRange;
+    const nextValue = tr ? editor.value.slice(0, tr.start) + text + editor.value.slice(tr.end) : text;
+    const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set;
+    if (setter) setter.call(editor, nextValue);
+    else editor.value = nextValue;
+    editor.dispatchEvent(new Event('input', { bubbles: true }));
+    editor.focus();
+    const caret = tr ? tr.start + text.length : nextValue.length;
+    try {
+      editor.setSelectionRange(caret, caret);
+    } catch {
+      // ignore if detached
+    }
+    return same(editor.value, nextValue);
+  }
   const select = () => {
     editor.focus();
     const sel = doc.getSelection();
@@ -206,7 +271,8 @@ function showPanel(anchor: Element, t: WriteTarget, deps: PanelDeps) {
   });
   const x = el('button', { class: 'x', type: 'button', 'aria-label': 'Close' }, '×');
   top.append(x);
-  const src = el('p', { class: 'src' }, `${t.range ? 'The selected text' : 'Your draft'} · ${SOURCE_LABEL[deps.source]}`);
+  const hasSelection = Boolean(t.range || t.textareaRange);
+  const src = el('p', { class: 'src' }, `${hasSelection ? 'The selected text' : 'Your draft'} · ${SOURCE_LABEL[deps.source]}`);
   const out = el('div', { class: 'out', 'aria-live': 'polite' });
   const meta = el('div', { class: 'meta' });
   const note = el('span');
@@ -223,11 +289,16 @@ function showPanel(anchor: Element, t: WriteTarget, deps: PanelDeps) {
 
   const place = () => {
     const a = anchor.getBoundingClientRect();
+    const vv = window.visualViewport;
+    const vw = vv?.width ?? innerWidth;
+    const vh = vv?.height ?? innerHeight;
+    const topOff = vv?.offsetTop ?? 0;
     const w = panel.offsetWidth;
     const h = panel.offsetHeight;
-    panel.style.left = `${Math.max(12, Math.min(a.left - 8, innerWidth - w - 12))}px`;
+    panel.style.left = `${Math.max(12, Math.min(a.left - 8, vw - w - 12))}px`;
     const below = a.bottom + 8;
-    panel.style.top = `${below + h < innerHeight - 8 ? below : Math.max(8, a.top - h - 8)}px`;
+    const maxBottom = topOff + vh - 8;
+    panel.style.top = `${below + h < maxBottom ? below : Math.max(topOff + 8, Math.min(a.top - h - 8, maxBottom - h))}px`;
   };
 
   let result = '';
@@ -270,7 +341,12 @@ function showPanel(anchor: Element, t: WriteTarget, deps: PanelDeps) {
         note.className = 'warn';
       }
     }
-    const n = xLength(t.range ? t.draft.replace(t.text, result) : result);
+    const fullResult = t.textareaRange
+      ? t.draft.slice(0, t.textareaRange.start) + result + t.draft.slice(t.textareaRange.end)
+      : t.range
+        ? t.draft.replace(t.text, result)
+        : result;
+    const n = xLength(fullResult);
     count.textContent = n > 280 ? `${n} characters: a long post` : `${n} / 280`;
     setButtons(false);
     place();
@@ -342,17 +418,29 @@ const defaultDeps: WriteDeps = {
   ready: () => sendToBackground({ type: 'ai-write-ready' }),
   ask: (mode, text) => sendToBackground({ type: 'ai-write', mode, text }),
   cancel: () => void sendToBackground({ type: 'ai-write-cancel' }).catch(() => {}),
-  // a key added or removed in Options (the page never touches the key): asked again when the tab shows again
+  // a key or setting added or removed in Options (the key itself never enters the x.com content script)
   watch: (cb) => {
-    const unwatch = aiTagsItem.watch(() => cb());
+    const unwatchSettings = aiTagsItem.watch(() => cb());
     const onShow = () => document.visibilityState === 'visible' && cb();
+    const onFocus = () => cb();
+    const onMsg = (msg: { type?: string } | null | undefined) => {
+      if (msg?.type === 'ai-write-refresh') cb();
+    };
     document.addEventListener('visibilitychange', onShow);
-    return () => (unwatch(), document.removeEventListener('visibilitychange', onShow));
+    window.addEventListener('focus', onFocus);
+    browser.runtime.onMessage.addListener(onMsg);
+    return () => {
+      unwatchSettings();
+      document.removeEventListener('visibilitychange', onShow);
+      window.removeEventListener('focus', onFocus);
+      browser.runtime.onMessage.removeListener(onMsg);
+    };
   },
 };
 
 /** The pen next to X's emoji button, in every composer toolbar, while writing help is set up and on. */
 export function startWriting(ctx: { onInvalidated(cb: () => void): void }, deps: WriteDeps = defaultDeps, doc: Document = document) {
+  const unhideGrok = hideComposerGrok(doc);
   let source: keyof typeof SOURCE_LABEL = 'local';
   let on = false;
   let observer: MutationObserver | null = null;
@@ -369,12 +457,12 @@ export function startWriting(ctx: { onInvalidated(cb: () => void): void }, deps:
     const editors = editorsFor(toolbar);
     if (!editors.length) return;
     const list = toolbar.querySelector('[role="tablist"]') ?? toolbar.querySelector('nav')?.firstElementChild ?? null;
-    const item = el('div', { role: 'presentation', class: WRITE_BUTTON, style: 'display:flex;align-items:center;justify-content:center;width:36px;min-width:36px;height:36px' });
+    const item = el('div', { role: 'presentation', class: WRITE_BUTTON, style: 'display:flex;align-items:center;justify-content:center;flex-shrink:0;width:36px;min-width:36px;height:36px' });
     const btn = el('button', {
       type: 'button',
       'aria-label': 'Writing help: proofread, shorten or translate with your AI (XMRadar)',
       title: 'Proofread · Shorten · English (XMRadar, your AI)',
-      style: 'all:unset;cursor:pointer;display:flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:999px;color:rgb(29,155,240)',
+      style: 'all:unset;cursor:pointer;display:flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:999px;color:rgb(29,155,240);touch-action:manipulation',
     });
     btn.innerHTML = PEN;
     // X's own icons' colour (theme and accent), from a button that's enabled: a disabled one (location, a
@@ -383,10 +471,11 @@ export function startWriting(ctx: { onInvalidated(cb: () => void): void }, deps:
     const theirs = toolbar.querySelector(enabled.replace('button[aria-label]', 'button[aria-label="Add emoji"]')) ?? toolbar.querySelector(enabled);
     if (theirs) btn.style.color = getComputedStyle(theirs).color;
     let target: WriteTarget | null = null;
-    // keep the editor's selection: the button never takes focus
+    // keep the editor's selection on desktop mouse; never preventDefault touch pointerdown
+    // (doing so cancels synthetic click events on Android / GeckoView).
     btn.addEventListener('mousedown', (e) => e.preventDefault());
     btn.addEventListener('pointerdown', (e) => {
-      e.preventDefault();
+      if (e.pointerType === 'mouse') e.preventDefault();
       target = captureTarget(editorsFor(toolbar), lastFocused, doc);
     });
     btn.addEventListener('click', (e) => {
@@ -439,6 +528,7 @@ export function startWriting(ctx: { onInvalidated(cb: () => void): void }, deps:
   void refresh();
   const unwatch = deps.watch(() => void refresh());
   ctx.onInvalidated(() => {
+    unhideGrok();
     unwatch();
     observer?.disconnect();
     clearTimeout(timer);

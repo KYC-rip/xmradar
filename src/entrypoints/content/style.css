@@ -12,7 +12,7 @@
 .dialog {
   background: #fff;
   width: min(560px, calc(100vw - 32px));
-  max-height: calc(100vh - 32px);
+  max-height: calc(100dvh - 24px);
   overflow: auto;
   border-radius: 12px;
   padding: 16px 18px;
@@ -20,6 +20,9 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
+}
+@media (pointer: coarse) {
+  .dialog button { min-height: 40px; }
 }
 header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 header .site { margin-left: auto; }

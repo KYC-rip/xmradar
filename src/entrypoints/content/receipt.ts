@@ -153,8 +153,7 @@ export function startReceipts(ctx: ContentScriptContext) {
 
   const schedule = (ms = RESCAN_MS) => {
     timer ??= setTimeout(() => {
-      const idle = (window as { requestIdleCallback?: (cb: () => void) => void }).requestIdleCallback;
-      if (idle) idle(() => void scan());
+      if (typeof window.requestIdleCallback === 'function') window.requestIdleCallback(() => void scan());
       else void scan();
     }, ms);
   };

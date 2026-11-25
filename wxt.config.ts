@@ -59,6 +59,9 @@ export default defineConfig({
         strict_min_version: '140.0',
         data_collection_permissions: { required: ['none'] },
       },
+      gecko_android: {
+        strict_min_version: '140.0',
+      },
     },
   },
 });

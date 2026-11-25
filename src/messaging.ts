@@ -1,5 +1,5 @@
 import type { PostRelays, PostRelaySource } from './nostr/post-relays';
-import type { Event } from 'nostr-tools/pure';
+import type { Event, EventTemplate } from 'nostr-tools/pure';
 import type { ResolvedIdentity } from './identity/envelope';
 import type { Badge } from './identity/resolve';
 import type { ProofResult } from './identity/nostr';
@@ -33,6 +33,8 @@ export interface OpenComposerMsg {
   fromCommand?: boolean;
   /** true when the user picked "Copy to Nostr" in X's share menu */
   fromShareMenu?: boolean;
+  /** true in the standalone Android shell: sign through background NIP-55 instead of page window.nostr */
+  useBackgroundSigner?: boolean;
 }
 
 /** background → content: open the Monero tip popup */
@@ -172,6 +174,8 @@ export type BgRequest =
   /** `sourceUrl`: the post copied, so a retry that is the first to succeed still marks it (PLAN-SYNCEDMARK) */
   | { type: 'republish'; sessionId: string; event: Event; relays: string[]; sourceUrl?: string }
   | { type: 'check-duplicate'; sessionId: string; sourceUrl: string; text: string }
+  | { type: 'composer-pubkey'; sessionId: string }
+  | { type: 'composer-sign'; sessionId: string; pubkey: string; template: EventTemplate }
   | { type: 'close-session'; sessionId: string }
   /** AI tag suggestions (PLAN-TAGS): whether Suggest can show, and one request on a trusted click */
   | { type: 'ai-tags-ready'; sessionId: string }
@@ -208,6 +212,7 @@ export type BgRequest =
   /** "List me on xmr.bio" pressed (PLAN-XMRBIOLIST) */
   | { type: 'xmrbio-list' }
   | { type: 'identity-mode'; mode: 'auto' | 'signer' | 'managed' }
+  | { type: 'identity-import'; nsec: string; confirmOverwrite?: boolean }
   | { type: 'identity-export' }
   | { type: 'identity-delete' }
   | { type: 'xap-post-totals'; posts: { id: string; pubkey: string }[]; fresh?: boolean }
@@ -265,6 +270,10 @@ export type BgResponse<T extends BgRequest['type']> = T extends 'fetch-image'
         ? { results: RelayResult[] }
       : T extends 'check-duplicate'
         ? { duplicate: boolean }
+      : T extends 'composer-pubkey'
+        ? { pubkey: string }
+      : T extends 'composer-sign'
+        ? { event: Event }
       : T extends 'ai-tags-ready'
         ? { ready: boolean; local: boolean; source: AiSource; auto: boolean; autoAdd: boolean }
       : T extends 'set-ai-auto'
@@ -303,6 +312,8 @@ export type BgResponse<T extends BgRequest['type']> = T extends 'fetch-image'
                                     ? { mode: 'auto' | 'signer' | 'managed'; managed: string | null; current: string | null }
                                   : T extends 'identity-mode' | 'identity-delete'
                                     ? null
+                                  : T extends 'identity-import'
+                                    ? { pubkey: string; unchanged: boolean } | { needsConfirm: true; existingPubkey: string }
                                   : T extends 'identity-export'
                                     ? { nsec: string | null }
                                   : T extends 'xo-send' | 'xo-undo'

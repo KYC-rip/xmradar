@@ -26,7 +26,9 @@ import { loadMedia } from '../nostr/load-media';
 import { statusIdFromUrl } from '../extractors/x-article';
 import { KIND_ARTICLE, checkBlossomAuth, checkPublishable, checkSigned, dedupeKey, sha256Hex } from '../nostr/event';
 import { allRelaysFrom, fetchWriteRelays, publishToRelays, readEach, readRelay } from '../nostr/relays';
-import { checkSessionSender, checkShareMenuSender, isExtensionPageSender, isSignerPage, isXUrl, SIGNER_PAGE, shareMenuRateLimit, withoutTab } from '../sender';
+import { checkSessionSender, checkShareMenuSender, isExactExtensionPageSender, isExtensionPageSender, isSignerPage, isXTopFrameSender, isXUrl, SIGNER_PAGE, shareMenuRateLimit, withoutTab } from '../sender';
+import { openExtensionPage, safeAlarms, safeClearNotice, safeNotify, safeOnNotificationClicked, safePermissionsContains } from '../platform/compat';
+import { ensureBrowserStorage } from '../platform/storage-compat';
 import { setAuto, suggestFor, tagsReady } from '../ai/requests';
 import { signerModeItem, syncedPostsItem, xmrbioListItem, xmrbioListPrefItem } from '../settings';
 import { recordSynced, type SyncedPost } from '../nostr/synced';
@@ -67,9 +69,10 @@ import { logoKeeper } from '../sites/logos';
 import { INBOX_NOTICE_ID, inboxKeeper, MAX_RELAYS } from '../xap/inbox';
 import { KIND_XO, readRelaysFrom, undoTemplate, xoHandleValue, xoRelayOrder, xoTemplate } from '../xo/event';
 import { KIND_RECEIPT } from '../xap/events';
-import { idbKeyStore, managedIdentity } from '../identity/managed';
+import { idbKeyStore, KeyReplaceRequired, managedIdentity } from '../identity/managed';
 import { listOutcome, listPlan, registerTemplate, XMRBIO_REGISTER_URL, type ListRecord } from '../identity/xmrbio-list';
 import { bySignerMode, NoSignerError } from '../identity/signer-mode';
+import { COMPOSER_KINDS, nativeClearSigner, nativeGetPublicKey, nativeSignEvent, probeAndroidSigner, type NativeRuntimeLike } from '../nostr/native-signer';
 import { rememberSent } from '../xo/sent';
 import { XO_NOTICE_ID, xoKeeper } from '../xo/inbox';
 import { knownLiker, rememberLiker, verifyLiker } from '../xo/verify';
@@ -93,6 +96,8 @@ interface Session {
   id: string;
   tabId: number;
   expires: number;
+  /** Pinned external pubkey for Android background composer signing (prevents mid-session key switching). */
+  pubkey?: string;
 }
 // one quoted-post picture per composer session (PLAN-QUOTESHOT), kept apart from the session records
 const quoteShots = shotGate(storage.defineItem<string[]>('session:quoteShots', { fallback: [] }));
@@ -111,11 +116,13 @@ const publishRelaysItem = storage.defineItem<Record<string, string[]>>('session:
 const relayHealth = healthStore(storage.defineItem<Health>('local:relayHealth', { fallback: {} }));
 // best effort: the post went out either way, so a storage error must not turn it into a failure
 // Sign in with Monero links waiting in a consent window (PLAN-SIWM); XMRadar holds no key, the user's wallet signs
+ensureBrowserStorage(browser as unknown as Parameters<typeof ensureBrowserStorage>[0]);
+const alarms = safeAlarms(browser.alarms);
 const siwm = siwmService({
   store: storage.defineItem<SiwmStore>('session:siwm', { fallback: {} }),
   now: Date.now,
   randomId: () => crypto.randomUUID(),
-  openWindow: async (id) => (await browser.windows.create({ url: browser.runtime.getURL(`/siwm.html#${id}`), type: 'popup', width: 520, height: 720 }))?.id,
+  openWindow: (id) => openExtensionPage(browser.runtime.getURL(`/siwm.html#${id}`), { windows: browser.windows, tabs: browser.tabs }),
   post: async (url, body) => {
     const r = await fetch(url, {
       method: 'POST',
@@ -216,7 +223,7 @@ const freshPostTotals = new FreshTotals(async (key) => {
 const swapRecords = swapRecordsKeeper({
   stores: { receipts: idbReceiptStore, letters: idbLetterStore },
   days: () => swapRecordDaysItem.getValue(),
-  alarms: browser.alarms,
+  alarms,
   cleaned: (c) => swapRecordsCleanedItem.setValue(c),
 });
 
@@ -225,18 +232,18 @@ const updates = updateKeeper({
   held: updateStateItem,
   fetch: (...args) => fetch(...args),
   readBody: boundedBody,
-  alarms: browser.alarms,
+  alarms,
   enabled: async () => updateCheckOn(await settingsItem.getValue()),
   current: () => browser.runtime.getManifest().version,
   notify: async (version) => {
-    await browser.notifications.create(UPDATE_NOTICE_ID, {
+    await safeNotify(browser.notifications, UPDATE_NOTICE_ID, {
       type: 'basic',
       iconUrl: browser.runtime.getURL('/icon/128.png'),
       title: 'XMRadar',
       message: `XMRadar ${version} is out. Click to see what's new and download.`,
     });
   },
-  clearNotice: () => browser.notifications.clear(UPDATE_NOTICE_ID).catch(() => {}),
+  clearNotice: () => safeClearNotice(browser.notifications, UPDATE_NOTICE_ID),
 });
 
 // the user's own relays and the defaults, where XMRadar publishes every receipt; index relays keep none
@@ -251,11 +258,11 @@ const xapInbox = inboxKeeper({
   relays: (pubkey) => xapInboxRelays(pubkey),
   read: (relays, filter, timeoutMs) => readEach(relays, filter, timeoutMs),
   query: xapPoolQuery,
-  alarms: browser.alarms,
+  alarms,
   notify: async (message) => {
-    await browser.notifications.create(INBOX_NOTICE_ID, { type: 'basic', iconUrl: browser.runtime.getURL('/icon/128.png'), title: 'XMRadar', message });
+    await safeNotify(browser.notifications, INBOX_NOTICE_ID, { type: 'basic', iconUrl: browser.runtime.getURL('/icon/128.png'), title: 'XMRadar', message });
   },
-  clearNotice: () => browser.notifications.clear(INBOX_NOTICE_ID).then(() => {}, () => {}),
+  clearNotice: () => safeClearNotice(browser.notifications, INBOX_NOTICE_ID),
 });
 
 // xo (PLAN-MONEROLIKE): a key's read relays (NIP-65), where its owner looks for xos; an hour in memory
@@ -297,11 +304,11 @@ const xoInbox = xoKeeper({
     if (liker) await xoLikersItem.setValue(rememberLiker(await xoLikersItem.getValue(), pk, liker, Date.now()));
     return liker;
   },
-  alarms: browser.alarms,
+  alarms,
   notify: async (message) => {
-    await browser.notifications.create(XO_NOTICE_ID, { type: 'basic', iconUrl: browser.runtime.getURL('/icon/128.png'), title: 'XMRadar', message });
+    await safeNotify(browser.notifications, XO_NOTICE_ID, { type: 'basic', iconUrl: browser.runtime.getURL('/icon/128.png'), title: 'XMRadar', message });
   },
-  clearNotice: () => browser.notifications.clear(XO_NOTICE_ID).then(() => {}, () => {}),
+  clearNotice: () => safeClearNotice(browser.notifications, XO_NOTICE_ID),
 });
 const xoLastItem = storage.defineItem<Record<number, number>>('session:xoLast', { fallback: {} });
 
@@ -370,7 +377,7 @@ const burner: BurnerDeps = { meta: { get: () => burnerInboxItem.getValue(), set:
 
 export default defineBackground(() => {
   // site info: a 12-hour alarm while it's on, and a fresh copy at startup when the kept one is old
-  browser.alarms.onAlarm.addListener((a) => {
+  alarms.onAlarm?.addListener((a) => {
     if (a.name === SITE_FEED_ALARM) void refreshSiteFeed();
     void directory.onAlarm(a.name);
     void swapRecords.onAlarm(a.name);
@@ -407,7 +414,7 @@ export default defineBackground(() => {
   void syncUpdateBadge();
   updateStateItem.watch(() => void syncUpdateBadge());
   // the update notification opens the release page of the version it names, built from the checked number
-  browser.notifications.onClicked.addListener(async (id) => {
+  safeOnNotificationClicked(browser.notifications, async (id) => {
     // a Xap notification opens the list in Options, never a post a tipper named
     if (id === XO_NOTICE_ID) {
       await xoInbox.markRead();
@@ -420,7 +427,7 @@ export default defineBackground(() => {
       return;
     }
     if (id !== UPDATE_NOTICE_ID) return;
-    await browser.notifications.clear(id).catch(() => {});
+    await safeClearNotice(browser.notifications, id);
     const url = releaseUrl(updateFor(await updateStateItem.getValue(), browser.runtime.getManifest().version));
     if (url) await browser.tabs.create({ url });
   });
@@ -443,52 +450,66 @@ export default defineBackground(() => {
     if (s.badgesX !== old?.badgesX) void directory.apply(s.badgesX);
     if (xClaimsOn(old) && !xClaimsOn(s)) void claims.clear();
   });
+  // Notify open X tabs when the BYOK key changes (without ever exposing the key to the X content script).
+  aiKeyItem.watch(() => {
+    void browser.tabs
+      .query({ url: X_PATTERNS })
+      .then((xTabs) => {
+        for (const t of xTabs) {
+          if (t.id != null) void browser.tabs.sendMessage(t.id, { type: 'ai-write-refresh' }, { frameId: 0 }).catch(() => {});
+        }
+      })
+      .catch(() => {});
+  });
   // a tab that moves to another page starts with no receipt or site state (the browser resets its badge)
   // the lookalike half of the badge comes from the address itself, so a copy that never loads still shows it
   browser.tabs.onUpdated.addListener((tabId, change) => {
     if (change.url) void dropTabState(tabId).then(() => addressBadge(tabId, change.url!)).then(() => guardAfterLoad(tabId, change.url!));
   });
-  browser.runtime.onInstalled.addListener(async () => {
-    await browser.contextMenus.removeAll();
-    browser.contextMenus.create({
-      id: MENU_ID,
-      title: 'Copy post to Nostr',
-      contexts: ['page', 'selection', 'image', 'link'],
+  if (browser.contextMenus) {
+    browser.runtime.onInstalled.addListener(async () => {
+      await browser.contextMenus.removeAll();
+      browser.contextMenus.create({
+        id: MENU_ID,
+        title: 'Copy post to Nostr',
+        contexts: ['page', 'selection', 'image', 'link'],
+      });
+      browser.contextMenus.create({
+        id: TIP_MENU_ID,
+        title: 'Tip with Monero (look up on xmr.bio)',
+        contexts: ['page', 'selection', 'image', 'link'],
+        documentUrlPatterns: X_PATTERNS,
+      });
     });
-    browser.contextMenus.create({
-      id: TIP_MENU_ID,
-      title: 'Tip with Monero (look up on xmr.bio)',
-      contexts: ['page', 'selection', 'image', 'link'],
-      documentUrlPatterns: X_PATTERNS,
-    });
-  });
 
-  browser.contextMenus.onClicked.addListener((info, tab) => {
-    if (info.menuItemId === TIP_MENU_ID && tab?.id != null) {
-      const msg: OpenTipMsg = { type: 'open-tip' };
-      void deliver(tab.id, info.frameId ?? 0, msg).catch((e) => notify(`Could not open the tip popup: ${(e as Error).message}`));
-      return;
-    }
-    if (info.menuItemId !== MENU_ID || !tab) return;
-    void openComposer(tab, info.frameId ?? 0, {
-      selection: info.selectionText,
-      srcUrl: info.mediaType === 'image' ? info.srcUrl : undefined,
+    browser.contextMenus.onClicked.addListener((info, tab) => {
+      if (info.menuItemId === TIP_MENU_ID && tab?.id != null) {
+        const msg: OpenTipMsg = { type: 'open-tip' };
+        void deliver(tab.id, 0, msg).catch((e) => notify(`Could not open the tip popup: ${(e as Error).message}`));
+        return;
+      }
+      if (info.menuItemId !== MENU_ID || !tab) return;
+      void openComposer(tab, info.frameId ?? 0, {
+        selection: info.selectionText,
+        srcUrl: info.mediaType === 'image' ? info.srcUrl : undefined,
+      });
     });
-  });
+  }
 
-  browser.commands.onCommand.addListener(async (command, tab) => {
+  browser.commands?.onCommand?.addListener(async (command, tab) => {
     if (command !== 'open-composer') return;
     tab ??= (await browser.tabs.query({ active: true, currentWindow: true }))[0];
     if (tab) void openComposer(tab, 0, { fromCommand: true });
   });
 
-  browser.windows.onRemoved.addListener((windowId) => void siwm.windowClosed(windowId).catch(() => {}));
+  browser.windows?.onRemoved?.addListener((windowId) => void siwm.windowClosed(windowId).catch(() => {}));
 
   browser.tabs.onRemoved.addListener((tabId) => {
     buckets.delete(tabId);
     xapBuckets.delete(tabId);
     writeGates.closed(tabId);
     receiptChecks.delete(tabId);
+    void siwm.tabClosed(tabId).catch(() => {});
     void dropTabState(tabId);
     void shareMenuLast.getValue().then((last) => (tabId in last ? shareMenuLast.setValue(withoutTab(last, tabId)) : undefined));
   });
@@ -523,7 +544,7 @@ export default defineBackground(() => {
 });
 
 function notify(message: string) {
-  void browser.notifications.create({
+  void safeNotify(browser.notifications, {
     type: 'basic',
     iconUrl: browser.runtime.getURL('/icon/128.png'),
     title: 'XMRadar',
@@ -541,16 +562,26 @@ async function openComposer(tab: Browser.tabs.Tab, frameId: number, extra: Omit<
   const live = (await sessionsItem.getValue()).filter((s) => s.expires > Date.now());
   await sessionsItem.setValue([...live, session]);
 
+  let probe: Awaited<ReturnType<typeof probeAndroidSigner>>;
   try {
-    // injected only now, after the user's gesture, rather than on every page load
-    await browser.scripting.executeScript({ target: { tabId, frameIds: [frameId] }, world: 'MAIN', func: installBridge });
+    probe = await probeAndroidSigner(browser.runtime as unknown as NativeRuntimeLike);
   } catch (e) {
     await endSession(session.id);
-    notify(`Could not attach to this page: ${(e as Error).message}`);
+    notify(`Android signer bridge unavailable; reopen the composer (${(e as Error).message}).`);
     return;
   }
+  if (!probe.androidApp) {
+    try {
+      // injected only now, after the user's gesture, rather than on every page load
+      await browser.scripting.executeScript({ target: { tabId, frameIds: [frameId] }, world: 'MAIN', func: installBridge });
+    } catch (e) {
+      await endSession(session.id);
+      notify(`Could not attach to this page: ${(e as Error).message}`);
+      return;
+    }
+  }
 
-  const msg: OpenComposerMsg = { type: 'open-composer', sessionId: session.id, ...extra };
+  const msg: OpenComposerMsg = { type: 'open-composer', sessionId: session.id, ...extra, ...(probe.androidApp ? { useBackgroundSigner: true } : {}) };
   try {
     await deliver(tabId, frameId, msg);
   } catch (e) {
@@ -604,8 +635,8 @@ async function writeSynced(sourceUrl: string, event: { id: string; pubkey: strin
 
 const isExtensionPage = (sender: Browser.runtime.MessageSender) => isExtensionPageSender(sender, browser.runtime.id, browser.runtime.getURL('/'));
 
-// the tab URL covers the popup opening inside an embedded frame on x.com
-const isXContentScript = (sender: Browser.runtime.MessageSender) => sender.id === browser.runtime.id && (isXUrl(sender.url) || isXUrl(sender.tab?.url));
+// top frame of an X tab only; never third-party iframes/ads embedded in X (PLAN-ANDROID)
+const isXContentScript = (sender: Browser.runtime.MessageSender) => isXTopFrameSender(sender, browser.runtime.id);
 
 const loadImage = (url: string, kind?: 'video') => loadMedia(url, kind, { fetch: (...a) => fetch(...a), readBody: boundedBody, imageMax: MAX_IMAGE_BYTES });
 
@@ -659,7 +690,7 @@ async function handle(msg: BgRequest, sender: Browser.runtime.MessageSender): Pr
       // claimed and stored before capturing, so neither a second ask nor a restarted worker gets another
       if (!(await quoteShots.claim(msg.sessionId))) throw new Error('Already taken');
       const canCrop = typeof OffscreenCanvas !== 'undefined' && typeof createImageBitmap !== 'undefined' && 'convertToBlob' in OffscreenCanvas.prototype;
-      if (!canCrop || !browser.tabs.captureVisibleTab) throw new Error('unsupported');
+      if (!canCrop || !browser.tabs?.captureVisibleTab) throw new Error('unsupported');
       return { dataUrl: await shootQuote({ id: tab.id, windowId: tab.windowId }, msg, shotDeps) };
     }
     case 'fetch-image': {
@@ -760,6 +791,36 @@ async function handle(msg: BgRequest, sender: Browser.runtime.MessageSender): Pr
       await requireSession(msg.sessionId, sender);
       return { duplicate: (await postedItem.getValue()).includes(await dedupeKey(msg.sourceUrl, msg.text)) };
     }
+    case 'composer-pubkey': {
+      await requireSession(msg.sessionId, sender);
+      const nativeRt = browser.runtime as unknown as NativeRuntimeLike;
+      const probe = await probeAndroidSigner(nativeRt);
+      if (!probe.androidApp) throw new Error('Background composer signer is only used in the Android app');
+      if (!probe.nip55Available) throw new Error('Install a Nostr signer app (e.g. Amber) to copy posts to Nostr');
+      const pubkey = await nativeGetPublicKey(nativeRt);
+      const sessions = await sessionsItem.getValue();
+      await sessionsItem.setValue(sessions.map((s) => (s.id === msg.sessionId ? { ...s, pubkey } : s)));
+      return { pubkey };
+    }
+    case 'composer-sign': {
+      await requireSession(msg.sessionId, sender);
+      const nativeRt = browser.runtime as unknown as NativeRuntimeLike;
+      const probe = await probeAndroidSigner(nativeRt);
+      if (!probe.androidApp) throw new Error('Background composer signer is only used in the Android app');
+      if (!probe.nip55Available) throw new Error('Install a Nostr signer app (e.g. Amber) to sign Nostr posts');
+      const session = (await sessionsItem.getValue()).find((s) => s.id === msg.sessionId);
+      if (!session?.pubkey || session.pubkey !== msg.pubkey) {
+        throw new Error('Composer signing key does not match connected session');
+      }
+      const t = msg.template;
+      if (!t || !COMPOSER_KINDS.has(t.kind) || typeof t.content !== 'string' || !Array.isArray(t.tags) || typeof t.created_at !== 'number') {
+        throw new Error('Event rejected by composer signer');
+      }
+      const clean: EventTemplate = { kind: t.kind, content: t.content, tags: t.tags, created_at: t.created_at };
+      const signed = await nativeSignEvent(nativeRt, clean, session.pubkey, false);
+      checkSigned(clean, signed, session.pubkey);
+      return { event: signed };
+    }
     case 'ai-tags-ready': {
       await requireSession(msg.sessionId, sender);
       return tagsReady();
@@ -833,24 +894,69 @@ async function handle(msg: BgRequest, sender: Browser.runtime.MessageSender): Pr
       // "only my signer" needs a signer that answers: the choice isn't taken (and the key in use doesn't
       // change) until one does
       if (msg.mode === 'signer') {
+        await nativeClearSigner(browser.runtime as unknown as NativeRuntimeLike);
         const pubkey = await signerPubkey();
         await signerModeItem.setValue('signer');
         await pubkeyItem.setValue(pubkey);
         return null;
       }
+      await nativeClearSigner(browser.runtime as unknown as NativeRuntimeLike);
       await signerModeItem.setValue(msg.mode);
       // the key now in use, so everything keyed to it follows
       if (msg.mode === 'managed') await pubkeyItem.setValue((await managed.ensure()).pubkey);
       return null;
     }
+    case 'identity-import': {
+      if (!isExactExtensionPageSender(sender, browser.runtime.id, browser.runtime.getURL('/'), ['/options.html', '/setup.html'])) {
+        throw new Error('Not allowed');
+      }
+      if (typeof msg.nsec !== 'string') throw new Error('Enter a valid Nostr private key (nsec1… or 64-character hex).');
+      const [prevActivePubkey, prevManagedPubkey, prevMode] = await Promise.all([
+        pubkeyItem.getValue(),
+        managed.pubkey(),
+        signerModeItem.getValue(),
+      ]);
+      let imported: Awaited<ReturnType<typeof managed.importKey>>;
+      try {
+        imported = await managed.importKey(msg.nsec, { confirmOverwrite: !!msg.confirmOverwrite });
+      } catch (e) {
+        if (e instanceof KeyReplaceRequired) {
+          return { needsConfirm: true as const, existingPubkey: e.existingPubkey };
+        }
+        // Never echo raw secret material in errors or logs.
+        throw new Error('Enter a valid Nostr private key (nsec1… or 64-character hex).');
+      }
+      try {
+        await pubkeyItem.setValue(imported.pubkey);
+        await signerModeItem.setValue('managed');
+        const keyChanged =
+          (prevActivePubkey != null && prevActivePubkey !== imported.pubkey) ||
+          (prevManagedPubkey != null && prevManagedPubkey !== imported.pubkey);
+        if (keyChanged) {
+          await rebindToKey();
+        }
+        await nativeClearSigner(browser.runtime as unknown as NativeRuntimeLike);
+      } catch {
+        await imported.rollback().catch(() => {});
+        await pubkeyItem.setValue(prevActivePubkey).catch(() => {});
+        await signerModeItem.setValue(prevMode).catch(() => {});
+        throw new Error('Could not save the imported key; nothing was changed.');
+      }
+      return { pubkey: imported.pubkey, unchanged: imported.unchanged };
+    }
     case 'identity-export': {
-      if (!isExtensionPage(sender) || !sender.url?.startsWith(browser.runtime.getURL('/options.html'))) throw new Error('Not allowed');
+      if (!isExactExtensionPageSender(sender, browser.runtime.id, browser.runtime.getURL('/'), ['/options.html'])) {
+        throw new Error('Not allowed');
+      }
       return { nsec: await managed.exportNsec() };
     }
     case 'identity-delete': {
-      if (!isExtensionPage(sender)) throw new Error('Not allowed');
+      if (!isExactExtensionPageSender(sender, browser.runtime.id, browser.runtime.getURL('/'), ['/options.html'])) {
+        throw new Error('Not allowed');
+      }
       const was = await managed.pubkey();
       await managed.forget();
+      await nativeClearSigner(browser.runtime as unknown as NativeRuntimeLike);
       if ((await signerModeItem.getValue()) === 'managed') await signerModeItem.setValue('auto');
       if (was && (await pubkeyItem.getValue()) === was) await pubkeyItem.setValue(null);
       return null;
@@ -984,7 +1090,14 @@ async function handle(msg: BgRequest, sender: Browser.runtime.MessageSender): Pr
     case 'open-setup': {
       const tabId = checkShareMenuSender(sender, browser.runtime.id);
       const hint = typeof msg.handleHint === 'string' && HANDLE_RE.test(msg.handleHint) ? msg.handleHint : '';
-      await browser.tabs.create({ url: browser.runtime.getURL('/setup.html') + (hint ? `#${hint}` : ''), openerTabId: tabId, index: (sender.tab?.index ?? 0) + 1 });
+      const url = browser.runtime.getURL('/setup.html') + (hint ? `#${hint}` : '');
+      // Firefox Android / GeckoView rejects openerTabId synchronously during schema validation;
+      // use try/catch (not .catch) so both synchronous TypeErrors and async rejections fall back cleanly.
+      try {
+        await browser.tabs.create({ url, openerTabId: tabId, index: (sender.tab?.index ?? 0) + 1 });
+      } catch {
+        await browser.tabs.create({ url });
+      }
       return null;
     }
     case 'proof-tweet-seen': {
@@ -1223,7 +1336,7 @@ const directory = directoryKeeper({
   status: directoryStatusItem,
   fetch: (...args) => fetch(...args),
   readBody: boundedBody,
-  alarms: browser.alarms,
+  alarms,
   enabled: async () => (await xmrSettingsItem.getValue()).badgesX,
   // badges looked up before may now have, lose or change an xmr.bio entry; x.com tabs follow the status item
   changed: async () => {
@@ -1267,7 +1380,7 @@ async function dropTabState(tabId: number) {
 }
 
 // both browsers take `text: null` for a tab (fall back to the global badge); the types don't say so
-const badgeAction = browser.action as unknown as BadgeAction;
+const badgeAction = (browser.action ?? null) as unknown as BadgeAction | null;
 const clearTabBadge = (tabId: number) => setTabBadge(badgeAction, tabId, { text: '', color: '' });
 
 /** The global badge and the icon's title, from the update state; cleared when up to date or switched off. */
@@ -1391,13 +1504,13 @@ async function downloadSiteFeed() {
 
 async function applySiteInfoSetting(on: boolean) {
   if (on) {
-    await browser.alarms.create(SITE_FEED_ALARM, { periodInMinutes: SITE_FEED_HOURS * 60 });
+    await alarms.create(SITE_FEED_ALARM, { periodInMinutes: SITE_FEED_HOURS * 60 });
     const kept = await siteFeedItem.getValue();
     if (!kept || kept.reader !== FEED_READER_V || Date.now() / 1000 - kept.issuedAt > SITE_FEED_HOURS * 3600) await refreshSiteFeed();
     return;
   }
   siteFeedGeneration++;
-  await browser.alarms.clear(SITE_FEED_ALARM);
+  await alarms.clear(SITE_FEED_ALARM);
   await siteFeedItem.removeValue();
   await logoPackItem.removeValue();
   await tabStateReady;
@@ -1454,7 +1567,7 @@ const letters = () =>
 const receiptDeps: CheckDeps = {
   store: idbReceiptStore,
   // Firefox grants host access separately from install; Chrome grants <all_urls> at install
-  hasAccess: (origin) => browser.permissions.contains({ origins: [`${origin}/*`] }),
+  hasAccess: (origin) => safePermissionsContains(browser.permissions, { origins: [`${origin}/*`] }),
 };
 
 function loadCaches() {
@@ -1654,14 +1767,12 @@ async function managedFallback(): Promise<void> {
   const { created } = await managed.ensure();
   await signerModeItem.setValue('managed');
   if (created)
-    await browser.notifications
-      .create('xmradar-identity', {
-        type: 'basic',
-        iconUrl: browser.runtime.getURL('/icon/128.png'),
-        title: 'XMRadar',
-        message: 'No Nostr signer was found, so XMRadar made a Nostr identity for you. It’s kept in this browser only, without a password. See Options → Monero identity.',
-      })
-      .catch(() => {});
+    await safeNotify(browser.notifications, 'xmradar-identity', {
+      type: 'basic',
+      iconUrl: browser.runtime.getURL('/icon/128.png'),
+      title: 'XMRadar',
+      message: 'No Nostr signer was found, so XMRadar made a Nostr identity for you. It’s kept in this browser only, without a password. See Options → Monero identity.',
+    });
 }
 
 async function testSigner(): Promise<string> {
@@ -1727,6 +1838,16 @@ async function withSignerTab<T>(run: (tabId: number) => Promise<T>, active = tru
 }
 
 async function signerPubkey(): Promise<string> {
+  const nativeRt = browser.runtime as unknown as NativeRuntimeLike;
+  const probe = await probeAndroidSigner(nativeRt);
+  if (probe.androidApp) {
+    // Standalone Android shell: never open xmradar.app/signer (there are no NIP-07 extensions).
+    // Route directly to NIP-55 (Amber, etc.) or fail immediately with NoSignerError for managed fallback.
+    if (!probe.nip55Available) {
+      throw new NoSignerError('No Android Nostr signer found (install Amber, or use XMRadar’s built-in identity)');
+    }
+    return nativeGetPublicKey(nativeRt);
+  }
   const pubkey = await withSignerTab(async (tabId) => {
     const [res] = await browser.scripting.executeScript({
       target: { tabId },
@@ -1756,6 +1877,20 @@ async function signerPubkey(): Promise<string> {
  * own prompt when it asks. Checked against the template and the key it named.
  */
 async function signerSignQuietly(template: EventTemplate): Promise<{ pubkey: string; event: Event }> {
+  const nativeRt = browser.runtime as unknown as NativeRuntimeLike;
+  const probe = await probeAndroidSigner(nativeRt);
+  if (probe.androidApp) {
+    if (!probe.nip55Available) {
+      throw new NoSignerError('No Android Nostr signer found (install Amber, or use XMRadar’s built-in identity)');
+    }
+    // Reuse a previously connected external pubkey if it is not our managed key, avoiding a redundant
+    // get_public_key prompt on every xo while letting NIP-55 ContentResolver sign silently (`quiet = true`).
+    const [storedPk, managedPk] = await Promise.all([pubkeyItem.getValue(), managed.pubkey()]);
+    const pubkey = storedPk && storedPk !== managedPk ? storedPk : await nativeGetPublicKey(nativeRt);
+    const event = await nativeSignEvent(nativeRt, template, pubkey, true);
+    checkSigned(template, event, pubkey);
+    return { pubkey, event };
+  }
   const out = await withSignerTab(async (tabId) => {
     const [res] = await browser.scripting.executeScript({
       target: { tabId },
@@ -1787,6 +1922,16 @@ async function signerSignQuietly(template: EventTemplate): Promise<{ pubkey: str
  * bridge, whose allowlist stays {1, 24242}; the result is checked against the template.
  */
 async function signerSignExact(template: EventTemplate, pubkey: string): Promise<Event> {
+  const nativeRt = browser.runtime as unknown as NativeRuntimeLike;
+  const probe = await probeAndroidSigner(nativeRt);
+  if (probe.androidApp) {
+    if (!probe.nip55Available) {
+      throw new NoSignerError('No Android Nostr signer found (install Amber, or use XMRadar’s built-in identity)');
+    }
+    const signed = await nativeSignEvent(nativeRt, template, pubkey);
+    checkSigned(template, signed, pubkey);
+    return signed;
+  }
   const signed = await withSignerTab(async (tabId) => {
     const [res] = await browser.scripting.executeScript({
       target: { tabId },
@@ -1934,17 +2079,25 @@ async function readSetupStatus(): Promise<SetupStatus> {
   const read = await readEach(relays, { kinds: [KIND_PAYTO, KIND_IDENTITIES], authors: [pubkey] });
   const payto = newestOwn(read.events, KIND_PAYTO, pubkey);
   const ids = newestOwn(read.events, KIND_IDENTITIES, pubkey);
-  const mine = await myHandleItem.getValue();
+  let mine = await myHandleItem.getValue();
   const p = payto ? moneroPayto(payto) : null;
-  const xmrbio = mine ? xmrbioStatus(mine.handle, pubkey) : Promise.resolve(null);
   let link: SetupStatus['link'] = null;
-  if (mine && ids) {
-    const claim = twitterClaims(ids, new Set([normalizeHandle(mine.handle)]))[0];
+  if (ids) {
+    const claim = mine
+      ? twitterClaims(ids, new Set([normalizeHandle(mine.handle)]))[0]
+      : twitterClaims(ids, null)[0];
     if (claim) {
       const proof = await cachedVerify(claim.handle, claim.tweetId, pubkey);
       link = { handle: claim.handle, tweetUrl: tweetUrl(claim.handle, claim.tweetId), proof };
+      // Fresh device / newly imported key: adopt a verified twitter claim from the user's own signed
+      // kind-10011 event automatically so they don't have to re-enter handle, address, or proof tweet.
+      if (!mine && proof.status === 'verified') {
+        mine = { handle: claim.handle, proven: true };
+        await myHandleItem.setValue(mine);
+      }
     }
   }
+  const xmrbio = mine ? xmrbioStatus(mine.handle, pubkey) : Promise.resolve(null);
   // a deleted or broken proof un-proves the handle; a transient X error doesn't
   if (mine) {
     const proven = link?.proof.status === 'verified' ? true : link?.proof.status === 'error' ? mine.proven : false;

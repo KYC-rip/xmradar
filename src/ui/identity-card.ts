@@ -19,9 +19,26 @@ export async function mountIdentityCard(root: HTMLElement) {
   const status = q('status');
   const exportBox = q('export-box');
   const nsec = q<HTMLInputElement>('nsec');
+  const importBox = q('import-box');
+  const importInput = q<HTMLInputElement>('import-nsec');
+  const importConfirmBox = q('import-confirm-box');
+  const importConfirmText = q('import-confirm-text');
+  let pendingImportSecret = '';
+
   const hideKey = () => {
     nsec.value = '';
     exportBox.classList.add('hidden');
+  };
+  const clearImport = (closeBox = false) => {
+    importInput.value = '';
+    pendingImportSecret = '';
+    importConfirmText.textContent = '';
+    importConfirmBox.classList.add('hidden');
+    if (closeBox) importBox.classList.add('hidden');
+  };
+  const clearSecrets = () => {
+    hideKey();
+    clearImport(true);
   };
 
   async function render() {
@@ -65,8 +82,59 @@ export async function mountIdentityCard(root: HTMLElement) {
     nsec.select();
   });
   q('hide').addEventListener('click', hideKey);
-  // the key isn't left on screen when the page goes away
-  addEventListener('pagehide', hideKey);
+  // clear secrets whenever the page hides, blurs, or backgrounds (Android GeckoView tabs may not fire pagehide)
+  addEventListener('pagehide', clearSecrets);
+  addEventListener('beforeunload', clearSecrets);
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) clearSecrets();
+  });
+
+  q('import-open').addEventListener('click', () => {
+    const opening = importBox.classList.contains('hidden');
+    clearImport(!opening);
+    if (opening) {
+      importBox.classList.remove('hidden');
+      importInput.focus();
+    }
+  });
+  q('import-cancel').addEventListener('click', () => clearImport(true));
+  q('import-confirm-cancel').addEventListener('click', () => clearImport(true));
+
+  const submitImport = async (secret: string, confirmOverwrite: boolean) => {
+    status.textContent = 'Importing…';
+    try {
+      const res = await sendToBackground({ type: 'identity-import', nsec: secret, confirmOverwrite });
+      if ('needsConfirm' in res) {
+        pendingImportSecret = secret;
+        importInput.value = '';
+        importConfirmText.textContent = `This will replace your current stored key (${short(res.existingPubkey)}). Export it above first if you want to keep it.`;
+        importConfirmBox.classList.remove('hidden');
+        status.textContent = '';
+        return;
+      }
+      clearImport(true);
+      status.textContent = res.unchanged
+        ? `Already using ${short(res.pubkey)}.`
+        : `Now signing as ${short(res.pubkey)}.`;
+      await render();
+    } catch (e) {
+      clearImport(false);
+      status.textContent = (e as Error).message;
+    }
+  };
+
+  q('import-save').addEventListener('click', (e) => {
+    if (!e.isTrusted) return;
+    const raw = importInput.value;
+    importInput.value = '';
+    void submitImport(raw, false);
+  });
+  q('import-confirm').addEventListener('click', (e) => {
+    if (!e.isTrusted || !pendingImportSecret) return;
+    const raw = pendingImportSecret;
+    pendingImportSecret = '';
+    void submitImport(raw, true);
+  });
 
   const del = q<HTMLButtonElement>('delete');
   let armed: ReturnType<typeof setTimeout> | null = null;

@@ -1,0 +1,15 @@
+XMRadar brings Monero to X and checks swap sites before you deposit — without installing the proprietary X Android app.
+
+Built on Mozilla GeckoView with XMRadar's open-source WebExtension bundled inside a hardened, isolated Android shell:
+- Monero tip badges and Xap totals on X, opening your own wallet (Cake Wallet, Monerujo, Stack) via confirmed monero: links.
+- xo (Monero likes) and your own Monero badge on X, using an extension-local Nostr key or an external NIP-55 Android signer (e.g. Amber).
+- Copy posts from X to Nostr via your external NIP-55 Android signer (Amber).
+- Swap Guard in a private compartment: checks NKIP-0001 signed receipts and PGP/MistProof letters of guarantee against xmr.club's signed list, and warns before lookalike sites load.
+- Sign in with Monero (NKIP-0003) consent helper.
+- One-click GhostMail burner email.
+- Isolated chat.xmr.club room tab.
+
+Privacy & limits:
+- Holds no Monero keys and no funds. Zero Google Play Services, zero Firebase/FCM, zero ads, zero analytics. Only INTERNET and optional runtime POST_NOTIFICATIONS (Android 13+, opt-in for live XMRadar Xap/xo alerts and X/Chat PWA notifications while the app is running) are requested — no location, camera, microphone, or storage permissions.
+- X, Chat, and Swap tabs use separate GeckoView cookie jars; external links (including t.co) hand off to your system browser.
+- XMRadar's built-in Nostr key is never used to sign your public Nostr posts (Copy to Nostr requires an external NIP-55 signer such as Amber).

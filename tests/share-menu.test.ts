@@ -264,3 +264,57 @@ describe('share menu hover tint', () => {
     document.body.style.backgroundColor = '';
   });
 });
+
+describe('mobile X bottom sheet share menu', () => {
+  it('injects Copy to Nostr into a newly opened sheetDialog without aria-expanded and dismisses via Cancel', async () => {
+    const { doc, share } = setup();
+    // Simulate Mobile X share button (no aria-haspopup, only aria-label="Share post")
+    share.removeAttribute('aria-haspopup');
+    share.setAttribute('aria-label', 'Share post');
+    expect(shareButtonOf(share)).toBe(share);
+
+    const { m, request } = menuFor(doc);
+    m.onClick(click(share), true);
+
+    const sheet = doc.createElement('div');
+    sheet.setAttribute('role', 'dialog');
+    sheet.setAttribute('data-testid', 'sheetDialog');
+    sheet.innerHTML =
+      '<div class="rows">' +
+      '<div role="menuitem"><svg><path d="M0 0"/></svg><span>Copy link</span></div>' +
+      '<div role="menuitem"><svg><path d="M0 0"/></svg><span>Share post via…</span></div>' +
+      '</div>' +
+      '<button type="button">Cancel</button>';
+    doc.getElementById('layers')!.append(sheet);
+    await settle();
+
+    expect(item(doc).length).toBe(1);
+    expect(item(doc)[0]!.textContent).toBe('Copy to Nostr');
+
+    const cancelSpy = vi.spyOn(sheet.querySelector('button')!, 'click');
+    item(doc)[0]!.dispatchEvent(trusted(new MouseEvent('click', { bubbles: true, cancelable: true })));
+    expect(request).toHaveBeenCalledTimes(1);
+    expect(cancelSpy).toHaveBeenCalledTimes(1);
+    expect(ownStatusId(m.takeTarget()!)).toBe(ID);
+  });
+
+  it('ignores pre-existing sheetDialogs that were already open before the share tap', async () => {
+    const { doc, share } = setup();
+    const oldSheet = doc.createElement('div');
+    oldSheet.setAttribute('role', 'dialog');
+    oldSheet.setAttribute('data-testid', 'sheetDialog');
+    oldSheet.innerHTML =
+      '<div>' +
+      '<div role="menuitem"><svg></svg><span>Repost</span></div>' +
+      '<div role="menuitem"><svg></svg><span>Quote</span></div>' +
+      '</div>';
+    doc.getElementById('layers')!.append(oldSheet);
+
+    const { m } = menuFor(doc);
+    m.onClick(click(share), true);
+    // Trigger an unrelated mutation inside #layers
+    doc.getElementById('layers')!.append(doc.createElement('span'));
+    await settle();
+    expect(item(doc).length).toBe(0);
+  });
+});

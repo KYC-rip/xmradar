@@ -19,9 +19,14 @@ import { renderSiteCard } from '../../ui/site-card';
 import { sendToBackground } from '../../messaging';
 import { mountPopupUpdate } from '../../ui/update-notice';
 import { openChat } from '../../chat/open';
-import { CHAT_ORIGIN } from '../../chat/rooms';
+import { chatUrl } from '../../chat/rooms';
+import { closeCurrentPage, openExtensionPage, resolveActiveSiteTabId } from '../../platform/compat';
+import { ensureBrowserStorage } from '../../platform/storage-compat';
+
+ensureBrowserStorage(browser as unknown as { storage?: Parameters<typeof ensureBrowserStorage>[0] extends { storage?: infer S } ? S : never });
 
 const $ = (id: string) => document.getElementById(id)!;
+const closePopup = () => void closeCurrentPage({ tabs: browser.tabs, closeWindow: () => window.close() });
 
 // each panel's code loads the first time its tab is shown
 const loaders: Record<string, () => Promise<unknown>> = {
@@ -46,11 +51,11 @@ for (const el of document.querySelectorAll<HTMLElement>('[data-open]')) {
     // the tip badge before setup is complete opens the setup page (PLAN-XOREACH), not Options
     if (el.id === 'tip-badge' && !(await setupComplete())) {
       await browser.tabs.create({ url: browser.runtime.getURL('/setup.html') });
-      return window.close();
+      return closePopup();
     }
     const hash = el.dataset.open ? `#${el.dataset.open}` : '';
     await browser.tabs.create({ url: browser.runtime.getURL(`/options.html${hash}`) });
-    window.close();
+    closePopup();
   });
 }
 
@@ -59,7 +64,7 @@ async function renderHeader() {
   const [pubkey, stored] = await Promise.all([pubkeyItem.getValue(), setupStatusLast.getValue()]);
   const npub = pubkey ? npubEncode(pubkey) : null;
   $('signed-in').textContent = npub ? `Signed in as ${npub.slice(0, 10)}…${npub.slice(-4)}` : 'No signer yet';
-  $('connect-signer').classList.toggle('hidden', !!npub);
+  $('connect-signer').textContent = npub ? 'Change' : 'Connect';
   $('tip-badge-summary').textContent = badgeSummary(statusFor(stored, pubkey)?.status ?? null);
   if (!(await setupComplete())) $('tip-badge-summary').textContent = 'Not set up yet: about a minute';
 }
@@ -72,36 +77,40 @@ const panelApis = browser as unknown as {
   sidebarAction?: { open(): Promise<void> };
 };
 let windowId: number | undefined;
-// enabled once the window is known, so Chrome's side panel isn't skipped for a tab by a quick click
-($('chat-open') as HTMLButtonElement).disabled = true;
-void browser.windows
-  .getCurrent()
-  .then((w) => (windowId = w.id))
-  .finally(() => (($('chat-open') as HTMLButtonElement).disabled = false));
+const chatBtn = $('chat-open') as HTMLButtonElement;
+if (browser.windows?.getCurrent) {
+  // enabled once the window is known, so Chrome's side panel isn't skipped for a tab by a quick click
+  chatBtn.disabled = true;
+  void browser.windows
+    .getCurrent()
+    .then((w) => (windowId = w.id))
+    .catch(() => {})
+    .finally(() => (chatBtn.disabled = false));
+}
 $('siwm-open').addEventListener('click', async () => {
-  await browser.windows.create({ url: browser.runtime.getURL('/siwm.html'), type: 'popup', width: 520, height: 720 });
-  window.close();
+  await openExtensionPage(browser.runtime.getURL('/siwm.html'), { windows: browser.windows, tabs: browser.tabs });
+  closePopup();
 });
 $('chat-open').addEventListener('click', () => {
   void openChat({
     sidePanelOpen: panelApis.sidePanel?.open.bind(panelApis.sidePanel),
     sidebarOpen: panelApis.sidebarAction?.open.bind(panelApis.sidebarAction),
     windowId,
-    openTab: () => browser.tabs.create({ url: `${CHAT_ORIGIN}/` }),
-    close: () => window.close(),
+    openTab: () => browser.tabs.create({ url: chatUrl('x', true) }),
+    close: closePopup,
   });
 });
 
 // a newer XMRadar, from the daily check: its release page in a tab
 mountPopupUpdate($('update') as HTMLButtonElement, async (url) => {
   await browser.tabs.create({ url });
-  window.close();
+  closePopup();
 });
 
 // the active tab's xmr.club listings, asked by tab id (no URL needed)
-void browser.tabs.query({ active: true, currentWindow: true }).then(async ([tab]) => {
-  if (tab?.id == null) return;
-  renderSiteCard($('this-site'), await sendToBackground({ type: 'site-tab', tabId: tab.id }).catch(() => null));
+void resolveActiveSiteTabId(browser.tabs, location.search, browser.runtime.getURL('/')).then(async (tabId) => {
+  if (tabId == null) return;
+  renderSiteCard($('this-site'), await sendToBackground({ type: 'site-tab', tabId }).catch(() => null));
 });
 pubkeyItem.watch(() => void renderHeader());
 
@@ -113,7 +122,7 @@ const showXaps = (st: InboxState | null) => {
 };
 $('xap-new').addEventListener('click', async () => {
   await browser.tabs.create({ url: browser.runtime.getURL('/options.html?xaps#badges') });
-  window.close();
+  closePopup();
 });
 void xapInboxItem.getValue().then(showXaps);
 xapInboxItem.watch(showXaps);

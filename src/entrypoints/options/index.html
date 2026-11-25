@@ -172,6 +172,16 @@
                 <div class="row"><button data-id="hide" type="button">Hide</button></div>
               </div>
             </div>
+            <div class="row"><button data-id="import-open" type="button">Import my key (nsec)</button><a class="button-link" href="/setup.html">Open setup wizard</a></div>
+            <div data-id="import-box" class="hidden">
+              <p class="warn row-hint">Stored unencrypted in this browser profile only (not synced or backed up, and unrecoverable if this profile or app is removed). Signs only XMRadar’s own kinds (xos, Xap receipts, Monero address, X proof) — not Copy-to-Nostr posts.</p>
+              <input data-id="import-nsec" type="password" autocomplete="new-password" spellcheck="false" data-lpignore="true" data-1p-ignore="true" placeholder="nsec1… or 64-char hex" aria-label="Import Nostr private key (nsec)" />
+              <div class="row"><button data-id="import-save" type="button">Use this key</button><button data-id="import-cancel" type="button">Cancel</button></div>
+              <div data-id="import-confirm-box" class="hidden">
+                <p class="warn row-hint" data-id="import-confirm-text"></p>
+                <div class="row"><button data-id="import-confirm" type="button" class="danger">Replace stored key</button><button data-id="import-confirm-cancel" type="button">Cancel</button></div>
+              </div>
+            </div>
             <span data-id="status" class="row-hint" role="status" aria-live="polite"></span>
           </div>
 

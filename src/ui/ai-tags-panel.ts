@@ -117,23 +117,34 @@ export function mountAiTagsPanel(root: ParentNode, fetchFn: FetchFn = (...a) => 
       if (r.checked) switchTo(r.value === 'local' ? 'local' : provider.value === 'anthropic' ? 'anthropic' : 'openai');
     });
   provider.addEventListener('change', () => switchTo(provider.value === 'anthropic' ? 'anthropic' : 'openai'));
-  const urlField = (input: HTMLInputElement, source: 'local' | 'openai', rule: string) =>
-    input.addEventListener('blur', () => {
+  const urlField = (input: HTMLInputElement, source: 'local' | 'openai', rule: string) => {
+    const commit = (showError: boolean) => {
       const v = source === 'local' ? localRoot(input.value) : input.value.trim().replace(/\/+$/, '');
-      if (!validBaseUrl(source, v)) return setStatus(status, rule, 'error');
+      if (!validBaseUrl(source, v)) {
+        if (showError) setStatus(status, rule, 'error');
+        return false;
+      }
       setStatus(status, '');
-      input.value = v;
+      if (showError) input.value = v;
       if (source === 'local') localBase = v;
       else keyBase = v;
       void save({ baseUrl: v });
-    });
+      return true;
+    };
+    input.addEventListener('blur', () => void commit(true));
+    input.addEventListener('input', () => void commit(false));
+  };
   urlField(localUrl, 'local', 'A local server is http://localhost, 127.0.0.1 or [::1], with any port.');
   urlField(base, 'openai', 'The API base URL must start with https://.');
-  model.addEventListener('change', () => {
+  const saveModel = () => {
     modelOf[s.source] = model.value.trim();
     void save({ model: modelOf[s.source] });
-  });
-  key.addEventListener('change', () => void aiKeyItem.setValue(key.value.trim()));
+  };
+  model.addEventListener('input', saveModel);
+  model.addEventListener('change', saveModel);
+  const saveKey = () => void aiKeyItem.setValue(key.value.trim());
+  key.addEventListener('input', saveKey);
+  key.addEventListener('change', saveKey);
   show.addEventListener('click', () => {
     key.type = key.type === 'password' ? 'text' : 'password';
     show.textContent = key.type === 'password' ? 'Show' : 'Hide';
@@ -164,7 +175,18 @@ export function mountAiTagsPanel(root: ParentNode, fetchFn: FetchFn = (...a) => 
     test.disabled = true;
     setStatus(status, 'Asking with a sample sentence…');
     try {
-      const res = await suggestTags({ ...s, on: true, model: model.value.trim() }, key.value, SAMPLE_TEXT, fetchFn);
+      const liveBase = s.source === 'local' ? localRoot(localUrl.value) : s.source === 'openai' ? base.value.trim().replace(/\/+$/, '') : s.baseUrl;
+      const liveModel = model.value.trim();
+      const liveKey = key.value.trim();
+      if (liveKey !== (await aiKeyItem.getValue())) await aiKeyItem.setValue(liveKey);
+      const effectiveBase = s.source === 'anthropic' || validBaseUrl(s.source, liveBase) ? liveBase : s.baseUrl;
+      if (liveModel !== s.model || effectiveBase !== s.baseUrl) {
+        modelOf[s.source] = liveModel;
+        if (s.source === 'local') localBase = effectiveBase;
+        else if (s.source === 'openai') keyBase = effectiveBase;
+        await save({ model: liveModel, baseUrl: effectiveBase });
+      }
+      const res = await suggestTags({ ...s, on: true, model: liveModel, baseUrl: effectiveBase }, liveKey, SAMPLE_TEXT, fetchFn);
       if (res.status === 'ok') setStatus(status, `Works: ${res.tags.map((t) => `#${t}`).join(' ')}`, 'ok');
       else setStatus(status, res.reason, 'error');
     } finally {

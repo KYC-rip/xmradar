@@ -5,8 +5,10 @@ import { HANDLE_RE, normalizeHandle } from '../../identity/envelope';
 import { proofTweetText } from '../../identity/proof-tweet';
 import { tagDiff } from '../../identity/setup';
 import { identitySteps } from '../../identity/steps';
+import { setupStatusLast, statusFor } from '../../identity/status';
 import { listButtonText } from '../../identity/xmrbio-list';
 import { sendToBackground, type PreparedSetup, type SetupRequest, type SetupStatus } from '../../messaging';
+import { closeCurrentPage } from '../../platform/compat';
 import { myHandleItem, proofCandidateItem, PROOF_CANDIDATE_MS, pubkeyItem, xmrbioListPrefItem } from '../../settings';
 import { validateMoneroAddress } from '../../xmr/address';
 import { wizardSteps, type WizardKey } from './steps';
@@ -28,10 +30,29 @@ function say(k: WizardKey, text: string, kind: 'ok' | 'error' | '' = '') {
 const handleEl = $<HTMLInputElement>('handle');
 const addressEl = $<HTMLInputElement>('address');
 const tweetUrlEl = $<HTMLInputElement>('tweet-url');
+const keyChangeBtn = $<HTMLButtonElement>('key-change');
+const keyImportBox = $('key-import-box');
+const keyNsecEl = $<HTMLInputElement>('key-nsec');
+const keyImportConfirmBox = $('key-import-confirm-box');
+const keyImportConfirmText = $('key-import-confirm-text');
 
 let pubkey: string | null = null;
 let status: SetupStatus | null = null;
 let busy = false;
+let pendingImportSecret = '';
+
+const shortNpub = (pk: string) => {
+  const n = npubEncode(pk);
+  return `${n.slice(0, 12)}…${n.slice(-6)}`;
+};
+
+function clearImport(closeBox = false) {
+  keyNsecEl.value = '';
+  pendingImportSecret = '';
+  keyImportConfirmText.textContent = '';
+  keyImportConfirmBox.hidden = true;
+  if (closeBox) keyImportBox.hidden = true;
+}
 
 async function render() {
   const mine = await myHandleItem.getValue();
@@ -42,6 +63,7 @@ async function render() {
     el.querySelector('[data-value]')!.textContent = s.value ?? '';
     if (s.warning) say(s.key, s.warning, 'error');
   }
+  keyChangeBtn.hidden = !pubkey;
   const done = steps.every((s) => s.state === 'done');
   $('done').hidden = !done;
   if (done && status) $('xmrbio-status').textContent = listButtonText(status, mine?.handle ?? '');
@@ -60,10 +82,42 @@ async function guard(k: WizardKey, label: string, fn: () => Promise<void>) {
   }
 }
 
+let refreshInFlight: Promise<void> | null = null;
 async function refresh() {
-  pubkey = await pubkeyItem.getValue();
-  status = pubkey ? await sendToBackground({ type: 'setup-status' }).catch(() => null) : null;
-  await render();
+  if (refreshInFlight) return refreshInFlight;
+  const run = (async () => {
+    const nextPubkey = await pubkeyItem.getValue();
+    if (nextPubkey !== pubkey) status = null;
+    pubkey = nextPubkey;
+    if (pubkey) {
+      // Seed immediately from cached status for this key so reopening setup.html shows Done (0 ms)
+      // instead of flashing empty Step 2 inputs while relays re-verify in the background.
+      if (!status) {
+        const cached = statusFor(await setupStatusLast.getValue().catch(() => null), pubkey);
+        if (cached) status = cached.status;
+      }
+      await render();
+      if (!status) say('address', 'Checking relays for your existing address and X proof…');
+      const fresh = await sendToBackground({ type: 'setup-status' }).catch(() => null);
+      if (fresh) status = fresh;
+      say('address', '');
+    } else {
+      status = null;
+    }
+    const mine = await myHandleItem.getValue();
+    if (mine?.handle && !handleEl.value.trim()) handleEl.value = mine.handle;
+    if (!addressEl.value.trim()) {
+      const knownAddr =
+        (status?.address?.check.ok ? status.address.address : null) ??
+        (status?.xmrbio?.found === true && status.xmrbio.linked && status.xmrbio.check.ok ? status.xmrbio.address : null);
+      if (knownAddr) addressEl.value = knownAddr;
+    }
+    await render();
+  })().finally(() => {
+    refreshInFlight = null;
+  });
+  refreshInFlight = run;
+  return run;
 }
 
 /** Sign at once when there was no list (the button was the consent); otherwise show the change first. */
@@ -106,9 +160,64 @@ $('key-make').addEventListener('click', (e) => {
   if (!e.isTrusted) return;
   void guard('key', 'Looking for your signer…', async () => {
     await sendToBackground({ type: 'test-signer' });
+    clearImport(true);
     say('key', 'Done.', 'ok');
     await refresh();
   });
+});
+
+const toggleImportBox = () => {
+  const opening = keyImportBox.hidden;
+  clearImport(!opening);
+  if (opening) {
+    keyImportBox.hidden = false;
+    keyNsecEl.focus();
+  }
+};
+$('key-import-open').addEventListener('click', toggleImportBox);
+keyChangeBtn.addEventListener('click', toggleImportBox);
+$('key-import-cancel').addEventListener('click', () => clearImport(true));
+$('key-import-confirm-cancel').addEventListener('click', () => clearImport(true));
+
+async function submitImport(secret: string, confirmOverwrite: boolean) {
+  await guard('key', 'Importing key…', async () => {
+    try {
+      const res = await sendToBackground({ type: 'identity-import', nsec: secret, confirmOverwrite });
+      if ('needsConfirm' in res) {
+        pendingImportSecret = secret;
+        keyNsecEl.value = '';
+        keyImportConfirmText.textContent = `This will replace your current stored key (${shortNpub(res.existingPubkey)}). Export it first in Options if you want to keep it.`;
+        keyImportConfirmBox.hidden = false;
+        say('key', 'Confirm before replacing your stored key.');
+        return;
+      }
+      clearImport(true);
+      say('key', res.unchanged ? 'Already using this key.' : 'Key imported.', 'ok');
+      await refresh();
+    } catch (e) {
+      clearImport(false);
+      throw e;
+    }
+  });
+}
+
+$('key-import-save').addEventListener('click', (e) => {
+  if (!e.isTrusted) return;
+  const raw = keyNsecEl.value;
+  keyNsecEl.value = '';
+  void submitImport(raw, false);
+});
+$('key-import-confirm').addEventListener('click', (e) => {
+  if (!e.isTrusted || !pendingImportSecret) return;
+  const raw = pendingImportSecret;
+  pendingImportSecret = '';
+  void submitImport(raw, true);
+});
+
+addEventListener('pagehide', () => clearImport(true));
+addEventListener('beforeunload', () => clearImport(true));
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) clearImport(true);
 });
 
 $('address-publish').addEventListener('click', (e) => {
@@ -150,6 +259,9 @@ async function fillCandidate() {
 const listOn = $<HTMLInputElement>('xmrbio-on');
 void xmrbioListPrefItem.getValue().then((p) => (listOn.checked = p !== 'off'));
 listOn.addEventListener('change', () => void xmrbioListPrefItem.setValue(listOn.checked ? 'on' : 'off'));
+$('done-back-x').addEventListener('click', () => {
+  void closeCurrentPage({ tabs: browser.tabs, closeWindow: () => window.close() });
+});
 
 async function init() {
   let hint = '';

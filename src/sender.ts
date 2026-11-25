@@ -16,6 +16,26 @@ export function isExtensionPageSender(sender: SenderLike, runtimeId: string, ext
   return sender.id === runtimeId && (sender.url ?? '').startsWith(extensionBaseUrl);
 }
 
+/**
+ * Exact page guard for sensitive identity key operations (import/export): requires top frame (`frameId === 0`),
+ * same extension origin, and an exact pathname in `allowedPaths` (ignoring query/hash).
+ */
+export function isExactExtensionPageSender(
+  sender: SenderLike,
+  runtimeId: string,
+  extensionBaseUrl: string,
+  allowedPaths: readonly string[],
+): boolean {
+  if (sender.id !== runtimeId || sender.frameId !== 0) return false;
+  try {
+    const base = new URL(extensionBaseUrl);
+    const actual = new URL(sender.url ?? '');
+    return actual.origin === base.origin && allowedPaths.includes(actual.pathname);
+  } catch {
+    return false;
+  }
+}
+
 /** Throws unless the message comes from our content script in the tab the session was opened for. */
 export function checkSessionSender(sessions: SessionLike[], sessionId: string, sender: SenderLike, runtimeId: string, now = Date.now()): void {
   if (sender.id !== runtimeId) throw new Error('Unknown sender');
@@ -34,6 +54,11 @@ export function isXUrl(url: string | undefined): boolean {
   } catch {
     return false;
   }
+}
+
+/** True when a message comes from our content script in the top frame of an X tab. */
+export function isXTopFrameSender(sender: SenderLike, runtimeId: string): boolean {
+  return sender.id === runtimeId && sender.frameId === 0 && isXUrl(sender.url) && isXUrl(sender.tab?.url);
 }
 
 /** Throws unless a share-menu copy request comes from our content script in the top frame of an X tab. */

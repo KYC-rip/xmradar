@@ -1,0 +1,3 @@
+# Keep Android app sources and F-Droid metadata out of Firefox AMO sources.zip (git archive HEAD)
+android/ export-ignore
+metadata/ export-ignore
