@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Privacy Policy · XMRadar</title>
 <meta name="description" content="XMRadar's privacy policy: what stays in your browser, what leaves it, where it goes, and how to turn each data flow off.">
-<meta name="color-scheme" content="light dark">
+<meta name="color-scheme" content="dark light">
 <link rel="icon" type="image/png" href="logo/icon/32.png">
 <link rel="preload" href="fonts/manrope-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="style.css">
@@ -15,21 +15,21 @@
   .policy main{max-width:760px}
   .policy h1{font-size:clamp(34px,5vw,52px);margin:0 0 8px}
   .policy .meta{color:var(--muted);font-size:14px;margin:0 0 28px}
-  .policy h2{font-size:26px;margin:40px 0 12px;scroll-margin-top:24px}
-  .policy h3{font-size:18px;margin:26px 0 8px}
+  .policy h2{font-size:26px;margin:40px 0 12px;scroll-margin-top:84px}
+  .policy h3{font-size:18px;margin:26px 0 8px;scroll-margin-top:84px}
   .policy p,.policy li{color:var(--fg);text-wrap:pretty}
   .policy p{margin:0 0 14px}
   .policy ul,.policy ol{margin:0 0 16px;padding-left:22px}
   .policy li{margin:0 0 8px}
   .policy .muted{color:var(--muted)}
-  .policy .note{background:var(--surface);box-shadow:0 0 0 1px var(--border);border-radius:14px;padding:18px 20px;margin:0 0 24px}
+  .policy .note{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:18px 20px;margin:0 0 24px}
   .policy .note p:last-child{margin-bottom:0}
   .policy table{width:100%;border-collapse:collapse;margin:8px 0 22px;font-size:14px;display:block;overflow-x:auto}
   .policy th,.policy td{text-align:left;vertical-align:top;padding:9px 10px;border-bottom:1px solid var(--border)}
   .policy th{font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);white-space:nowrap}
   .policy td:first-child{font-weight:700}
   .policy code{font-size:13px}
-  .policy .toc{position:sticky;top:24px;background:var(--surface);box-shadow:0 0 0 1px var(--border);border-radius:14px;padding:16px 18px;font-size:14px}
+  .policy .toc{position:sticky;top:84px;background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px 18px;font-size:14px}
   .policy .toc b{display:block;margin-bottom:8px}
   .policy .toc a{display:block;color:var(--muted);text-decoration:none;padding:4px 0}
   .policy .toc a:hover{color:var(--fg)}
@@ -39,15 +39,22 @@
 </head>
 <body>
 
-<header class="wrap">
-  <a class="brand" href="/"><img src="logo/xmradar.svg" alt=""><span>XMRadar</span></a>
-  <nav aria-label="Main">
-    <a href="/#features">Features</a>
-    <a href="/#proof">Your badge</a>
-    <a href="/#on-x">On X</a>
-    <a href="/#install">Install</a>
-    <a href="https://github.com/KYC-rip/xmradar">GitHub</a>
-  </nav>
+<header class="site-header">
+  <div class="wrap head-inner">
+    <a class="brand" href="/"><img src="logo/xmradar.svg" width="28" height="28" alt=""><span>XMRadar</span></a>
+    <nav class="pill-nav" aria-label="Main">
+      <a href="/#features">Features</a>
+      <a href="/#android">Android</a>
+      <a href="/#proof">Your badge</a>
+      <a href="/#on-x">On X</a>
+      <a href="/#install">Install</a>
+      <a href="https://github.com/KYC-rip/xmradar">GitHub</a>
+    </nav>
+    <div class="head-actions">
+      <a class="btn-donate-sm" href="https://pwa.cash/s/xbtoshi">ɱ Donate</a>
+      <a class="btn-install-sm" href="/#install">Install</a>
+    </div>
+  </div>
 </header>
 
 <div class="policy wrap">
@@ -197,7 +204,7 @@
 </div>
 
 <footer class="wrap">
-  <span class="foot-brand"><span><img src="logo/icon/32.png" alt="">XMRadar by kyc.rip</span><span style="font-size:12px">Exchange data © <a href="https://xmr.club">xmr.club</a> contributors, <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>.</span></span>
+  <span class="foot-brand"><span><img src="logo/icon/32.png" width="16" height="16" alt="">XMRadar by kyc.rip</span><span class="foot-cc">Exchange data © <a href="https://xmr.club">xmr.club</a> contributors, <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>.</span></span>
   <span class="foot-links"><a href="https://github.com/KYC-rip/xmradar">GitHub</a><a href="https://xmr.club">xmr.club</a><a href="https://pwa.cash/s/xbtoshi">Donate</a><a href="https://kyc.rip">kyc.rip</a><a href="/privacy">Privacy</a></span>
 </footer>
 

@@ -223,11 +223,17 @@ describe('hideOverlays', () => {
     site.setAttribute('style', 'top: 4px');
     site.attachShadow({ mode: 'closed' });
     const tip = document.createElement('xmradar-tip');
+    const badge = document.createElement('xmradar-badge');
+    const card = document.createElement('xmradar-setup-card');
+    const ring = document.createElement('span');
+    ring.setAttribute('data-xmradar-ring', 'quote:alice');
+    const writePanel = document.createElement('div');
+    writePanel.setAttribute('data-xmradar', 'write-panel');
     const other = document.createElement('div');
-    document.body.append(ui, site, tip, other);
+    document.body.append(ui, site, tip, badge, card, ring, writePanel, other);
 
     const undo = hideOverlays(document);
-    for (const el of [ui, site, tip]) expect(el.style.getPropertyPriority('visibility')).toBe('important');
+    for (const el of [ui, site, tip, badge, card, ring, writePanel]) expect(el.style.getPropertyPriority('visibility')).toBe('important');
     expect(ui.shadowRoot!.lastElementChild!.textContent).toBe(':host{visibility:hidden !important}');
     expect(other.getAttribute('style')).toBeNull();
 
@@ -235,7 +241,7 @@ describe('hideOverlays', () => {
     expect(ui.getAttribute('style')).toBeNull();
     expect(ui.shadowRoot!.querySelectorAll('style')).toHaveLength(1);
     expect(site.getAttribute('style')).toBe('top: 4px');
-    expect(tip.getAttribute('style')).toBeNull();
+    for (const el of [tip, badge, card, ring, writePanel]) expect(el.getAttribute('style')).toBeNull();
     undo();
     expect(site.getAttribute('style')).toBe('top: 4px');
   });

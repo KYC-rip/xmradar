@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:background="@color/surface"
     android:fillViewport="true">
 
     <LinearLayout
@@ -94,8 +94,9 @@
 
             <TextView
                 android:id="@+id/swap_url_clear"
-                android:layout_width="32dp"
-                android:layout_height="32dp"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
                 android:clickable="true"
                 android:contentDescription="@string/swap_clear_input"
                 android:focusable="true"
@@ -110,61 +111,73 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="6dp"
-            android:textColor="@color/xmr"
+            android:textColor="@color/error"
             android:textSize="12sp"
             android:visibility="gone" />
 
         <!-- Quick-pick swap / ecosystem hosts -->
-        <LinearLayout
+        <HorizontalScrollView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="10dp"
-            android:orientation="horizontal">
+            android:scrollbars="none">
 
-            <TextView
-                android:id="@+id/swap_chip_kycrip"
+            <LinearLayout
                 android:layout_width="wrap_content"
-                android:layout_height="30dp"
-                android:background="@drawable/bg_swap_chip"
-                android:clickable="true"
-                android:focusable="true"
-                android:gravity="center"
-                android:paddingHorizontal="12dp"
-                android:text="kyc.rip"
-                android:textColor="@color/fg"
-                android:textSize="12sp"
-                android:textStyle="bold" />
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
 
-            <TextView
-                android:id="@+id/swap_chip_xmrclub"
-                android:layout_width="wrap_content"
-                android:layout_height="30dp"
-                android:layout_marginStart="8dp"
-                android:background="@drawable/bg_swap_chip"
-                android:clickable="true"
-                android:focusable="true"
-                android:gravity="center"
-                android:paddingHorizontal="12dp"
-                android:text="xmr.club"
-                android:textColor="@color/fg"
-                android:textSize="12sp"
-                android:textStyle="bold" />
+                <TextView
+                    android:id="@+id/swap_chip_kycrip"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:minHeight="40dp"
+                    android:background="@drawable/bg_swap_chip"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:gravity="center"
+                    android:paddingHorizontal="14dp"
+                    android:paddingVertical="8dp"
+                    android:text="kyc.rip"
+                    android:textColor="@color/fg"
+                    android:textSize="12sp"
+                    android:textStyle="bold" />
 
-            <TextView
-                android:id="@+id/swap_chip_xmrbio"
-                android:layout_width="wrap_content"
-                android:layout_height="30dp"
-                android:layout_marginStart="8dp"
-                android:background="@drawable/bg_swap_chip"
-                android:clickable="true"
-                android:focusable="true"
-                android:gravity="center"
-                android:paddingHorizontal="12dp"
-                android:text="xmr.bio"
-                android:textColor="@color/fg"
-                android:textSize="12sp"
-                android:textStyle="bold" />
-        </LinearLayout>
+                <TextView
+                    android:id="@+id/swap_chip_xmrclub"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:minHeight="40dp"
+                    android:layout_marginStart="8dp"
+                    android:background="@drawable/bg_swap_chip"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:gravity="center"
+                    android:paddingHorizontal="14dp"
+                    android:paddingVertical="8dp"
+                    android:text="xmr.club"
+                    android:textColor="@color/fg"
+                    android:textSize="12sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/swap_chip_xmrbio"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:minHeight="40dp"
+                    android:layout_marginStart="8dp"
+                    android:background="@drawable/bg_swap_chip"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:gravity="center"
+                    android:paddingHorizontal="14dp"
+                    android:paddingVertical="8dp"
+                    android:text="xmr.bio"
+                    android:textColor="@color/fg"
+                    android:textSize="12sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+        </HorizontalScrollView>
 
         <!-- Primary & secondary actions -->
         <LinearLayout
@@ -176,30 +189,36 @@
 
             <Button
                 android:id="@+id/swap_btn_cancel"
-                style="?android:attr/borderlessButtonStyle"
+                style="?attr/borderlessButtonStyle"
                 android:layout_width="wrap_content"
-                android:layout_height="46dp"
+                android:layout_height="wrap_content"
+                android:insetTop="0dp"
+                android:insetBottom="0dp"
                 android:minWidth="84dp"
+                android:minHeight="48dp"
                 android:paddingHorizontal="14dp"
                 android:text="@string/cancel"
                 android:textAllCaps="false"
                 android:textColor="@color/muted"
                 android:textSize="14sp" />
 
-            <Button
+            <com.google.android.material.button.MaterialButton
                 android:id="@+id/swap_btn_open"
                 android:layout_width="0dp"
-                android:layout_height="46dp"
+                android:layout_height="wrap_content"
                 android:layout_marginStart="8dp"
                 android:layout_weight="1"
-                android:background="@drawable/bg_swap_button"
-                android:backgroundTint="@null"
+                android:insetTop="0dp"
+                android:insetBottom="0dp"
+                android:minHeight="48dp"
                 android:stateListAnimator="@null"
                 android:text="@string/swap_dialog_open"
                 android:textAllCaps="false"
                 android:textColor="#FFFFFF"
                 android:textSize="15sp"
-                android:textStyle="bold" />
+                android:textStyle="bold"
+                app:backgroundTint="@color/accent_solid"
+                app:cornerRadius="12dp" />
         </LinearLayout>
 
         <!-- How XMRadar helps card -->
@@ -229,6 +248,7 @@
                 <TextView
                     android:layout_width="18dp"
                     android:layout_height="wrap_content"
+                    android:importantForAccessibility="no"
                     android:text="•"
                     android:textColor="@color/xmr"
                     android:textSize="14sp"
@@ -268,6 +288,7 @@
                 <TextView
                     android:layout_width="18dp"
                     android:layout_height="wrap_content"
+                    android:importantForAccessibility="no"
                     android:text="•"
                     android:textColor="@color/xmr"
                     android:textSize="14sp"
@@ -307,6 +328,7 @@
                 <TextView
                     android:layout_width="18dp"
                     android:layout_height="wrap_content"
+                    android:importantForAccessibility="no"
                     android:text="•"
                     android:textColor="@color/xmr"
                     android:textSize="14sp"
@@ -346,6 +368,7 @@
                 <TextView
                     android:layout_width="18dp"
                     android:layout_height="wrap_content"
+                    android:importantForAccessibility="no"
                     android:text="•"
                     android:textColor="@color/xmr"
                     android:textSize="14sp"

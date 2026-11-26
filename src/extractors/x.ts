@@ -167,8 +167,8 @@ export const xExtractor: Extractor = {
       .filter((href, i, all) => /^https:\/\/t\.co\/[A-Za-z0-9]{4,16}$/.test(href) && all.indexOf(href) === i && !text.includes(href));
     const withCards = cards.length ? [text.trimEnd(), cards.join('\n')].filter(Boolean).join('\n\n') : text;
     const permalink = ownPermalink(article)?.getAttribute('href');
-    // best effort: X may render the shared-article card through a different link
-    const articleCard = !!article.querySelector('a[href*="/article/"]');
+    // best effort: X may render the shared-article card through a different link (exclude quoted tweet cards)
+    const articleCard = [...article.querySelectorAll('a[href*="/article/"]')].some(own);
     return { site: 'x', text: withCards, images, sourceUrl: absUrl(permalink, doc) ?? doc.location.href, ...(articleCard ? { articleCard } : {}) };
   },
 };

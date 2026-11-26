@@ -49,6 +49,8 @@ describe('assertFetchableImageUrl', () => {
     'http://[::ffff:169.254.169.254]/a.png',
     'http://localhost./a.png',
     'http://[fec0::1]/a.png',
+    'http://intranet/a.png',
+    'http://100.64.0.1/a.png',
   ])('blocks %s', (url) => {
     expect(() => assertFetchableImageUrl(url)).toThrow();
   });

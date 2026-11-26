@@ -33,11 +33,13 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: pnpm
-      - uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00 # v4.7.1
+      - uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6.3.0
         with:
           distribution: temurin
           java-version: '17'
-      - uses: gradle/actions/setup-gradle@af1da67850ed9a4cedd57bfd976089dd991e2582 # v4.3.1
+      - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
+        with:
+          cache-provider: basic
 
       - name: Tag must match package.json
         run: |
@@ -49,7 +51,6 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
       - run: pnpm compile
-      - run: pnpm test
 
       - name: Build
         env:
@@ -57,6 +58,11 @@ jobs:
           WXT_COMMIT: ${{ github.sha }}
           WXT_RELEASE_URL: ${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ github.ref_name }}
         run: scripts/build-release.sh dist
+
+      - name: Test built bundles
+        env:
+          XMRADAR_REQUIRE_BUILD: '1'
+        run: pnpm test
 
       - name: Build signed Android APK
         working-directory: android
@@ -72,13 +78,22 @@ jobs:
             echo "Refusing to cut an unsigned Android release APK: configure XMRADAR_KEYSTORE_* secrets in the release environment or repo settings." >&2
             exit 1
           fi
+          KEYSTORE_FILE="$RUNNER_TEMP/xmradar.jks"
+          trap 'rm -f "$KEYSTORE_FILE"' EXIT
           # Uses output/firefox-mv3 produced by scripts/build-release.sh (with WXT_COMMIT / WXT_RELEASE_URL intact)
           ./gradlew testDebugUnitTest lintVitalRelease --no-daemon
-          echo "$XMRADAR_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/xmradar.jks"
-          export XMRADAR_KEYSTORE_PATH="$RUNNER_TEMP/xmradar.jks"
+          umask 077
+          echo "$XMRADAR_KEYSTORE_BASE64" | base64 -d > "$KEYSTORE_FILE"
+          chmod 600 "$KEYSTORE_FILE"
+          export XMRADAR_KEYSTORE_PATH="$KEYSTORE_FILE"
           ./gradlew assembleRelease --no-daemon
           VERSION=$(node -p "require('../package.json').version")
-          APK=$(ls app/build/outputs/apk/release/*.apk | head -n 1)
+          APK="app/build/outputs/apk/release/app-release.apk"
+          [ -f "$APK" ] || { echo "Expected signed release APK at $APK" >&2; exit 1; }
+          APKSIGNER=$(ls -1 "${ANDROID_HOME:-$ANDROID_SDK_ROOT}"/build-tools/*/apksigner 2>/dev/null | sort -V | tail -n 1 || true)
+          if [ -n "$APKSIGNER" ]; then
+            "$APKSIGNER" verify --verbose "$APK"
+          fi
           OUT="../dist/xmradar-${VERSION}-arm64-v8a.apk"
           cp "$APK" "$OUT"
           (cd ../dist && sha256sum "xmradar-${VERSION}-arm64-v8a.apk" >> SHA256SUMS)

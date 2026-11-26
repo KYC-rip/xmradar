@@ -9,6 +9,7 @@
   const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
   let i = 0;
   let hovered = false;
+  let focused = false;
   let stopped = reduced;
   const show = (k, focus = false) => {
     i = k;
@@ -51,8 +52,10 @@
   }
   hero.addEventListener('mouseenter', () => (hovered = true));
   hero.addEventListener('mouseleave', () => (hovered = false));
-  hero.addEventListener('focusin', () => (hovered = true));
-  hero.addEventListener('focusout', () => (hovered = false));
+  hero.addEventListener('focusin', () => (focused = true));
+  hero.addEventListener('focusout', (e) => {
+    if (!hero.contains(e.relatedTarget)) focused = false;
+  });
   show(0);
-  setInterval(() => !stopped && !hovered && !document.hidden && show((i + 1) % slides.length), 6000);
+  setInterval(() => !stopped && !hovered && !focused && !document.hidden && show((i + 1) % slides.length), 6000);
 })();

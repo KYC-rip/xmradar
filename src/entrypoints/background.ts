@@ -44,6 +44,7 @@ import { xapTtl } from '../xap/ttl';
 import type { RecordLinks, SiteInfo, XapPostTotalsResult, XapTotals, XapTotalsResult } from '../messaging';
 import { trackCreate } from '../burner/tracked';
 import { checkPageReceipt, savedSignatureLine, type CheckDeps } from '../receipts/check';
+import { safeRelay } from '../receipts/guards';
 import { letterOrderLink, receiptOrderLink } from '../receipts/order-link';
 import { lookalikeIndex, lookalikeOf, type LookalikeIndex } from '../sites/lookalike';
 import { badgeFor, FEED_READER_V, FEED_URL, leadSite, publicSite, readFeed, sitesFor, worstGrade, type SiteFeed, type TabState } from '../sites/feed';
@@ -82,6 +83,7 @@ import { cappedText, siwmService, type SiwmStore } from '../siwm/service';
 
 const MENU_ID = 'xmradar';
 const TIP_MENU_ID = 'xmradar-tip';
+const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
 const X_PATTERNS = ['https://x.com/*', 'https://twitter.com/*', 'https://mobile.x.com/*', 'https://mobile.twitter.com/*'];
 const SESSION_TTL_MS = 15 * 60_000;
 const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
@@ -266,15 +268,30 @@ const xapInbox = inboxKeeper({
 });
 
 // xo (PLAN-MONEROLIKE): a key's read relays (NIP-65), where its owner looks for xos; an hour in memory
+const READ_RELAY_CACHE_MAX = 500;
+const READ_RELAY_TTL_MS = 3600_000;
 const readRelayCache = new Map<string, { relays: string[]; at: number }>();
 async function nip65ReadRelays(pubkey: string): Promise<string[]> {
+  const now = Date.now();
   const hit = readRelayCache.get(pubkey);
-  if (hit && Date.now() - hit.at < 3600_000) return hit.relays;
+  if (hit && now - hit.at < READ_RELAY_TTL_MS) return hit.relays;
   const lists = await xapPoolQuery(await xapDeps.lookupRelays(), { kinds: [10002], authors: [pubkey] }).catch(() => []);
   // only a list the key really signed
   const newest = lists.filter((e) => e.pubkey === pubkey && e.kind === 10002 && validEvent(e)).sort((a, b) => b.created_at - a.created_at)[0] ?? null;
-  const relays = readRelaysFrom(newest).slice(0, 4);
-  readRelayCache.set(pubkey, { relays, at: Date.now() });
+  const relays = readRelaysFrom(newest).filter(safeRelay).slice(0, 4);
+  const at = Date.now();
+  readRelayCache.delete(pubkey);
+  if (readRelayCache.size >= READ_RELAY_CACHE_MAX) {
+    for (const [k, v] of readRelayCache) {
+      if (at - v.at >= READ_RELAY_TTL_MS) readRelayCache.delete(k);
+    }
+    while (readRelayCache.size >= READ_RELAY_CACHE_MAX) {
+      const oldest = readRelayCache.keys().next().value;
+      if (oldest === undefined) break;
+      readRelayCache.delete(oldest);
+    }
+  }
+  readRelayCache.set(pubkey, { relays, at });
   return relays;
 }
 /** Where an xo goes: the sender's post relays, the author's read relays and the defaults (the shared floor). */
@@ -398,7 +415,7 @@ export default defineBackground(() => {
     void xoInbox.apply();
     // another key now signs (switching between the signer and the XMRadar identity, PLAN-MANAGEDID): what
     // the old key sent can't be taken back by this one, and the handle must be proven again for it
-    if (old && pk && old !== pk) void rebindToKey();
+    if (!suppressRebind && old && pk && old !== pk) void rebindToKey();
   });
   myHandleItem.watch((m, old) => {
     if ((m?.proven ? m.handle : null) !== (old?.proven ? old.handle : null)) void xoInbox.apply();
@@ -464,7 +481,7 @@ export default defineBackground(() => {
   // a tab that moves to another page starts with no receipt or site state (the browser resets its badge)
   // the lookalike half of the badge comes from the address itself, so a copy that never loads still shows it
   browser.tabs.onUpdated.addListener((tabId, change) => {
-    if (change.url) void dropTabState(tabId).then(() => addressBadge(tabId, change.url!)).then(() => guardAfterLoad(tabId, change.url!));
+    if (change.url) void onTabUrlChange(tabId, change.url);
   });
   if (browser.contextMenus) {
     browser.runtime.onInstalled.addListener(async () => {
@@ -511,7 +528,14 @@ export default defineBackground(() => {
     receiptChecks.delete(tabId);
     void siwm.tabClosed(tabId).catch(() => {});
     void dropTabState(tabId);
-    void shareMenuLast.getValue().then((last) => (tabId in last ? shareMenuLast.setValue(withoutTab(last, tabId)) : undefined));
+    void shareMenuLast
+      .getValue()
+      .then((last) => (tabId in last ? shareMenuLast.setValue(withoutTab(last, tabId)) : undefined))
+      .catch(() => {});
+    void xoLastItem
+      .getValue()
+      .then((last) => (tabId in last ? xoLastItem.setValue(withoutTab(last, tabId)) : undefined))
+      .catch(() => {});
   });
 
   // drop an inbox that expired while the worker was asleep
@@ -813,7 +837,16 @@ async function handle(msg: BgRequest, sender: Browser.runtime.MessageSender): Pr
         throw new Error('Composer signing key does not match connected session');
       }
       const t = msg.template;
-      if (!t || !COMPOSER_KINDS.has(t.kind) || typeof t.content !== 'string' || !Array.isArray(t.tags) || typeof t.created_at !== 'number') {
+      if (
+        !t ||
+        !COMPOSER_KINDS.has(t.kind) ||
+        typeof t.content !== 'string' ||
+        !Array.isArray(t.tags) ||
+        !t.tags.every((row) => Array.isArray(row) && row.every((s) => typeof s === 'string')) ||
+        typeof t.created_at !== 'number' ||
+        !Number.isSafeInteger(t.created_at) ||
+        t.created_at < 0
+      ) {
         throw new Error('Event rejected by composer signer');
       }
       const clean: EventTemplate = { kind: t.kind, content: t.content, tags: t.tags, created_at: t.created_at };
@@ -846,11 +879,18 @@ async function handle(msg: BgRequest, sender: Browser.runtime.MessageSender): Pr
       if (!siwmHelperOn(await settingsItem.getValue())) return null;
       let host: string;
       try {
-        host = new URL(sender.url ?? '').host;
+        const u = new URL(sender.url ?? '');
+        const allowedProto = u.protocol === 'https:' || (u.protocol === 'http:' && LOOPBACK_HOSTS.has(u.hostname.toLowerCase()));
+        if (!allowedProto || !u.host) throw new Error('Not allowed');
+        if (sender.frameId !== 0) {
+          const top = new URL(sender.tab.url ?? '');
+          const topAllowed = top.protocol === 'https:' || (top.protocol === 'http:' && LOOPBACK_HOSTS.has(top.hostname.toLowerCase()));
+          if (!topAllowed || top.host !== u.host) throw new Error('Not allowed');
+        }
+        host = u.host;
       } catch {
         throw new Error('Not allowed');
       }
-      if (!host) throw new Error('Not allowed');
       return siwm.open(msg.uri, host);
     }
     case 'siwm-get': {
@@ -926,9 +966,10 @@ async function handle(msg: BgRequest, sender: Browser.runtime.MessageSender): Pr
         // Never echo raw secret material in errors or logs.
         throw new Error('Enter a valid Nostr private key (nsec1… or 64-character hex).');
       }
+      suppressRebind = true;
       try {
-        await pubkeyItem.setValue(imported.pubkey);
         await signerModeItem.setValue('managed');
+        await pubkeyItem.setValue(imported.pubkey);
         const keyChanged =
           (prevActivePubkey != null && prevActivePubkey !== imported.pubkey) ||
           (prevManagedPubkey != null && prevManagedPubkey !== imported.pubkey);
@@ -938,9 +979,11 @@ async function handle(msg: BgRequest, sender: Browser.runtime.MessageSender): Pr
         await nativeClearSigner(browser.runtime as unknown as NativeRuntimeLike);
       } catch {
         await imported.rollback().catch(() => {});
-        await pubkeyItem.setValue(prevActivePubkey).catch(() => {});
         await signerModeItem.setValue(prevMode).catch(() => {});
+        await pubkeyItem.setValue(prevActivePubkey).catch(() => {});
         throw new Error('Could not save the imported key; nothing was changed.');
+      } finally {
+        suppressRebind = false;
       }
       return { pubkey: imported.pubkey, unchanged: imported.unchanged };
     }
@@ -1078,11 +1121,13 @@ async function handle(msg: BgRequest, sender: Browser.runtime.MessageSender): Pr
       if (!pubkey) return { complete: false };
       const known = await setupDoneItem.getValue();
       if (known?.pubkey === pubkey) return { complete: known.done };
-      // not checked for this key yet: a proven handle is worth one status check, anything less isn't done
+      // not checked for this key yet: a proven handle is worth one passive relay check; never signs or POSTs to xmr.bio
       if (!(await myHandleItem.getValue())?.proven) return { complete: false };
       try {
-        await setupStatus();
-        return { complete: !!(await setupDoneItem.getValue())?.done };
+        const status = await readSetupStatus(false);
+        const complete = !!status.address?.check.ok && status.link?.proof.status === 'verified';
+        await setupDoneItem.setValue({ pubkey: status.pubkey, done: complete }).catch(() => {});
+        return { complete };
       } catch {
         return { complete: false };
       }
@@ -1359,16 +1404,21 @@ const tabStates = new Map<number, TabState>();
 const siteInfoByTab = new Map<number, SiteInfo>();
 // the per-tab state outlives a suspended service worker: kept in session storage, loaded before use
 const tabStateItem = storage.defineItem<[number, TabState, SiteInfo | null][]>('session:tabSiteState', { fallback: [] });
-const tabStateReady = tabStateItem.getValue().then((rows) => {
-  for (const [id, state, info] of Array.isArray(rows) ? rows : []) {
-    if (!tabStates.has(id)) tabStates.set(id, state);
-    if (info && !siteInfoByTab.has(id)) siteInfoByTab.set(id, info);
-  }
-});
+const tabStateReady = tabStateItem
+  .getValue()
+  .then((rows) => {
+    for (const [id, state, info] of Array.isArray(rows) ? rows : []) {
+      if (!tabStates.has(id)) tabStates.set(id, state);
+      if (info && !siteInfoByTab.has(id)) siteInfoByTab.set(id, info);
+    }
+  })
+  .catch(() => {});
 let tabStateWrite: ReturnType<typeof setTimeout> | undefined;
 function persistTabState() {
   clearTimeout(tabStateWrite);
-  tabStateWrite = setTimeout(() => void tabStateItem.setValue([...tabStates].map(([id, s]) => [id, s, siteInfoByTab.get(id) ?? null])), 200);
+  tabStateWrite = setTimeout(() => {
+    void tabStateItem.setValue([...tabStates].map(([id, s]) => [id, s, siteInfoByTab.get(id) ?? null])).catch(() => {});
+  }, 200);
 }
 /** Forget a tab's receipt and site state and clear its badge (navigation, close). */
 async function dropTabState(tabId: number) {
@@ -1434,38 +1484,43 @@ function isGuardPage(sender: Browser.runtime.MessageSender): boolean {
     return false;
   }
 }
-/** A copy no rule could list (look-alike letters, a listed copy) is replaced by the guard page once it starts loading. */
-async function guardAfterLoad(tabId: number, url: string) {
-  const [on, feed] = await guardInputs();
-  await guard
-    .afterLoad(url, on, feed, async (to) => {
-      // still on exactly that address: a tab that moved on keeps its new page
-      const tab = await browser.tabs.get(tabId).catch(() => null);
-      if (tab?.url !== new URL(url).href) return;
-      await browser.tabs.update(tabId, { url: to }).catch(() => {});
-    })
-    .catch(() => {});
-}
-/** The lookalike badge for a tab's new address, before (or without) its page loading. */
-async function addressBadge(tabId: number, url: string) {
-  let host: string;
+/** Clears stale per-tab state, then checks lookalike badge and post-load guard using one settings/feed read. */
+async function onTabUrlChange(tabId: number, url: string) {
+  await dropTabState(tabId);
+  let parsed: URL;
   try {
-    const u = new URL(url);
-    if (u.protocol !== 'http:' && u.protocol !== 'https:') return;
-    host = u.hostname;
+    parsed = new URL(url);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return;
   } catch {
     return;
   }
-  if (!siteInfoOn(await xmrSettingsItem.getValue())) return;
+  const settings = await xmrSettingsItem.getValue();
+  const infoOn = siteInfoOn(settings);
+  const warningsOn = siteWarningsOn(settings);
+  if (!infoOn && !warningsOn) return;
   const feed = await siteFeedItem.getValue();
-  const lookalike = feed && lookalikeOf(lookalikesFor(feed), host);
+  if (!feed) return;
+  const index = lookalikesFor(feed);
+  const lookalike = lookalikeOf(index, parsed.hostname);
   if (!lookalike) return;
-  await tabStateReady;
-  const state = tabStates.get(tabId) ?? {};
-  state.lookalike = lookalike.kind;
-  tabStates.set(tabId, state);
-  persistTabState();
-  await applyBadge(tabId);
+  if (infoOn) {
+    await tabStateReady;
+    const state = tabStates.get(tabId) ?? {};
+    state.lookalike = lookalike.kind;
+    tabStates.set(tabId, state);
+    persistTabState();
+    await applyBadge(tabId);
+  }
+  if (warningsOn) {
+    await guard
+      .afterLoad(parsed.href, true, { index, issuedAt: feed.issuedAt }, async (to) => {
+        // still on exactly that address: a tab that moved on keeps its new page
+        const tab = await browser.tabs.get(tabId).catch(() => null);
+        if (tab?.url !== parsed.href) return;
+        await browser.tabs.update(tabId, { url: to }).catch(() => {});
+      })
+      .catch(() => {});
+  }
 }
 
 // bumped when the setting goes off, so a download that finishes later is dropped
@@ -1571,18 +1626,25 @@ const receiptDeps: CheckDeps = {
 };
 
 function loadCaches() {
-  caches ??= Promise.all([badgeCacheItem.getValue(), proofCacheItem.getValue()]).then(([b, p]) => ({
-    badges: new EntryCache(b),
-    proofs: new EntryCache(p),
-  }));
+  caches ??= Promise.all([badgeCacheItem.getValue(), proofCacheItem.getValue()])
+    .then(([b, p]) => ({
+      badges: new EntryCache(b),
+      proofs: new EntryCache(p),
+    }))
+    .catch((e) => {
+      caches = null;
+      throw e;
+    });
   return caches;
 }
 
 function persistCaches() {
   clearTimeout(persistTimer);
   persistTimer = setTimeout(async () => {
-    const { badges, proofs } = await loadCaches();
-    await Promise.all([badgeCacheItem.setValue(badges.entries()), proofCacheItem.setValue(proofs.entries())]);
+    try {
+      const { badges, proofs } = await loadCaches();
+      await Promise.all([badgeCacheItem.setValue(badges.entries()), proofCacheItem.setValue(proofs.entries())]);
+    } catch {}
   }, 1000);
 }
 
@@ -1662,13 +1724,23 @@ const claims = claimKeeper({
 });
 
 function loadXapCache() {
-  xapCache ??= xapCacheItem.getValue().then((e) => new EntryCache(e, 1000));
+  xapCache ??= xapCacheItem
+    .getValue()
+    .then((e) => new EntryCache(e, 1000))
+    .catch((e) => {
+      xapCache = null;
+      throw e;
+    });
   return xapCache;
 }
 
 function persistXapCache() {
   clearTimeout(xapPersistTimer);
-  xapPersistTimer = setTimeout(async () => xapCacheItem.setValue((await loadXapCache()).entries()), 1000);
+  xapPersistTimer = setTimeout(async () => {
+    try {
+      await xapCacheItem.setValue((await loadXapCache()).entries());
+    } catch {}
+  }, 1000);
 }
 
 /**
@@ -1746,6 +1818,8 @@ async function xapPostTotals(posts: unknown, fresh: boolean, tabId: number): Pro
 
 // ---- which key signs (PLAN-MANAGEDID) ----
 
+let suppressRebind = false;
+
 /** Key-bound state goes when the signing key changes; the inboxes already restart per key. */
 async function rebindToKey() {
   await Promise.all([
@@ -1814,19 +1888,30 @@ async function withSignerTab<T>(run: (tabId: number) => Promise<T>, active = tru
   const tabId = tab.id!;
   try {
     await new Promise<void>((resolve, reject) => {
+      let settled = false;
       const done = (err?: Error) => {
+        if (settled) return;
+        settled = true;
         clearTimeout(timer);
-        browser.tabs.onUpdated.removeListener(listener);
+        browser.tabs.onUpdated.removeListener(onUpdated);
+        browser.tabs.onRemoved.removeListener(onRemoved);
         if (err) reject(err);
         else resolve();
       };
       const timer = setTimeout(() => done(new Error('Signer page did not load (xmradar.app)')), 15_000);
-      const listener = (id: number, info: Browser.tabs.OnUpdatedInfo) => {
+      const onUpdated = (id: number, info: Browser.tabs.OnUpdatedInfo) => {
         if (id === tabId && info.status === 'complete') done();
       };
-      browser.tabs.onUpdated.addListener(listener);
+      const onRemoved = (id: number) => {
+        if (id === tabId) done(new Error('The signer tab was closed'));
+      };
+      browser.tabs.onUpdated.addListener(onUpdated);
+      browser.tabs.onRemoved.addListener(onRemoved);
       // the page may have finished loading before the listener was attached
-      void browser.tabs.get(tabId).then((t) => t.status === 'complete' && done(), () => {});
+      void browser.tabs.get(tabId).then(
+        (t) => t.status === 'complete' && done(),
+        () => done(new Error('The signer tab was closed')),
+      );
     });
     // the tab is visible, so make sure it's still the page we opened before running anything in it
     const now = await browser.tabs.get(tabId);
@@ -1985,7 +2070,7 @@ async function requirePubkey(): Promise<string> {
 async function setupRelays(pubkey: string): Promise<string[]> {
   const { relays } = await settingsItem.getValue();
   const lists = await readEach([...new Set([...DEFAULT_RELAYS, ...INDEX_RELAYS, ...relays])], { kinds: [10002], authors: [pubkey] }, 4000);
-  const nip65 = allRelaysFrom(newestOwn(lists.events, 10002, pubkey));
+  const nip65 = allRelaysFrom(newestOwn(lists.events, 10002, pubkey)).filter(safeRelay).slice(0, 10);
   return [...new Set([...nip65, ...relays, ...DEFAULT_RELAYS, ...INDEX_RELAYS])];
 }
 
@@ -2073,7 +2158,7 @@ async function listOnce(status: SetupStatus, handle: string, explicit: boolean):
   return outcome;
 }
 
-async function readSetupStatus(): Promise<SetupStatus> {
+async function readSetupStatus(checkXmrbio = true): Promise<SetupStatus> {
   const pubkey = await requirePubkey();
   const relays = await setupRelays(pubkey);
   const read = await readEach(relays, { kinds: [KIND_PAYTO, KIND_IDENTITIES], authors: [pubkey] });
@@ -2097,7 +2182,7 @@ async function readSetupStatus(): Promise<SetupStatus> {
       }
     }
   }
-  const xmrbio = mine ? xmrbioStatus(mine.handle, pubkey) : Promise.resolve(null);
+  const xmrbio = checkXmrbio && mine ? xmrbioStatus(mine.handle, pubkey) : Promise.resolve(null);
   // a deleted or broken proof un-proves the handle; a transient X error doesn't
   if (mine) {
     const proven = link?.proof.status === 'verified' ? true : link?.proof.status === 'error' ? mine.proven : false;

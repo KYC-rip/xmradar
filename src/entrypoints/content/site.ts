@@ -29,7 +29,14 @@ const CSS = `
 .bar.caution .msg b { color: #b26a00; }
 a { color: #7b3fe4; white-space: nowrap; }
 button { font: inherit; border: 0; background: transparent; font-size: 16px; line-height: 1; padding: 0 4px; cursor: pointer; color: #6b6880; }
-@media (prefers-color-scheme: dark) { .bar { color: #ececf1; background: #1f1e26; } a { color: #a98bf0; } button { color: #a9a6b8; } }`;
+@media (prefers-color-scheme: dark) {
+  .bar { color: #ececf1; background: #1f1e26; border-color: #ff8a80; }
+  .msg b { color: #ff8a80; }
+  .bar.caution { border-color: #f0b44c; }
+  .bar.caution .msg b { color: #f0b44c; }
+  a { color: #b794f6; }
+  button { color: #a9a6b8; }
+}`;
 
 /** The banner's wording: the worst listing, and how many more the menu has. */
 export function bannerText(sites: SiteEntry[]): { lead: string; rest: string; site: SiteEntry } {

@@ -332,18 +332,25 @@ export function inboxKeeper(deps: InboxDeps) {
 
   /** The switch or the key changed (or the worker started). */
   async function apply() {
-    generation++;
+    const gen = ++generation;
     inFlight = null;
     const [on, pubkey] = await Promise.all([deps.enabled(), deps.pubkey()]);
+    if (gen !== generation) return;
     if (!on || !pubkey) {
       await Promise.all([deps.alarms.clear(INBOX_ALARM), deps.held.removeValue(), deps.clearNotice()]);
       return;
     }
     const held = await deps.held.getValue();
+    if (gen !== generation) return;
     // another key: its Xaps are someone else's, and its baseline starts over
     if (held && held.pubkey !== pubkey) await Promise.all([deps.held.setValue(freshInbox(pubkey)), deps.clearNotice()]);
+    if (gen !== generation) return;
     // made again only when missing or at another period, since making it restarts its countdown
-    if ((await deps.alarms.get(INBOX_ALARM))?.periodInMinutes !== INBOX_MINUTES) await deps.alarms.create(INBOX_ALARM, { periodInMinutes: INBOX_MINUTES });
+    if ((await deps.alarms.get(INBOX_ALARM))?.periodInMinutes !== INBOX_MINUTES) {
+      if (gen !== generation) return;
+      await deps.alarms.create(INBOX_ALARM, { periodInMinutes: INBOX_MINUTES });
+    }
+    if (gen !== generation) return;
     const last = held?.pubkey === pubkey ? held.checkedAt : null;
     if (last === null || now() - last >= INBOX_MINUTES * 60_000) await check();
   }

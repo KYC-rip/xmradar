@@ -183,4 +183,6 @@ button.chip { padding: 3px 10px; border-radius: 999px; font-size: 13px; }
   .error { color: #ff8a80; }
   .ok { color: #7ddc99; }
   button.primary { background: #8f5cf0; border-color: #8f5cf0; }
+  a, button.link { color: #b794f6; }
+  .tag-auto { border-color: #45434f; }
 }

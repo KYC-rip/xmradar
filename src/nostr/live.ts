@@ -37,10 +37,11 @@ export const RECONNECT_MAX_MS = 60_000;
 /** Does this event match the filter: its kind, `since`, and each `#x` tag filter. */
 export function matches(e: Event, f: LiveFilter): boolean {
   if (!f.kinds.includes(e.kind) || e.created_at < f.since) return false;
+  if (!Array.isArray(e.tags)) return false;
   for (const [k, want] of Object.entries(f) as [string, unknown][]) {
     if (!k.startsWith('#') || !Array.isArray(want)) continue;
     const name = k.slice(1);
-    if (!e.tags.some((t) => t[0] === name && want.includes(String(t[1])))) return false;
+    if (!e.tags.some((t) => Array.isArray(t) && t[0] === name && want.includes(String(t[1])))) return false;
   }
   return true;
 }
@@ -210,23 +211,33 @@ export function liveController(deps: ControllerDeps, triggers: { xo: () => void;
   const cancel = deps.clearInterval ?? ((t) => clearInterval(t as ReturnType<typeof setInterval>));
   let live: { key: string; sub: { stop(): void }; timer: unknown } | null = null;
   let seen = 0;
+  let gen = 0;
   let queue: Promise<void> = Promise.resolve();
-  function stop() {
+  function teardown() {
     if (!live) return;
     cancel(live.timer);
     live.sub.stop();
     live = null;
   }
+  function stop() {
+    gen++;
+    teardown();
+  }
   function heartbeat(): Promise<void> {
     seen = now();
+    const myGen = gen;
     queue = queue
       .then(async () => {
+        if (myGen !== gen) return;
         const pk = await deps.pubkey();
-        if (!(await deps.on()) || !pk) return stop();
+        if (myGen !== gen) return;
+        if (!(await deps.on()) || !pk) return teardown();
+        if (myGen !== gen) return;
         const handle = await deps.handle();
+        if (myGen !== gen) return;
         const key = `${pk}:${handle ?? ''}`;
         if (live?.key === key) return;
-        stop();
+        teardown();
         const since = Math.floor(now() / 1000) - 60;
         const filters: LiveFilter[] = [
           { kinds: [deps.kinds.xo], '#p': [pk], since },
@@ -234,6 +245,7 @@ export function liveController(deps: ControllerDeps, triggers: { xo: () => void;
           { kinds: [deps.kinds.xap], '#p': [pk], since },
         ];
         const relays = await deps.relays(pk);
+        if (myGen !== gen) return;
         // no relay to hold: nothing opens, and the next heartbeat tries again
         if (!relays.length) return;
         const sub = deps.subscribe(relays, filters);
@@ -242,6 +254,7 @@ export function liveController(deps: ControllerDeps, triggers: { xo: () => void;
         }, 30_000);
         live = { key, sub, timer };
         const at = await deps.checkedAt();
+        if (myGen !== gen) return;
         const stale = (t: number | null) => t == null || now() - t > LIVE_CATCH_UP_MS;
         if (stale(at.xo)) triggers.xo();
         if (stale(at.xap)) triggers.xap();

@@ -101,6 +101,7 @@ export const BADGE_CSS = `
 button.badge:hover { background: #d9571a; }
 button.round.color:hover { background: transparent; filter: brightness(0.92); }
 button.badge:focus-visible { outline: 2px solid #4c2a85; outline-offset: 1px; }
+@media (prefers-color-scheme: dark) { button.badge:focus-visible { outline-color: #a77bf5; } }
 .preview { cursor: inherit; margin-left: 0; }
 `;
 

@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest';
 import { directoryIndex, readDirectory } from '../src/identity/directory';
 import { mergeBadge, xoCountOf } from '../src/identity/resolve';
 import { buildBadge, badgeLook } from '../src/identity/badge-look';
-import { postAvatar, profileAvatar, RING_ATTR, ringHost, setRing } from '../src/entrypoints/content/x-xo-ring';
+import { clearForeignRing, postAvatar, profileAvatar, removeRingsFor, RING_ATTR, ringHost, setRing } from '../src/entrypoints/content/x-xo-ring';
 import { validateMoneroAddress } from '../src/xmr/address';
 import { xoOf } from '../src/xo/event';
 import { xoRingsOn } from '../src/settings';
@@ -171,5 +171,17 @@ describe('the ring', () => {
       <div data-testid="UserAvatar-Container-XBToshi" id="outside"></div>`;
     expect(profileAvatar(document, 'xbtoshi')?.id).toBe('big');
     expect(profileAvatar(document, 'bob')).toBeNull();
+  });
+  it('clears a stale ring from a recycled avatar for a different slot key, and drops rings by handle', () => {
+    const { av } = post();
+    setRing(av, '123:alice', 4);
+    expect(document.querySelectorAll(`[${RING_ATTR}]`)).toHaveLength(1);
+    clearForeignRing(av, '123:alice');
+    expect(document.querySelectorAll(`[${RING_ATTR}]`)).toHaveLength(1);
+    clearForeignRing(av, '456:bob');
+    expect(document.querySelectorAll(`[${RING_ATTR}]`)).toHaveLength(0);
+    setRing(av, '789:Alice', 2);
+    removeRingsFor('alice');
+    expect(document.querySelectorAll(`[${RING_ATTR}]`)).toHaveLength(0);
   });
 });

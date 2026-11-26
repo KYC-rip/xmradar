@@ -1,12 +1,13 @@
 /* Fixed 340 × 560 on desktop popup; fluid full-viewport on mobile / GeckoView tabs. */
 html, body { width: 340px; height: 560px; overflow: hidden; }
-@media (max-width: 480px), (pointer: coarse) {
+@media (pointer: coarse) {
   html, body { width: 100%; height: 100dvh; max-width: 100vw; }
 }
 body { display: grid; grid-template-rows: auto 1fr auto; box-sizing: border-box; }
 header { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 14px 14px 10px; }
 main { overflow-y: auto; padding: 2px 14px 12px; }
 footer { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 16px 14px; }
+footer > .hint { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 [role='tabpanel'] { display: flex; flex-direction: column; gap: 10px; }
 [role='tabpanel'][hidden] { display: none; }
 .pad { padding: 12px 14px; display: flex; flex-direction: column; gap: 4px; }
@@ -17,7 +18,7 @@ footer { display: flex; align-items: center; justify-content: space-between; gap
 .burner-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
 .burner-head .mono { font-size: 13px; }
 #burner .row { margin-bottom: 4px; }
-#signed-in { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#signed-in { min-width: 0; flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 #this-site { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
 #this-site.hidden { display: none; }

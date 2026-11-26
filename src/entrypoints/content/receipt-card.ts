@@ -48,7 +48,7 @@ const CSS = `
 .box.chip { border-radius: 999px; overflow: hidden; }
 .box.warn { border-color: #d93025; }
 .box.dragging { transition: none; cursor: grabbing; user-select: none; }
-.head { display: flex; gap: 8px; align-items: center; padding: 8px 10px 8px 12px; cursor: grab; }
+.head { display: flex; gap: 8px; align-items: center; padding: 8px 10px 8px 12px; cursor: grab; touch-action: none; }
 .chip .head { padding: 4px 6px 4px 8px; }
 .icon { width: 18px; height: 18px; flex: none; }
 .title { font-weight: 600; }
@@ -72,6 +72,11 @@ dd button { font: 11px system-ui, sans-serif; border: 1px solid #d9d6e3; backgro
 .sep { border-top: 1px solid #eee; margin: 8px 0; }
 @media (prefers-color-scheme: dark) {
   .box { color: #ececf1; background: #1f1e26; border-color: #45434f; }
+  .box.warn { border-color: #ff8a80; }
+  .title.warn, li.warn .m { color: #ff8a80; }
+  .title.caution, li.caution .m { color: #f0b44c; }
+  .title.ok, li.ok .m { color: #7ddc99; }
+  li.off .m { color: #a9a6b8; }
   .head button, dd button, .row button { border-color: #45434f; } summary { color: #a9a6b8; }
   dt, .note, .head .x { color: #a9a6b8; } .sep { border-color: #333; }
 }
@@ -215,8 +220,10 @@ export function mountReceiptCard(doc: Document, opts: { toastMs?: number } = {})
 
   // dragging by the head, anywhere in the window; a drag isn't also a click
   let dragged = false;
+  let cancelDrag: (() => void) | null = null;
   box.addEventListener('pointerdown', (e) => {
     if (e.button !== 0 || !(e.target instanceof Element) || !e.target.closest('.head')) return;
+    cancelDrag?.();
     const start = box.getBoundingClientRect();
     const [dx, dy] = [e.clientX - start.left, e.clientY - start.top];
     dragged = false;
@@ -233,9 +240,13 @@ export function mountReceiptCard(doc: Document, opts: { toastMs?: number } = {})
       box.classList.remove('dragging');
       doc.removeEventListener('pointermove', move);
       doc.removeEventListener('pointerup', up);
+      doc.removeEventListener('pointercancel', up);
+      if (cancelDrag === up) cancelDrag = null;
     };
+    cancelDrag = up;
     doc.addEventListener('pointermove', move);
     doc.addEventListener('pointerup', up);
+    doc.addEventListener('pointercancel', up);
   });
   const onClick = (fn: () => void) => () => {
     if (dragged) return void (dragged = false);
@@ -312,6 +323,7 @@ export function mountReceiptCard(doc: Document, opts: { toastMs?: number } = {})
   return {
     render,
     remove: () => {
+      cancelDrag?.();
       clearTimeout(shrink);
       host.remove();
     },

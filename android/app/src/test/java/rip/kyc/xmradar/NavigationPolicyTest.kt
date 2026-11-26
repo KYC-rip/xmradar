@@ -116,7 +116,21 @@ class NavigationPolicyTest {
         )
         assertEquals(
             Decision.AllowInApp,
+            NavigationPolicy.evaluate("${ownBase}guard.html", Compartment.SWAP, ownBase, hasUserGesture = false)
+        )
+        assertEquals(
+            Decision.AllowInApp,
             NavigationPolicy.evaluate("${ownBase}guard.html#abc", Compartment.SWAP, ownBase, hasUserGesture = false)
+        )
+        assertEquals(
+            Decision.AllowInApp,
+            NavigationPolicy.evaluate("${ownBase}guard.html?x=1", Compartment.SWAP, ownBase, hasUserGesture = false)
+        )
+        assertTrue(
+            NavigationPolicy.evaluate("${ownBase}guard.html.evil", Compartment.SWAP, ownBase, hasUserGesture = true) is Decision.Deny
+        )
+        assertTrue(
+            NavigationPolicy.evaluate("${ownBase}guard.html/extra", Compartment.SWAP, ownBase, hasUserGesture = true) is Decision.Deny
         )
         assertTrue(
             NavigationPolicy.evaluate("${ownBase}options.html", Compartment.X, ownBase, hasUserGesture = true) is Decision.Deny

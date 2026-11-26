@@ -482,4 +482,29 @@ describe('guard keeper with typo rules', () => {
     const now = f.dynamic.find((r) => r.id === TYPO_RULE_FIRST)! as typeof first;
     expect(now.action.redirect.regexSubstitution).toContain(`#t=${f.tokens.v!.current}&`);
   });
+  it('afterLoad skips DNR IPC completely for normal non-lookalike URLs', async () => {
+    const f = fakes();
+    let dnrReads = 0;
+    const dnr = {
+      getDynamicRules: async () => {
+        dnrReads++;
+        return f.dynamic;
+      },
+      updateDynamicRules: async () => {},
+      getSessionRules: async () => f.session,
+      updateSessionRules: async () => {},
+    };
+    const k = guardKeeper({
+      dnr,
+      guardUrl: () => 'chrome-extension://abc/guard.html',
+      tokens: f.tokens,
+      continued: f.continued,
+      continuedListed: f.continuedListed,
+      dismissed: f.dismissed,
+      now: () => f.clock.now,
+      randomHex: () => 'c'.repeat(32),
+    });
+    expect(await k.afterLoad('https://github.com/KYC-rip/xmradar', true, FEED, async () => {})).toBeNull();
+    expect(dnrReads).toBe(0);
+  });
 });

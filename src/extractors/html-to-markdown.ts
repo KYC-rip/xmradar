@@ -131,7 +131,8 @@ export function htmlToMarkdown(root: Element, opts: ToMarkdownOptions): Markdown
     }
     if (el.tagName === 'A' && !ctx.link) {
       const img = el.querySelector('img');
-      if (img) return image(img);
+      const isContentImg = (i: Element) => /pbs\.twimg\.com\/media\//.test(i.getAttribute('src') ?? '') || !i.getAttribute('alt');
+      if (img && isContentImg(img) && !plain(el)) return image(img);
       const href = safeUrl(el.getAttribute('href'), opts.baseUrl);
       const inner = children(el, { ...ctx, link: true });
       if (!href) return inner;

@@ -94,11 +94,11 @@ export default defineContentScript({
 
     let lastContextTarget: Element | null = null;
     let lastHover: Element | null = null;
-    document.addEventListener('contextmenu', (e) => (lastContextTarget = e.target as Element), true);
+    ctx.addEventListener(document, 'contextmenu', (e) => (lastContextTarget = e.target as Element), true);
     // a plain assignment is cheap enough not to need throttling
-    document.addEventListener('pointerover', (e) => (lastHover = e.target as Element), { capture: true, passive: true });
+    ctx.addEventListener(document, 'pointerover', (e) => (lastHover = e.target as Element), { capture: true, passive: true });
 
-    browser.runtime.onMessage.addListener((msg: OpenComposerMsg | OpenTipMsg) => {
+    const onMessage = (msg: OpenComposerMsg | OpenTipMsg) => {
       if (msg?.type === 'open-tip') {
         void openTip(ctx, handleFromTarget(lastContextTarget, location));
         return;
@@ -118,6 +118,12 @@ export default defineContentScript({
         target = anchor instanceof Element ? anchor : (anchor?.parentElement ?? target);
       }
       void openComposer(ctx, { ...msg, selection }, target);
+    };
+    browser.runtime.onMessage.addListener(onMessage);
+    ctx.onInvalidated(() => {
+      browser.runtime.onMessage.removeListener(onMessage);
+      lastContextTarget = null;
+      lastHover = null;
     });
   },
 });

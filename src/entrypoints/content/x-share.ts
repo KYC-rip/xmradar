@@ -10,6 +10,8 @@ import { ownStatusId } from '../../extractors/x';
  */
 
 const TWEET = 'article[data-testid="tweet"]';
+const ARTICLE_VIEW = 'article[data-testid="twitterArticleReadView"]';
+const POST_CONTAINER = `${TWEET}, ${ARTICLE_VIEW}`;
 const SHARE_BUTTON = 'button[aria-haspopup="menu"]:not([data-testid]), button[aria-label*="share" i]:not([data-testid])';
 const SHEET_SELECTOR = '#layers [data-testid="sheetDialog"], #layers [role="dialog"]';
 const ITEM_ATTR = 'data-xmradar';
@@ -18,20 +20,27 @@ const SHEET_WINDOW_MS = 4000;
 const ACTION_WINDOW_MS = 10_000;
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
-/** The share button a click landed on: the last button of a tweet's action bar, untagged. */
+const articleIdFromPath = (path: string | null | undefined): string | null =>
+  /^\/[A-Za-z0-9_]{1,15}\/article\/([1-9]\d{0,19})(?:[/?#]|$)/.exec(path ?? '')?.[1] ?? null;
+
+function postIdOf(el: Element, doc: Document): string | null {
+  return ownStatusId(el) ?? (el.matches(ARTICLE_VIEW) ? articleIdFromPath(doc.location?.pathname) : null);
+}
+
+/** The share button a click landed on: the last button of a tweet's or article's action bar, untagged. */
 export function shareButtonOf(target: EventTarget | null): HTMLButtonElement | null {
   const btn = target instanceof Element ? target.closest('button') : null;
   if (!btn?.matches(SHARE_BUTTON)) return null;
-  const bar = btn.closest(`${TWEET} [role="group"]`);
+  const bar = btn.closest(`${POST_CONTAINER} [role="group"]`);
   const buttons = bar?.querySelectorAll('button');
   return buttons && buttons[buttons.length - 1] === btn ? btn : null;
 }
 
-/** The tweet with this status ID, preferring the one around `near` (X recycles tweet nodes). */
+/** The tweet or article view with this status ID, preferring the one around `near` (X recycles tweet nodes). */
 export function findTweet(doc: Document, id: string, near?: Element | null): Element | null {
-  const own = near?.closest(TWEET);
-  if (own && ownStatusId(own) === id) return own;
-  return [...doc.querySelectorAll(TWEET)].find((a) => ownStatusId(a) === id) ?? null;
+  const own = near?.closest(POST_CONTAINER);
+  if (own && postIdOf(own, doc) === id) return own;
+  return [...doc.querySelectorAll(POST_CONTAINER)].find((a) => postIdOf(a, doc) === id) ?? null;
 }
 
 /** The radar mark: a dot and two arcs. `like` lends X's size and colour classes. */
@@ -170,6 +179,16 @@ export function shareMenu(doc: Document, request: () => Promise<unknown>, now = 
     if (list.querySelector(`[${ITEM_ATTR}]`)) return;
     const last = items[items.length - 1]!;
     const item = last.cloneNode(true) as HTMLElement;
+    // Strip cloned IDs, data-* attributes, and stale ARIA labels from the copied X menu item and its descendants.
+    for (const node of [item, ...item.querySelectorAll('*')]) {
+      node.removeAttribute('id');
+      node.removeAttribute('aria-label');
+      node.removeAttribute('aria-labelledby');
+      node.removeAttribute('aria-describedby');
+      for (const attr of [...node.attributes]) {
+        if (attr.name.startsWith('data-')) node.removeAttribute(attr.name);
+      }
+    }
     item.setAttribute(ITEM_ATTR, 'copy-to-nostr');
     item.setAttribute('tabindex', '0');
     const oldSvg = item.querySelector('svg');
@@ -226,7 +245,7 @@ export function shareMenu(doc: Document, request: () => Promise<unknown>, now = 
       if (!button) return;
       // a new share click restarts everything
       stopWatching();
-      const tweetId = ownStatusId(button.closest(TWEET)!);
+      const tweetId = postIdOf(button.closest(POST_CONTAINER)!, doc);
       const priorSheets = new Set(doc.querySelectorAll(SHEET_SELECTOR));
       pending = tweetId ? { button, tweetId, at: now(), priorSheets, sheet: null } : null;
       if (!pending) return;
@@ -246,7 +265,7 @@ export function shareMenu(doc: Document, request: () => Promise<unknown>, now = 
       target = null;
       if (!t || now() - t.at > ACTION_WINDOW_MS) return null;
       // the node may have been reused for another tweet since
-      return t.article.isConnected && ownStatusId(t.article) === t.tweetId ? t.article : findTweet(doc, t.tweetId);
+      return t.article.isConnected && postIdOf(t.article, doc) === t.tweetId ? t.article : findTweet(doc, t.tweetId);
     },
     stop() {
       stopWatching();

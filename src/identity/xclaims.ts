@@ -238,9 +238,17 @@ export function claimKeeper(deps: ClaimKeeperDeps) {
     return run;
   };
 
+  let cached: Map<string, XClaimEntry> | null = null;
+  const invalidate = () => {
+    cached = null;
+  };
+
   async function lookup(): Promise<(handle: string) => XClaimEntry | undefined> {
     if (!(await deps.enabled())) return () => undefined;
-    const map = new Map(pruneClaims(await deps.store.getValue(), now()).entries.map((e) => [e.handle, e]));
+    if (!cached) {
+      cached = new Map(pruneClaims(await deps.store.getValue(), now()).entries.map((e) => [e.handle, e]));
+    }
+    const map = cached;
     return (handle) => map.get(normalizeHandle(handle));
   }
 
@@ -262,6 +270,7 @@ export function claimKeeper(deps: ClaimKeeperDeps) {
       if (!(await deps.enabled())) return { changed: false };
       const { store, changed } = applySeen(await deps.store.getValue(), handle, place, claim, now(), tweetId);
       await deps.store.setValue(store);
+      invalidate();
       if (changed) {
         await deps.dropBadge(handle);
         await deps.changedItem.setValue({ handle, at: now() });
@@ -275,6 +284,7 @@ export function claimKeeper(deps: ClaimKeeperDeps) {
     serial(async () => {
       const had = (await deps.store.getValue())?.entries?.length;
       await deps.store.removeValue();
+      invalidate();
       if (had) await deps.dropAllBadges();
     });
 

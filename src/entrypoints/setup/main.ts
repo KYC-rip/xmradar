@@ -60,6 +60,13 @@ async function render() {
   for (const s of steps) {
     const el = stepEl(s.key);
     el.dataset.state = s.state;
+    if (s.state === 'current') el.setAttribute('aria-current', 'step');
+    else el.removeAttribute('aria-current');
+    const marker = el.querySelector<HTMLElement>('.marker');
+    if (marker) {
+      marker.setAttribute('role', 'img');
+      marker.setAttribute('aria-label', s.state === 'done' ? 'Completed step' : s.state === 'current' ? 'Current step' : 'Upcoming step');
+    }
     el.querySelector('[data-value]')!.textContent = s.value ?? '';
     if (s.warning) say(s.key, s.warning, 'error');
   }
@@ -97,10 +104,11 @@ async function refresh() {
         if (cached) status = cached.status;
       }
       await render();
-      if (!status) say('address', 'Checking relays for your existing address and X proof…');
+      const showedCheckMsg = !status;
+      if (showedCheckMsg) say('address', 'Checking relays for your existing address and X proof…');
       const fresh = await sendToBackground({ type: 'setup-status' }).catch(() => null);
       if (fresh) status = fresh;
-      say('address', '');
+      if (showedCheckMsg) say('address', '');
     } else {
       status = null;
     }

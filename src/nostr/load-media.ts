@@ -20,7 +20,7 @@ export async function loadMedia(url: string, kind: 'video' | undefined, deps: Lo
   const video = kind === 'video';
   const max = video ? VIDEO_MAX : deps.imageMax;
   const what = video ? 'Video' : 'Image';
-  const res = await deps.fetch(url, { credentials: 'omit', signal: AbortSignal.timeout(video ? scaledMs(20_000, VIDEO_MAX) : 20_000) });
+  const res = await deps.fetch(url, { credentials: 'omit', referrerPolicy: 'no-referrer', signal: AbortSignal.timeout(video ? scaledMs(20_000, VIDEO_MAX) : 20_000) });
   // redirects are followed (CDNs use them), so re-check where we actually ended up
   if (res.redirected) assertFetchableImageUrl(res.url);
   if (!res.ok) throw new Error(`${what} fetch failed (${res.status})`);

@@ -6,20 +6,21 @@ section { display: flex; flex-direction: column; gap: 10px; }
 /* `display` above would otherwise show hidden sections */
 [hidden] { display: none !important; }
 .card.pad { display: flex; flex-direction: column; gap: 4px; padding: 12px 14px; }
-.warn { border-color: var(--warn); }
-.refused { border-color: var(--danger); }
-.ok { border-color: var(--ok); }
+.card.warn { border-color: var(--warn); color: var(--fg); }
+.card.refused { border-color: var(--danger); color: var(--fg); }
+.card.ok { border-color: var(--ok); color: var(--fg); }
 .card.pad.facts { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 14px; margin: 0; }
 .facts dt { color: var(--muted); }
-.facts dd { margin: 0; min-width: 0; }
+.facts dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
 .mono { font-family: var(--mono); font-size: 12px; }
 .wrap { overflow-wrap: anywhere; word-break: break-all; }
 /* words stay whole; only a line too long for the window (the address) breaks */
 .message { overflow-wrap: anywhere; }
 .message { white-space: pre-wrap; font-family: var(--mono); font-size: 12px; margin: 0; }
 .tag { font-size: 12px; font-weight: 600; padding: 1px 6px; border-radius: 6px; background: var(--chip); }
-.tag.other { background: var(--danger); color: var(--on-accent); }
+.tag.other { background: var(--danger-btn); color: var(--on-accent); }
 .row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+#send { white-space: normal; text-align: center; }
 .guide { display: flex; flex-direction: column; gap: 6px; }
 .guide details { padding: 8px 12px; }
 .guide summary { cursor: pointer; font-weight: 600; }
@@ -28,3 +29,8 @@ section { display: flex; flex-direction: column; gap: 10px; }
 .guide code { font-family: var(--mono); font-size: 12px; overflow-wrap: break-word; }
 textarea { width: 100%; box-sizing: border-box; font-family: var(--mono); font-size: 12px; }
 .button-link { color: var(--accent); font-weight: 600; text-decoration: none; padding: 6px 4px; }
+@media (max-width: 480px) {
+  .card.pad.facts { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+  .facts dt { margin-top: 6px; }
+  .facts dt:first-child { margin-top: 0; }
+}

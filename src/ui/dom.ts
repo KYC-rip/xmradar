@@ -9,5 +9,6 @@ export const optionalPart = <T extends HTMLElement>(root: HTMLElement, attr: str
 
 export function setStatus(el: HTMLElement, text: string, kind: 'ok' | 'error' | 'warn' | '' = '') {
   el.textContent = text;
-  el.className = kind;
+  el.classList.remove('ok', 'error', 'warn');
+  if (kind) el.classList.add(kind);
 }

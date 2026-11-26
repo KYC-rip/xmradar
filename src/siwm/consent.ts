@@ -63,6 +63,8 @@ export function mountConsent(doc: Document, d: ConsentDeps) {
   };
   const refuse = (why: string) => {
     $('refused-why').textContent = why;
+    const actions = doc.getElementById('refused-actions');
+    if (actions) actions.hidden = !!d.id;
     show('refused');
   };
   let timer: ReturnType<typeof setInterval> | undefined;
@@ -154,9 +156,19 @@ export function mountConsent(doc: Document, d: ConsentDeps) {
 
   if (d.id) return load(d.id);
   show('paste');
+  const pasteStatus = doc.getElementById('paste-status');
+  doc.getElementById('refused-retry')?.addEventListener('click', () => {
+    if (pasteStatus) pasteStatus.textContent = '';
+    show('paste');
+    $<HTMLTextAreaElement>('paste-uri').focus();
+  });
   $('paste-check').addEventListener('click', async () => {
     const uri = $<HTMLTextAreaElement>('paste-uri').value.trim();
-    if (!uri) return;
+    if (!uri) {
+      if (pasteStatus) pasteStatus.textContent = 'Paste a monero-signin: link first.';
+      return;
+    }
+    if (pasteStatus) pasteStatus.textContent = '';
     const r = await d.open(uri).catch(() => null);
     if (!r) return refuse('That isn’t a sign-in link.');
     d.setId(r.id);

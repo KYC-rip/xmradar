@@ -205,6 +205,27 @@ object NotificationRegistry {
     )
 
     private val active = LinkedHashMap<Int, NotificationBridge.ActiveNotification>()
+    private val superseded = ArrayDeque<WebNotification>()
+    private const val MAX_SUPERSEDED = 128
+
+    private fun markSuperseded(old: WebNotification) {
+        if (superseded.any { it === old }) return
+        while (superseded.size >= MAX_SUPERSEDED) {
+            superseded.removeFirst()
+        }
+        superseded.addLast(old)
+    }
+
+    private fun consumeSuperseded(notification: WebNotification): Boolean {
+        val it = superseded.iterator()
+        while (it.hasNext()) {
+            if (it.next() === notification) {
+                it.remove()
+                return true
+            }
+        }
+        return false
+    }
 
     @Synchronized
     fun register(
@@ -214,7 +235,10 @@ object NotificationRegistry {
         notification: WebNotification,
     ): RegisterResult {
         val token = UUID.randomUUID().toString()
-        active.remove(id)
+        val replaced = active.remove(id)
+        if (replaced != null && replaced.notification !== notification) {
+            markSuperseded(replaced.notification)
+        }
         val evicted = mutableListOf<NotificationBridge.ActiveNotification>()
         while (active.size >= NotificationBridge.MAX_ACTIVE_NOTIFICATIONS) {
             val oldestKey = active.entries.firstOrNull()?.key ?: break
@@ -244,6 +268,7 @@ object NotificationRegistry {
         originKey: String?,
         tag: String?,
     ): Int? {
+        if (consumeSuperseded(notification)) return null
         val byRef = active.entries.firstOrNull { it.value.notification === notification }
         if (byRef != null) {
             active.remove(byRef.key)
@@ -261,5 +286,6 @@ object NotificationRegistry {
     @Synchronized
     fun clear() {
         active.clear()
+        superseded.clear()
     }
 }

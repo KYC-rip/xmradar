@@ -107,9 +107,11 @@ void mountUpdatePanel(document);
 
 $('test-signer').addEventListener('click', () => void testSigner(signerStatus));
 
-$('load-nip65').addEventListener('click', async () => {
+const loadNip65Btn = $<HTMLButtonElement>('load-nip65');
+loadNip65Btn.addEventListener('click', async () => {
   const pubkey = await pubkeyItem.getValue();
   if (!pubkey) return setStatus($('relay-error'), 'Connect your signer first ("Test signer" above), so XMRadar knows your key.', 'error');
+  loadNip65Btn.disabled = true;
   setStatus($('relay-error'), 'Looking up your relay list…');
   try {
     const { relays: found } = await sendToBackground({ type: 'load-nip65', pubkey });
@@ -118,6 +120,8 @@ $('load-nip65').addEventListener('click', async () => {
     setStatus($('relay-error'), `Loaded ${found.length} relays from your NIP-65 list.`, 'ok');
   } catch (e) {
     setStatus($('relay-error'), (e as Error).message, 'error');
+  } finally {
+    loadNip65Btn.disabled = false;
   }
 });
 
