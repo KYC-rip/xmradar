@@ -13,7 +13,11 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.content.res.Configuration
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Color
+import android.graphics.Outline
+import android.graphics.drawable.GradientDrawable
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -23,13 +27,21 @@ import android.os.SystemClock
 import android.provider.Settings
 import android.text.InputType
 import android.util.Log
+import android.util.LruCache
+import android.view.LayoutInflater
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewConfiguration
+import android.view.ViewGroup
+import android.view.ViewOutlineProvider
 import android.view.inputmethod.EditorInfo
+import android.widget.ArrayAdapter
+import android.widget.AutoCompleteTextView
 import android.widget.Button
 import android.widget.EditText
+import android.widget.Filter
 import android.widget.FrameLayout
+import android.widget.ImageView
 import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
@@ -98,6 +110,7 @@ class MainActivity : AppCompatActivity() {
         const val NEW_SESSION_GESTURE_WINDOW_MS = 1_500L
         const val NIP55_INTERACTIVE_TIMEOUT_MS = 125_000L
         const val MAX_DOWNLOAD_BYTES = 16 * 1024 * 1024
+        const val SITE_CATALOG_CACHE_FILE = "xmrclub_site_catalog.json"
 
         // GeckoRuntime and live GeckoSessions are process-wide so Activity recreation
         // (e.g. lock/unlock or display config changes) re-attaches the exact live X tab
@@ -107,6 +120,10 @@ class MainActivity : AppCompatActivity() {
         @Volatile private var sharedExtension: WebExtension? = null
         @Volatile private var sharedExtensionBaseUrl: String? = null
         @Volatile private var sharedPrivateBrowsingReady: Boolean = false
+        @Volatile private var sharedGlobalAction: WebExtension.Action? = null
+        @Volatile private var sharedSiteCatalog: List<SiteCatalog.CatalogSite> = emptyList()
+        @Volatile private var sharedSiteCatalogIssuedAt: Long = -1L
+        private val siteLogoCache = LruCache<String, Bitmap>(128)
         private val runtimeLock = Any()
 
         private var sharedNextTabId: Int = 1
@@ -128,22 +145,31 @@ class MainActivity : AppCompatActivity() {
         var recentRecoveries: Int = 0,
         var lastRecoveryAtMs: Long = 0L,
         var openedByUserTapAtMs: Long = 0L,
+        var tabAction: WebExtension.Action? = null,
         val allowedSwapHosts: MutableSet<String> = mutableSetOf(),
     ) {
         fun isAuthFlowActive(nowMs: Long = System.currentTimeMillis()): Boolean =
             inXAuthFlowUntilMs > nowMs
     }
 
+    private data class FabVisualState(
+        val badgeText: String?,
+        val badgeColor: Int?,
+        val matchedSite: SiteCatalog.CatalogSite?,
+        val activeSiteVisual: Boolean,
+    )
+
     private lateinit var rootContainer: FrameLayout
     private lateinit var geckoView: GeckoView
     private lateinit var progressBar: ProgressBar
     private lateinit var fabContainer: FrameLayout
+    private lateinit var fabOrb: FrameLayout
+    private lateinit var fabIcon: ImageView
     private lateinit var fabBadge: TextView
 
     private var runtime: GeckoRuntime? = null
     private var extension: WebExtension? = null
     private var ownExtensionBaseUrl: String? = null
-    private var badgeText: String? = null
     @Volatile private var privateBrowsingReady = false
     @Volatile private var lastTouchGestureAtMs = 0L
 
@@ -480,7 +506,15 @@ class MainActivity : AppCompatActivity() {
         geckoView = findViewById(R.id.gecko_view)
         progressBar = findViewById(R.id.progress_bar)
         fabContainer = findViewById(R.id.fab_container)
+        fabOrb = findViewById(R.id.fab_orb)
+        fabIcon = findViewById(R.id.fab_icon)
         fabBadge = findViewById(R.id.fab_badge)
+        fabIcon.outlineProvider = object : ViewOutlineProvider() {
+            override fun getOutline(view: View, outline: Outline) {
+                outline.setOval(0, 0, view.width, view.height)
+            }
+        }
+        loadCachedSiteCatalogAsync()
 
         setupFloatingButton()
 
@@ -643,8 +677,15 @@ class MainActivity : AppCompatActivity() {
         rowSwap.setTextColor(if (active == Compartment.SWAP) accent else fg)
         rowOptions.setTextColor(if (isOptions) accent else fg)
 
-        badgeText?.let { b ->
-            rowXmradar.text = "${getString(R.string.sheet_xmradar)} · $b"
+        val fabState = resolveFabVisualState()
+        val sheetTag = when {
+            fabState.matchedSite != null && fabState.badgeText != null ->
+                "${fabState.matchedSite.name} · ${fabState.badgeText}"
+            fabState.badgeText != null -> fabState.badgeText
+            else -> null
+        }
+        sheetTag?.let { tag ->
+            rowXmradar.text = "${getString(R.string.sheet_xmradar)} · $tag"
         }
 
         val prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
@@ -1168,7 +1209,11 @@ class MainActivity : AppCompatActivity() {
                 action: WebExtension.Action,
             ) {
                 runOnUiThread {
-                    badgeText = action.badgeText?.takeIf { it.isNotBlank() }
+                    if (session == null) {
+                        sharedGlobalAction = action
+                    } else {
+                        tabs.firstOrNull { it.session == session }?.tabAction = action
+                    }
                     updateNavHighlight()
                 }
             }
@@ -1295,6 +1340,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun handleNativeSignerMessage(msg: JSONObject): GeckoResult<Any> {
         return when (msg.optString("type")) {
+            "sync_site_catalog" -> handleSiteCatalogSync(msg)
             "probe" -> {
                 val signers = findNip55Signers()
                 val res = JSONObject()
@@ -1682,13 +1728,29 @@ class MainActivity : AppCompatActivity() {
         dialog.behavior.state = BottomSheetBehavior.STATE_EXPANDED
         dialog.behavior.skipCollapsed = true
 
-        val input = view.findViewById<EditText>(R.id.swap_url_input)
+        val input = view.findViewById<AutoCompleteTextView>(R.id.swap_url_input)
         val clearBtn = view.findViewById<TextView>(R.id.swap_url_clear)
         val errorView = view.findViewById<TextView>(R.id.swap_url_error)
         val openBtn = view.findViewById<Button>(R.id.swap_btn_open)
         val cancelBtn = view.findViewById<Button>(R.id.swap_btn_cancel)
 
-        input.setText("kyc.rip")
+        val catalogSnapshot = sharedSiteCatalog
+        val suggestionAdapter = SwapSiteAdapter(this, catalogSnapshot)
+        input.setAdapter(suggestionAdapter)
+        input.setOnItemClickListener { parent, _, position, _ ->
+            val picked = parent.getItemAtPosition(position) as? SiteCatalog.CatalogSite ?: return@setOnItemClickListener
+            input.setText(picked.primaryHost, false)
+            input.setSelection(picked.primaryHost.length)
+            input.dismissDropDown()
+            errorView.visibility = View.GONE
+        }
+        input.setOnClickListener {
+            if (catalogSnapshot.isNotEmpty() && !input.isPopupShowing) {
+                input.showDropDown()
+            }
+        }
+
+        input.setText("kyc.rip", false)
         input.setSelection(input.text.length)
 
         fun updateClearVisibility() {
@@ -1700,8 +1762,12 @@ class MainActivity : AppCompatActivity() {
             if (errorView.visibility == View.VISIBLE) errorView.visibility = View.GONE
         }
         clearBtn.setOnClickListener {
-            input.setText("")
+            input.setText("", false)
             input.requestFocus()
+            if (catalogSnapshot.isNotEmpty()) {
+                suggestionAdapter.filter.filter("")
+                input.post { if (!isFinishing && !isDestroyed && input.isAttachedToWindow) input.showDropDown() }
+            }
         }
 
         val chips = listOf(
@@ -1711,8 +1777,9 @@ class MainActivity : AppCompatActivity() {
         )
         for ((chipId, host) in chips) {
             view.findViewById<TextView>(chipId).setOnClickListener {
-                input.setText(host)
+                input.setText(host, false)
                 input.setSelection(host.length)
+                input.dismissDropDown()
                 errorView.visibility = View.GONE
             }
         }
@@ -2453,13 +2520,266 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun handleSiteCatalogSync(msg: JSONObject): GeckoResult<Any> {
+        val snap = SiteCatalog.parse(msg)
+            ?: return GeckoResult.fromValue(nativeReply(JSONObject().put("error", "Invalid site catalog payload")))
+        sharedSiteCatalog = snap.sites
+        sharedSiteCatalogIssuedAt = snap.issuedAt
+        siteLogoCache.evictAll()
+        val serialized = if (snap.sites.isEmpty()) null else msg.toString()
+        persistSiteCatalogCacheAsync(serialized)
+        runOnUiThread {
+            if (!isFinishing && !isDestroyed) updateNavHighlight()
+        }
+        return GeckoResult.fromValue(
+            nativeReply(JSONObject().put("ok", true).put("count", snap.sites.size)),
+        )
+    }
+
+    private fun loadCachedSiteCatalogAsync() {
+        if (sharedSiteCatalogIssuedAt >= 0L || downloadExecutor.isShutdown) return
+        val cacheFile = File(filesDir, SITE_CATALOG_CACHE_FILE)
+        try {
+            downloadExecutor.execute {
+                if (sharedSiteCatalogIssuedAt >= 0L || !cacheFile.isFile) return@execute
+                try {
+                    val raw = cacheFile.readText(Charsets.UTF_8)
+                    val snap = SiteCatalog.parse(JSONObject(raw)) ?: return@execute
+                    if (sharedSiteCatalogIssuedAt < 0L) {
+                        sharedSiteCatalog = snap.sites
+                        sharedSiteCatalogIssuedAt = snap.issuedAt
+                        runOnUiThread {
+                            if (!isFinishing && !isDestroyed) updateNavHighlight()
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed reading cached site catalog", e)
+                }
+            }
+        } catch (_: RejectedExecutionException) {
+        }
+    }
+
+    private fun persistSiteCatalogCacheAsync(serializedJson: String?) {
+        if (downloadExecutor.isShutdown) return
+        val cacheFile = File(filesDir, SITE_CATALOG_CACHE_FILE)
+        val tmpFile = File(filesDir, "$SITE_CATALOG_CACHE_FILE.tmp")
+        try {
+            downloadExecutor.execute {
+                try {
+                    if (serializedJson == null) {
+                        cacheFile.delete()
+                        tmpFile.delete()
+                    } else {
+                        tmpFile.writeText(serializedJson, Charsets.UTF_8)
+                        if (!tmpFile.renameTo(cacheFile)) {
+                            cacheFile.writeText(serializedJson, Charsets.UTF_8)
+                            tmpFile.delete()
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed persisting site catalog cache", e)
+                }
+            }
+        } catch (_: RejectedExecutionException) {
+        }
+    }
+
+    private fun decodeSiteLogo(site: SiteCatalog.CatalogSite): Bitmap? {
+        val uri = site.logoDataUri ?: return null
+        val cacheKey = "${site.id}@$sharedSiteCatalogIssuedAt"
+        siteLogoCache.get(cacheKey)?.let { return it }
+        val bytes = SiteCatalog.decodeWebpBase64(uri) ?: return null
+        val bmp = BitmapFactory.decodeByteArray(bytes, 0, bytes.size) ?: return null
+        siteLogoCache.put(cacheKey, bmp)
+        return bmp
+    }
+
+    private inner class SwapSiteAdapter(
+        context: Context,
+        private val allSites: List<SiteCatalog.CatalogSite>,
+    ) : ArrayAdapter<SiteCatalog.CatalogSite>(context, 0, mutableListOf()) {
+
+        private val inflater = LayoutInflater.from(context)
+        private val shown = mutableListOf<SiteCatalog.CatalogSite>()
+        private val logoOutlineProvider = object : ViewOutlineProvider() {
+            override fun getOutline(view: View, outline: Outline) {
+                val r = 6f * view.resources.displayMetrics.density
+                outline.setRoundRect(0, 0, view.width, view.height, r)
+            }
+        }
+
+        init {
+            shown.addAll(SiteCatalog.search(allSites, ""))
+        }
+
+        override fun getCount(): Int = shown.size
+
+        override fun getItem(position: Int): SiteCatalog.CatalogSite? = shown.getOrNull(position)
+
+        override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
+            val row = convertView ?: inflater.inflate(R.layout.item_swap_suggestion, parent, false)
+            val site = shown[position]
+            val logoView = row.findViewById<ImageView>(R.id.suggestion_logo)
+            val initialView = row.findViewById<TextView>(R.id.suggestion_initial)
+            val nameView = row.findViewById<TextView>(R.id.suggestion_name)
+            val proofView = row.findViewById<TextView>(R.id.suggestion_proof)
+            val hostView = row.findViewById<TextView>(R.id.suggestion_host)
+            val gradeView = row.findViewById<TextView>(R.id.suggestion_grade)
+
+            val gradeColor = SiteCatalog.gradeColorInt(site.grade, site.incident, site.intern)
+            val bmp = decodeSiteLogo(site)
+            if (bmp != null) {
+                logoView.setImageBitmap(bmp)
+                if (logoView.outlineProvider !== logoOutlineProvider) {
+                    logoView.outlineProvider = logoOutlineProvider
+                    logoView.clipToOutline = true
+                }
+                logoView.visibility = View.VISIBLE
+                initialView.visibility = View.GONE
+            } else {
+                logoView.visibility = View.GONE
+                initialView.visibility = View.VISIBLE
+                initialView.text = site.name.firstOrNull()?.uppercaseChar()?.toString() ?: "?"
+                (initialView.background.mutate() as? GradientDrawable)?.setColor(gradeColor)
+            }
+
+            nameView.text = site.name
+            val proof = SiteCatalog.proofSummary(site)
+            if (proof != null) {
+                proofView.text = proof
+                proofView.visibility = View.VISIBLE
+            } else {
+                proofView.visibility = View.GONE
+            }
+
+            val cat = SiteCatalog.formatCategory(site.category)
+            hostView.text = if (cat.isNotEmpty()) "${site.primaryHost} · $cat" else site.primaryHost
+
+            gradeView.text = SiteCatalog.badgeLabel(site)
+            (gradeView.background.mutate() as? GradientDrawable)?.setColor(gradeColor)
+            return row
+        }
+
+        override fun getFilter(): Filter = object : Filter() {
+            override fun performFiltering(constraint: CharSequence?): FilterResults {
+                val results = SiteCatalog.search(allSites, constraint)
+                return FilterResults().apply {
+                    values = results
+                    count = results.size
+                }
+            }
+
+            @Suppress("UNCHECKED_CAST")
+            override fun publishResults(constraint: CharSequence?, results: FilterResults?) {
+                shown.clear()
+                val list = results?.values as? List<SiteCatalog.CatalogSite>
+                if (list != null) shown.addAll(list)
+                if (shown.isNotEmpty()) notifyDataSetChanged() else notifyDataSetInvalidated()
+            }
+
+            override fun convertResultToString(resultValue: Any?): CharSequence {
+                return (resultValue as? SiteCatalog.CatalogSite)?.primaryHost ?: super.convertResultToString(resultValue)
+            }
+        }
+    }
+
+    private fun resolveFabVisualState(): FabVisualState {
+        val tab = activeTab
+        val tabOwnText = tab?.tabAction?.badgeText?.takeIf { it.isNotBlank() }
+        val tabOwnColor = tab?.tabAction?.badgeBackgroundColor
+        val globalText = sharedGlobalAction?.badgeText?.takeIf { it.isNotBlank() }
+        val globalColor = sharedGlobalAction?.badgeBackgroundColor
+        val matchedSite = if (tab != null && tab.compartment != Compartment.EXTENSION) {
+            SiteCatalog.matchUrl(sharedSiteCatalog, tab.currentUrl)
+        } else {
+            null
+        }
+        val fallbackSite = matchedSite?.takeIf { tab?.compartment == Compartment.SWAP }
+
+        return when {
+            tabOwnText != null -> FabVisualState(
+                badgeText = tabOwnText,
+                badgeColor = tabOwnColor
+                    ?: matchedSite?.let { SiteCatalog.gradeColorInt(it.grade, it.incident, it.intern) }
+                    ?: ContextCompat.getColor(this, R.color.xmr),
+                matchedSite = matchedSite,
+                activeSiteVisual = true,
+            )
+            fallbackSite != null -> FabVisualState(
+                badgeText = SiteCatalog.badgeLabel(fallbackSite),
+                badgeColor = SiteCatalog.gradeColorInt(fallbackSite.grade, fallbackSite.incident, fallbackSite.intern),
+                matchedSite = fallbackSite,
+                activeSiteVisual = true,
+            )
+            globalText != null -> FabVisualState(
+                badgeText = globalText,
+                badgeColor = globalColor ?: SiteCatalog.COLOR_VERIFIED_GREEN,
+                matchedSite = null,
+                activeSiteVisual = false,
+            )
+            else -> FabVisualState(
+                badgeText = null,
+                badgeColor = null,
+                matchedSite = null,
+                activeSiteVisual = false,
+            )
+        }
+    }
+
     private fun updateNavHighlight() {
-        val badge = badgeText
-        if (badge != null) {
-            fabBadge.text = badge
+        val state = resolveFabVisualState()
+        val density = resources.displayMetrics.density
+
+        if (state.badgeText != null) {
+            fabBadge.text = state.badgeText
+            val bgColor = state.badgeColor ?: ContextCompat.getColor(this, R.color.xmr)
+            (fabBadge.background.mutate() as? GradientDrawable)?.setColor(bgColor)
             fabBadge.visibility = View.VISIBLE
         } else {
             fabBadge.visibility = View.GONE
+        }
+
+        if (state.activeSiteVisual) {
+            val ringColor = state.badgeColor ?: ContextCompat.getColor(this, R.color.xmr)
+            val orbBg = ContextCompat.getDrawable(this, R.drawable.bg_fab_orb)?.mutate() as? GradientDrawable
+            if (orbBg != null) {
+                orbBg.setStroke((2.5f * density).toInt().coerceAtLeast(2), ringColor)
+                fabOrb.background = orbBg
+            }
+            // Only display a brand's verified WebP logo on an exact normalized host match from the
+            // signed feed — never on an unlisted lookalike/phishing warning.
+            val siteBmp = state.matchedSite?.let { decodeSiteLogo(it) }
+            if (siteBmp != null) {
+                val pad = (8f * density).toInt()
+                fabOrb.setPadding(pad, pad, pad, pad)
+                fabIcon.clipToOutline = true
+                fabIcon.scaleType = ImageView.ScaleType.CENTER_CROP
+                fabIcon.alpha = 1.0f
+                fabIcon.setImageBitmap(siteBmp)
+            } else {
+                val pad = (5f * density).toInt()
+                fabOrb.setPadding(pad, pad, pad, pad)
+                fabIcon.clipToOutline = false
+                fabIcon.scaleType = ImageView.ScaleType.FIT_CENTER
+                fabIcon.alpha = 0.96f
+                fabIcon.setImageResource(R.drawable.ic_xmradar)
+            }
+            val siteName = state.matchedSite?.name
+            fabContainer.contentDescription = when {
+                siteName != null && state.badgeText != null -> "${getString(R.string.nav_xmradar)} — $siteName (${state.badgeText})"
+                siteName != null -> "${getString(R.string.nav_xmradar)} — $siteName"
+                state.badgeText != null -> "${getString(R.string.nav_xmradar)} (${state.badgeText})"
+                else -> getString(R.string.nav_xmradar)
+            }
+        } else {
+            fabOrb.background = null
+            fabOrb.setPadding(0, 0, 0, 0)
+            fabIcon.clipToOutline = false
+            fabIcon.scaleType = ImageView.ScaleType.FIT_CENTER
+            fabIcon.alpha = 0.92f
+            fabIcon.setImageResource(R.drawable.ic_xmradar)
+            fabContainer.contentDescription = getString(R.string.nav_xmradar)
         }
     }
 
