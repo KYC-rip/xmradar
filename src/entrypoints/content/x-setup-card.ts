@@ -25,6 +25,9 @@ export type CardPref = { snoozedUntil?: number; dismissed?: boolean; nudged?: bo
 /** Whether the card may show, before asking the background whether setup is complete. */
 export const cardAllowed = (xoOn: boolean, pref: CardPref, now: number) => xoOn && !pref.dismissed && (pref.snoozedUntil ?? 0) <= now;
 
+/** Whether the one-time contextual nudge after sending an xo may show (never unsolicited on page load). */
+export const nudgeAllowed = (xoOn: boolean, pref: CardPref, now: number) => cardAllowed(xoOn, pref, now) && !pref.nudged;
+
 /** The signed-in user's handle from X's side nav (the Profile link), or null. Only a pre-fill. */
 export function handleFromNav(doc: Document): string | null {
   const href = doc.querySelector<HTMLAnchorElement>('a[data-testid="AppTabBar_Profile_Link"]')?.getAttribute('href') ?? '';
@@ -105,25 +108,21 @@ function cardEl(doc: Document, text: { title: string; body: string }, on: { go()
     });
     return b;
   };
-  row.append(mk('go', 'Set up', on.go), mk('later', 'Not now', on.later));
+  row.append(mk('go', 'Optional setup', on.go), mk('later', 'Just browse', on.close));
   card.append(mk('x', '×', on.close, 'Don’t show again'), title, body, row);
   root.append(style, card);
   return host;
 }
 
-const CARD_TEXT = {
-  title: 'Get xos on X',
-  body: 'Set up your Monero identity, about a minute: XMRadar makes your Nostr key, you add your Monero address and post one tweet. Then Monero people can xo your posts, and your xos count.',
-};
 const NUDGE_TEXT = {
   title: 'Your xo is sent',
-  body: 'It counts once you’ve set up your Monero identity. About a minute: a Nostr key, your Monero address and one tweet.',
+  body: 'Viewing badges and browsing already work without setup. Add an optional Monero identity if you want your xos to count or to show your own tip badge.',
 };
 
 let complete: boolean | null = null;
 let showNudge: (() => void) | null = null;
 
-/** After an xo is sent: once per browser, while setup isn't complete, the card says the xo counts after setup. */
+/** After an xo is sent: at most once, while setup isn't complete and not dismissed, offer optional setup. */
 export function noteXoSent() {
   if (complete === false) showNudge?.();
 }
@@ -138,44 +137,38 @@ export function startSetupCard(ctx: ContentScriptContext) {
     remove();
     void sendToBackground({ type: 'open-setup', handleHint: handleFromNav(document) ?? undefined }).catch(() => {});
   };
-  const later = async () => {
-    remove();
-    await setupCardItem.setValue({ ...(await setupCardItem.getValue()), snoozedUntil: Date.now() + SNOOZE_MS });
-  };
   const close = async () => {
     remove();
     await setupCardItem.setValue({ ...(await setupCardItem.getValue()), dismissed: true });
   };
-  const show = (text: typeof CARD_TEXT) => {
+  const show = (text: typeof NUDGE_TEXT) => {
     if (card || !ctx.isValid) return;
-    card = cardEl(document, text, { go: open, later: () => void later(), close: () => void close() });
+    card = cardEl(document, text, { go: open, later: () => void close(), close: () => void close() });
     document.body.append(card);
   };
 
+  // Passive check only: never auto-pop a setup nag on X page load. Only records completion state
+  // so the proof-tweet spotter and contextual post-xo offer know whether setup is already done.
   async function check() {
-    const [s, pref] = await Promise.all([xmrSettingsItem.getValue(), setupCardItem.getValue()]);
-    // unknown on a failed ask: no card now, and the next key or handle change asks again
     const r = await sendToBackground({ type: 'setup-card-state' }).catch(() => null);
     if (!r) return;
     complete = r.complete;
-    if (!complete && cardAllowed(xoButtonOn(s), pref, Date.now())) show(CARD_TEXT);
+    if (complete) remove();
   }
   showNudge = () =>
-    void setupCardItem.getValue().then(async (pref) => {
-      if (pref.nudged || card) return;
+    void Promise.all([xmrSettingsItem.getValue(), setupCardItem.getValue()]).then(async ([s, pref]) => {
+      if (!ctx.isValid || card || !nudgeAllowed(xoButtonOn(s), pref, Date.now())) return;
       await setupCardItem.setValue({ ...pref, nudged: true });
       show(NUDGE_TEXT);
     });
   ctx.setTimeout(() => void check(), SHOW_AFTER_MS);
-  // setup finished elsewhere (setup.html, Options): the card goes
+  // setup finished elsewhere (setup.html, Options): dismiss any open card
   const recheck = () => {
     if (!ctx.isValid) return;
-    void sendToBackground({ type: 'setup-card-state' }).then(async (r) => {
+    void sendToBackground({ type: 'setup-card-state' }).then((r) => {
       if (!ctx.isValid) return;
       complete = r.complete;
-      if (r.complete) return remove();
-      const [s, pref] = await Promise.all([xmrSettingsItem.getValue(), setupCardItem.getValue()]);
-      if (ctx.isValid && cardAllowed(xoButtonOn(s), pref, Date.now())) show(CARD_TEXT);
+      if (r.complete) remove();
     }, () => {});
   };
   const unwatchHandle = myHandleItem.watch(recheck);

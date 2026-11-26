@@ -9,7 +9,7 @@ import { setupStatusLast, statusFor } from '../../identity/status';
 import { listButtonText } from '../../identity/xmrbio-list';
 import { sendToBackground, type PreparedSetup, type SetupRequest, type SetupStatus } from '../../messaging';
 import { closeCurrentPage } from '../../platform/compat';
-import { myHandleItem, proofCandidateItem, PROOF_CANDIDATE_MS, pubkeyItem, xmrbioListPrefItem } from '../../settings';
+import { myHandleItem, proofCandidateItem, PROOF_CANDIDATE_MS, pubkeyItem, setupCardItem, xmrbioListPrefItem } from '../../settings';
 import { validateMoneroAddress } from '../../xmr/address';
 import { wizardSteps, type WizardKey } from './steps';
 
@@ -36,15 +36,36 @@ const keyNsecEl = $<HTMLInputElement>('key-nsec');
 const keyImportConfirmBox = $('key-import-confirm-box');
 const keyImportConfirmText = $('key-import-confirm-text');
 
+const modePicker = $('mode-picker');
+const wizardEl = $('wizard');
+const privateReadyEl = $('private-ready');
+const chooseBrowseBtn = $<HTMLButtonElement>('choose-browse');
+const choosePrivateBtn = $<HTMLButtonElement>('choose-private');
+const choosePublicBtn = $<HTMLButtonElement>('choose-public');
+
+type SetupIntent = 'pick' | 'private' | 'public';
+
 let pubkey: string | null = null;
 let status: SetupStatus | null = null;
 let busy = false;
 let pendingImportSecret = '';
+let intent: SetupIntent = 'pick';
 
 const shortNpub = (pk: string) => {
   const n = npubEncode(pk);
   return `${n.slice(0, 12)}…${n.slice(-6)}`;
 };
+
+function closePage() {
+  void closeCurrentPage({ tabs: browser.tabs, closeWindow: () => window.close() });
+}
+
+function setIntent(next: SetupIntent) {
+  intent = next;
+  choosePrivateBtn.classList.toggle('active', next === 'private');
+  choosePublicBtn.classList.toggle('active', next === 'public');
+  void render();
+}
 
 function clearImport(closeBox = false) {
   keyNsecEl.value = '';
@@ -57,8 +78,18 @@ function clearImport(closeBox = false) {
 async function render() {
   const mine = await myHandleItem.getValue();
   const steps = wizardSteps(identitySteps({ npub: pubkey ? npubEncode(pubkey) : null, handle: mine?.handle ?? null, status }));
+  const done = steps.every((s) => s.state === 'done');
+
+  // If setup is already complete, show the full wizard + done card cleanly.
+  // If user hasn't picked a path yet and has no key, keep the 3 clear choices front and center.
+  const showWizard = done || intent !== 'pick';
+  modePicker.hidden = done;
+  wizardEl.hidden = !showWizard;
+
+  const privateOnly = intent === 'private' && !done;
   for (const s of steps) {
     const el = stepEl(s.key);
+    el.hidden = privateOnly && s.key !== 'key';
     el.dataset.state = s.state;
     if (s.state === 'current') el.setAttribute('aria-current', 'step');
     else el.removeAttribute('aria-current');
@@ -71,7 +102,7 @@ async function render() {
     if (s.warning) say(s.key, s.warning, 'error');
   }
   keyChangeBtn.hidden = !pubkey;
-  const done = steps.every((s) => s.state === 'done');
+  privateReadyEl.hidden = !(privateOnly && Boolean(pubkey));
   $('done').hidden = !done;
   if (done && status) $('xmrbio-status').textContent = listButtonText(status, mine?.handle ?? '');
 }
@@ -164,12 +195,36 @@ async function sign(k: WizardKey, p: PreparedSetup) {
   await refresh();
 }
 
-$('key-make').addEventListener('click', (e) => {
+chooseBrowseBtn.addEventListener('click', (e) => {
   if (!e.isTrusted) return;
-  void guard('key', 'Looking for your signer…', async () => {
-    await sendToBackground({ type: 'test-signer' });
+  void setupCardItem.getValue().then((pref) => setupCardItem.setValue({ ...pref, dismissed: true })).finally(closePage);
+});
+choosePrivateBtn.addEventListener('click', () => setIntent('private'));
+choosePublicBtn.addEventListener('click', () => setIntent('public'));
+$('private-done').addEventListener('click', () => {
+  void setupCardItem.getValue().then((pref) => setupCardItem.setValue({ ...pref, dismissed: true })).finally(closePage);
+});
+$('private-upgrade').addEventListener('click', () => setIntent('public'));
+$('skip-public').addEventListener('click', () => {
+  void setupCardItem.getValue().then((pref) => setupCardItem.setValue({ ...pref, dismissed: true })).finally(() => setIntent('private'));
+});
+
+$('key-create').addEventListener('click', (e) => {
+  if (!e.isTrusted) return;
+  void guard('key', 'Creating your local key…', async () => {
+    await sendToBackground({ type: 'identity-mode', mode: 'managed' });
     clearImport(true);
-    say('key', 'Done.', 'ok');
+    say('key', 'Local key created.', 'ok');
+    await refresh();
+  });
+});
+
+$('key-signer').addEventListener('click', (e) => {
+  if (!e.isTrusted) return;
+  void guard('key', 'Connecting to your Nostr signer…', async () => {
+    await sendToBackground({ type: 'identity-mode', mode: 'signer' });
+    clearImport(true);
+    say('key', 'Connected to your signer.', 'ok');
     await refresh();
   });
 });
@@ -267,19 +322,23 @@ async function fillCandidate() {
 const listOn = $<HTMLInputElement>('xmrbio-on');
 void xmrbioListPrefItem.getValue().then((p) => (listOn.checked = p !== 'off'));
 listOn.addEventListener('change', () => void xmrbioListPrefItem.setValue(listOn.checked ? 'on' : 'off'));
-$('done-back-x').addEventListener('click', () => {
-  void closeCurrentPage({ tabs: browser.tabs, closeWindow: () => window.close() });
-});
+$('done-back-x').addEventListener('click', closePage);
 
 async function init() {
-  let hint = '';
+  let rawHash = '';
   try {
-    hint = decodeURIComponent(location.hash.slice(1));
+    rawHash = decodeURIComponent(location.hash.slice(1));
   } catch {
     /* a malformed fragment: no hint */
   }
-  const mine = await myHandleItem.getValue();
+  const initialMode: SetupIntent = rawHash === 'private' ? 'private' : rawHash === 'public' ? 'public' : 'pick';
+  const hint = rawHash === 'private' || rawHash === 'public' ? '' : rawHash;
+  const [mine, existingPk] = await Promise.all([myHandleItem.getValue(), pubkeyItem.getValue()]);
   handleEl.value = mine?.handle ?? (HANDLE_RE.test(hint) ? hint : '');
+  // If user already started or explicitly navigated to #private/#public, honor it; otherwise show choices.
+  intent = initialMode !== 'pick' ? initialMode : existingPk ? 'public' : 'pick';
+  choosePrivateBtn.classList.toggle('active', intent === 'private');
+  choosePublicBtn.classList.toggle('active', intent === 'public');
   proofCandidateItem.watch(() => void fillCandidate());
   pubkeyItem.watch(() => void refresh());
   await refresh();

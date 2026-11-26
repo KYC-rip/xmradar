@@ -52,9 +52,13 @@ $('all-settings').title = currentBuild().label;
 // a link in a popup would navigate the popup itself, so the options page opens in a tab
 for (const el of document.querySelectorAll<HTMLElement>('[data-open]')) {
   el.addEventListener('click', async () => {
-    // the tip badge before setup is complete opens the setup page (PLAN-XOREACH), not Options
+    // Open the friendly optional setup choices when the user explicitly clicks tip-badge or footer setup without a full identity yet.
     if (el.id === 'tip-badge' && !(await setupComplete())) {
       await browser.tabs.create({ url: browser.runtime.getURL('/setup.html') });
+      return closePopup();
+    }
+    if (el.id === 'connect-signer' && !(await pubkeyItem.getValue())) {
+      await browser.tabs.create({ url: browser.runtime.getURL('/setup.html#private') });
       return closePopup();
     }
     const hash = el.dataset.open ? `#${el.dataset.open}` : '';
@@ -67,10 +71,12 @@ for (const el of document.querySelectorAll<HTMLElement>('[data-open]')) {
 async function renderHeader() {
   const [pubkey, stored] = await Promise.all([pubkeyItem.getValue(), setupStatusLast.getValue()]);
   const npub = pubkey ? npubEncode(pubkey) : null;
-  $('signed-in').textContent = npub ? `Signed in as ${npub.slice(0, 10)}…${npub.slice(-4)}` : 'No signer yet';
-  $('connect-signer').textContent = npub ? 'Change' : 'Connect';
+  $('signed-in').textContent = npub ? `Signed in as ${npub.slice(0, 10)}…${npub.slice(-4)}` : 'Browsing anonymously';
+  $('connect-signer').textContent = npub ? 'Change' : 'Set up';
   $('tip-badge-summary').textContent = badgeSummary(statusFor(stored, pubkey)?.status ?? null);
-  if (!(await setupComplete())) $('tip-badge-summary').textContent = 'Not set up yet: about a minute';
+  if (!(await setupComplete())) {
+    $('tip-badge-summary').textContent = npub ? 'Key ready (private) · add badge anytime' : 'Optional · viewing badges works without setup';
+  }
 }
 
 void renderHeader();
