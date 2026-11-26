@@ -688,6 +688,52 @@ class MainActivity : AppCompatActivity() {
             rowXmradar.text = "${getString(R.string.sheet_xmradar)} · $tag"
         }
 
+        // Surface open-incident / D–F / funds-intern / unlisted alert warnings directly in the
+        // 1-tap FAB sheet so users don't have to guess why the FAB is red/amber.
+        val warningCard = view.findViewById<View>(R.id.sheet_site_warning_card)
+        val warnedSite = fabState.matchedSite?.takeIf { SiteCatalog.needsWarning(it) }
+        val unlistedAlert = warnedSite == null && (fabState.badgeText == "!" || fabState.badgeText == "?")
+        if (warnedSite != null || unlistedAlert) {
+            val titleView = view.findViewById<TextView>(R.id.sheet_site_warning_title)
+            val bodyView = view.findViewById<TextView>(R.id.sheet_site_warning_body)
+            val cardBtn = view.findViewById<TextView>(R.id.sheet_site_warning_card_btn)
+            val xmrClubBtn = view.findViewById<TextView>(R.id.sheet_site_warning_xmrclub)
+
+            val isRed = warnedSite?.let { SiteCatalog.isHighSeverityWarning(it) }
+                ?: (fabState.badgeText == "!" && fabState.badgeColor != SiteCatalog.COLOR_CAUTION_AMBER)
+            val strokeColor = if (isRed) SiteCatalog.COLOR_WARN_RED else SiteCatalog.COLOR_CAUTION_AMBER
+            (warningCard.background.mutate() as? GradientDrawable)?.setStroke(
+                (1.5f * resources.displayMetrics.density).toInt().coerceAtLeast(2),
+                strokeColor,
+            )
+            titleView.setTextColor(strokeColor)
+            if (warnedSite != null) {
+                titleView.text = SiteCatalog.warningTitle(warnedSite)
+                bodyView.text = SiteCatalog.warningBody(warnedSite)
+                val listingUrl = warnedSite.url
+                if (listingUrl != null) {
+                    xmrClubBtn.visibility = View.VISIBLE
+                    xmrClubBtn.setOnClickListener {
+                        dialog.dismiss()
+                        launchSwapTab(listingUrl, "xmr.club")
+                    }
+                } else {
+                    xmrClubBtn.visibility = View.GONE
+                }
+            } else {
+                titleView.text = if (isRed) "⚠ Security warning on this page" else "⚠ Caution on this page"
+                bodyView.text = "XMRadar flagged this page (lookalike domain or swap receipt warning). Inspect details before sending funds."
+                xmrClubBtn.visibility = View.GONE
+            }
+            cardBtn.setOnClickListener {
+                dialog.dismiss()
+                openExtensionUi("popup.html")
+            }
+            warningCard.visibility = View.VISIBLE
+        } else {
+            warningCard.visibility = View.GONE
+        }
+
         val prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
         val hasBlockedWebOrigin = listOf("https://x.com", "https://chat.xmr.club").any { origin ->
             val key = PREF_NOTIF_ORIGIN_PREFIX + origin
@@ -1196,7 +1242,10 @@ class MainActivity : AppCompatActivity() {
                     preOpenSession = false,
                 )
                 if (targetCompartment == Compartment.SWAP) {
-                    NavigationPolicy.normalizeUserSwapInput(url)?.second?.let { entry.allowedSwapHosts.add(it) }
+                    NavigationPolicy.normalizeUserSwapInput(url)?.second?.let { swapHost ->
+                        entry.allowedSwapHosts.add(swapHost)
+                        entry.allowedSwapHosts.addAll(SiteCatalog.siblingHostsFor(sharedSiteCatalog, swapHost))
+                    }
                 }
                 return GeckoResult.fromValue(entry.session)
             }
@@ -1793,9 +1842,12 @@ class MainActivity : AppCompatActivity() {
             }
             dialog.dismiss()
             val (url, host) = normalized
-            val entry = createTab(Compartment.SWAP, openImmediately = true)
-            entry.allowedSwapHosts.add(host)
-            entry.session.loadUri(url)
+            val warned = SiteCatalog.matchHost(sharedSiteCatalog, host)?.takeIf { SiteCatalog.needsWarning(it) }
+            if (warned != null) {
+                showSwapWarningConfirmation(warned, url, host)
+            } else {
+                launchSwapTab(url, host)
+            }
         }
 
         openBtn.setOnClickListener { submit() }
@@ -2330,6 +2382,30 @@ class MainActivity : AppCompatActivity() {
         return result
     }
 
+    private fun launchSwapTab(url: String, host: String) {
+        val entry = createTab(Compartment.SWAP, openImmediately = true)
+        entry.allowedSwapHosts.add(host)
+        entry.allowedSwapHosts.addAll(SiteCatalog.siblingHostsFor(sharedSiteCatalog, host))
+        entry.session.loadUri(url)
+    }
+
+    private fun showSwapWarningConfirmation(site: SiteCatalog.CatalogSite, url: String, host: String) {
+        if (isFinishing || isDestroyed) return
+        val builder = AlertDialog.Builder(this)
+            .setTitle(SiteCatalog.warningTitle(site))
+            .setMessage(SiteCatalog.warningBody(site))
+            .setPositiveButton(R.string.swap_warning_open_anyway) { _, _ ->
+                launchSwapTab(url, host)
+            }
+            .setNegativeButton(R.string.cancel, null)
+        site.url?.let { listingUrl ->
+            builder.setNeutralButton(R.string.swap_warning_view_listing) { _, _ ->
+                launchSwapTab(listingUrl, "xmr.club")
+            }
+        }
+        showTrackedDialog(builder.create())
+    }
+
     private fun bindSessionTabDelegate(session: GeckoSession, ext: WebExtension) {
         session.webExtensionController.setTabDelegate(ext, object : WebExtension.SessionTabDelegate {
             override fun onCloseTab(
@@ -2341,6 +2417,21 @@ class MainActivity : AppCompatActivity() {
                     if (target != null) closeTab(target)
                 }
                 return GeckoResult.fromValue(AllowOrDeny.ALLOW)
+            }
+        })
+        // Per-tab browser.action updates (receipts ✓/!, lookalikes !/?, site grades/incidents) are
+        // dispatched to the session's ActionDelegate in GeckoView, not the global ext delegate.
+        session.webExtensionController.setActionDelegate(ext, object : WebExtension.ActionDelegate {
+            override fun onBrowserAction(
+                source: WebExtension,
+                actionSession: GeckoSession?,
+                action: WebExtension.Action,
+            ) {
+                runOnUiThread {
+                    val targetSession = actionSession ?: session
+                    tabs.firstOrNull { it.session == targetSession }?.tabAction = action
+                    updateNavHighlight()
+                }
             }
         })
     }
@@ -2656,6 +2747,18 @@ class MainActivity : AppCompatActivity() {
             val cat = SiteCatalog.formatCategory(site.category)
             hostView.text = if (cat.isNotEmpty()) "${site.primaryHost} · $cat" else site.primaryHost
 
+            val warningView = row.findViewById<TextView>(R.id.suggestion_warning)
+            val warningLine = SiteCatalog.shortWarningLine(site)
+            if (warningLine != null) {
+                warningView.text = warningLine
+                warningView.setTextColor(
+                    if (SiteCatalog.isHighSeverityWarning(site)) SiteCatalog.COLOR_WARN_RED else SiteCatalog.COLOR_CAUTION_AMBER,
+                )
+                warningView.visibility = View.VISIBLE
+            } else {
+                warningView.visibility = View.GONE
+            }
+
             gradeView.text = SiteCatalog.badgeLabel(site)
             (gradeView.background.mutate() as? GradientDrawable)?.setColor(gradeColor)
             return row
@@ -2786,6 +2889,10 @@ class MainActivity : AppCompatActivity() {
     override fun onDestroy() {
         if (currentActivity === this) {
             extension?.let { ext ->
+                for (t in tabs) {
+                    t.session.webExtensionController.setTabDelegate(ext, null)
+                    t.session.webExtensionController.setActionDelegate(ext, null)
+                }
                 ext.tabDelegate = null
                 ext.setActionDelegate(null)
                 ext.setMessageDelegate(null, Nip55Bridge.NATIVE_APP_ID)

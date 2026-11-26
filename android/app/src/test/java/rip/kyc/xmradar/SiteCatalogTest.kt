@@ -72,10 +72,13 @@ class SiteCatalogTest {
                         put("name", "ShadySwap")
                         put("category", "swap")
                         put("grade", "F")
+                        put("url", "https://xmr.club/exchanges/shady-swap")
                         put("incident", true)
+                        put("incidentWhen", "critical, 2026-09-25")
+                        put("incidentSummary", "Large swaps held indefinitely without payout.")
                         put("intern", false)
                         put("internHoldsFunds", false)
-                        put("hosts", JSONArray(listOf("shadyswap.io")))
+                        put("hosts", JSONArray(listOf("shadyswap.io", "shadyswap.org")))
                         put("nkip01Level", 0)
                         put("logOnly", true)
                         put("hasLog", true)
@@ -88,9 +91,12 @@ class SiteCatalogTest {
                         put("name", "FreshMonero")
                         put("category", "swap")
                         put("grade", "")
+                        put("url", "https://xmr.club/exchanges/freshmonero")
                         put("incident", false)
                         put("intern", true)
                         put("internHoldsFunds", true)
+                        put("internDay", 5)
+                        put("internDaysRequired", 90)
                         put("hosts", JSONArray(listOf("freshmonero.org")))
                         put("nkip01Level", JSONObject.NULL)
                         put("logOnly", false)
@@ -176,5 +182,31 @@ class SiteCatalogTest {
         assertNull(SiteCatalog.decodeWebpBase64("data:image/webp;base64,not-valid-base64!!!"))
         assertNull(SiteCatalog.decodeWebpBase64("data:image/webp;base64,AAAAAAAAAAAAAAAAAAAAAAAAAAAA"))
         assertTrue(SiteCatalog.decodeWebpBase64(validWebpDataUri)!!.size >= 30)
+    }
+
+    @Test
+    fun warningsAndSiblingHostsMirrorDesktopRules() {
+        val sites = SiteCatalog.parse(samplePayload())!!.sites
+        val trocador = sites.first { it.id == "trocador" }
+        val shady = sites.first { it.id == "shady-swap" }
+        val intern = sites.first { it.id == "fresh-intern" }
+
+        assertEquals(false, SiteCatalog.needsWarning(trocador))
+        assertNull(SiteCatalog.shortWarningLine(trocador))
+
+        assertTrue(SiteCatalog.needsWarning(shady))
+        assertTrue(SiteCatalog.isHighSeverityWarning(shady))
+        assertEquals("⚠ Open incident (critical, 2026-09-25)", SiteCatalog.shortWarningLine(shady))
+        assertEquals("⚠ Open incident · ShadySwap (critical, 2026-09-25)", SiteCatalog.warningTitle(shady))
+        assertEquals("Large swaps held indefinitely without payout.", SiteCatalog.warningBody(shady))
+        assertEquals("https://xmr.club/exchanges/shady-swap", shady.url)
+
+        assertTrue(SiteCatalog.needsWarning(intern))
+        assertEquals(false, SiteCatalog.isHighSeverityWarning(intern))
+        assertEquals("⚠ New on xmr.club · holds coins during swap", SiteCatalog.shortWarningLine(intern))
+        assertTrue(SiteCatalog.warningBody(intern).contains("day 5 of 90"))
+
+        assertEquals(setOf("shadyswap.io", "shadyswap.org"), SiteCatalog.siblingHostsFor(sites, "www.shadyswap.org"))
+        assertEquals(emptySet<String>(), SiteCatalog.siblingHostsFor(sites, "unknown.example"))
     }
 }

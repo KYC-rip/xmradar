@@ -23,6 +23,10 @@
     <string name="swap_clear_input">Clear URL</string>
     <string name="swap_dialog_open">Open in private tab</string>
     <string name="swap_invalid_host">Enter a valid HTTPS domain (e.g. kyc.rip or trocador.app).</string>
+    <string name="swap_warning_open_anyway">Open anyway</string>
+    <string name="swap_warning_view_listing">Listing on xmr.club</string>
+    <string name="sheet_warning_open_card">Inspect in XMRadar</string>
+    <string name="sheet_warning_listing">Listing on xmr.club</string>
     <string name="swap_help_heading">How XMRadar helps during your swap</string>
     <string name="swap_help_1_title">Isolated private session</string>
     <string name="swap_help_1_body">Runs in its own private GeckoView tab with zero cookies or storage shared with X or Chat.</string>

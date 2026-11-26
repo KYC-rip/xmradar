@@ -1,4 +1,4 @@
-import { normalizeHost, PLATFORM_HOSTS, type SiteEntry, type SiteFeed } from './feed';
+import { firstSentence, incidentWhen, normalizeHost, PLATFORM_HOSTS, type SiteEntry, type SiteFeed } from './feed';
 import { logoFor, type LogoPack } from './logos';
 import { ANDROID_NATIVE_APP, type NativeRuntimeLike } from '../nostr/native-signer';
 
@@ -16,9 +16,14 @@ export interface AndroidCatalogSite {
   name: string;
   category: string;
   grade: string;
+  url: string;
   incident: boolean;
+  incidentWhen?: string;
+  incidentSummary?: string;
   intern: boolean;
   internHoldsFunds: boolean;
+  internDay?: number;
+  internDaysRequired?: number;
   hosts: string[];
   nkip01Level: number | null;
   logOnly: boolean;
@@ -48,6 +53,7 @@ function toCatalogSite(entry: SiteEntry, pack: LogoPack | null | undefined): And
     name: entry.name,
     category: entry.category,
     grade: entry.grade,
+    url: entry.url,
     incident: entry.incident,
     intern: Boolean(entry.intern),
     internHoldsFunds: entry.intern?.track === 'funds',
@@ -56,6 +62,16 @@ function toCatalogSite(entry: SiteEntry, pack: LogoPack | null | undefined): And
     logOnly: Boolean(entry.nkip01?.logOnly),
     hasLog: Boolean(entry.log),
   };
+  if (entry.incident && entry.incidentDetail) {
+    const when = incidentWhen(entry.incidentDetail);
+    if (when) out.incidentWhen = when;
+    const summary = firstSentence(entry.incidentDetail.summary, 200);
+    if (summary) out.incidentSummary = summary;
+  }
+  if (entry.intern) {
+    out.internDay = entry.intern.day;
+    out.internDaysRequired = entry.intern.daysRequired;
+  }
   if (logo) out.logo = logo;
   return out;
 }

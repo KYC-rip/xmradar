@@ -110,16 +110,30 @@ describe('what the listings mean (§3)', () => {
   });
   it('incident detail: date, severity and the first sentence; only for an open incident', () => {
     const feed = readFeed(
-      sign(payload({ sites: [site({ id: 'wagyu', name: 'Wagyu', grade: 'C', incident: true, hosts: ['wagyu.xyz'], incident_detail: { date: '2026-10-27', severity: 'high', summary: 'Order data leaked after a ransom was refused. More text follows.', source_url: 'https://example.com/a' } }), site({ id: 'calm', hosts: ['calm.example'], incident: false, incident_detail: { date: '2026-01-01', severity: 'low', summary: 'Old.', source_url: null } }), site({ id: 'bad', hosts: ['bad.example'], incident: true, incident_detail: { date: 'yesterday', severity: 'high', summary: 'x', source_url: 'javascript:alert(1)' } })] })),
+      sign(
+        payload({
+          sites: [
+            site({ id: 'wagyu', name: 'Wagyu', grade: 'C', incident: true, hosts: ['wagyu.xyz'], incident_detail: { date: '2026-10-27', severity: 'high', summary: 'Order data leaked after a ransom was refused. More text follows.', source_url: 'https://example.com/a' } }),
+            site({ id: 'octo', name: 'OctoSwap', grade: 'F', incident: true, hosts: ['octoswap.io'], incident_detail: { date: null, severity: 'critical', summary: 'Peer directories flagged an exit scam. More details.', source_url: null } }),
+            site({ id: 'sms', name: 'SMSPool', grade: 'C', incident: true, hosts: ['smspool.net'], incident_detail: { date: null, severity: null, summary: 'Stopped direct Monero payments.', source_url: null } }),
+            site({ id: 'calm', hosts: ['calm.example'], incident: false, incident_detail: { date: '2026-01-01', severity: 'low', summary: 'Old.', source_url: null } }),
+            site({ id: 'bad', hosts: ['bad.example'], incident: true, incident_detail: { date: 'yesterday', severity: 'high', summary: 'x', source_url: 'javascript:alert(1)' } }),
+          ],
+        }),
+      ),
       NOW,
       0,
       KEYS,
     );
-    const [wagyu, calm, bad] = feed.sites;
+    const [wagyu, octo, sms, calm, bad] = feed.sites;
     expect(wagyu!.incidentDetail).toEqual({ date: '2026-10-27', severity: 'high', summary: 'Order data leaked after a ransom was refused. More text follows.', sourceUrl: 'https://example.com/a' });
+    expect(octo!.incidentDetail).toEqual({ date: '', severity: 'critical', summary: 'Peer directories flagged an exit scam. More details.', sourceUrl: null });
+    expect(sms!.incidentDetail).toEqual({ date: '', severity: '', summary: 'Stopped direct Monero payments.', sourceUrl: null });
     expect(calm!.incidentDetail).toBeUndefined();
     expect(bad!.incidentDetail).toBeUndefined();
     expect(bannerText([wagyu!]).lead).toBe('Open incident for Wagyu (high, 2026-10-27): Order data leaked after a ransom was refused.');
+    expect(bannerText([octo!]).lead).toBe('Open incident for OctoSwap (critical): Peer directories flagged an exit scam.');
+    expect(bannerText([sms!]).lead).toBe('Open incident for SMSPool: Stopped direct Monero payments.');
     expect(firstSentence('x'.repeat(300), 20)).toHaveLength(20);
   });
   it('banner wording: the worst listing and how many more', () => {

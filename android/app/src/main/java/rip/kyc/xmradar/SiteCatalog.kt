@@ -19,6 +19,7 @@ object SiteCatalog {
     const val MAX_LOGO_BYTES = 4096
     private const val MAX_LOGO_B64_CHARS = ((MAX_LOGO_BYTES + 2) / 3) * 4
     private const val WEBP_DATA_URI_PREFIX = "data:image/webp;base64,"
+    private val XMRCLUB_URL_RE = Regex("^https://xmr\\.club/[A-Za-z0-9/_.-]*$")
 
     // Mirror of src/sites/feed.ts PLATFORM_HOSTS so multi-tenant platforms never match as a single service.
     private val PLATFORM_HOSTS = setOf(
@@ -61,9 +62,14 @@ object SiteCatalog {
         val name: String,
         val category: String,
         val grade: String,
+        val url: String?,
         val incident: Boolean,
+        val incidentWhen: String?,
+        val incidentSummary: String?,
         val intern: Boolean,
         val internHoldsFunds: Boolean,
+        val internDay: Int?,
+        val internDaysRequired: Int?,
         val hosts: List<String>,
         val nkip01Level: Int?,
         val logOnly: Boolean,
@@ -115,9 +121,15 @@ object SiteCatalog {
         if (hosts.isEmpty()) return null
         val category = obj.optString("category", "").trim()
         val grade = obj.optString("grade", "").trim().uppercase().take(3)
+        val rawUrl = obj.optString("url", "").trim()
+        val url = rawUrl.takeIf { it.isNotEmpty() && !it.contains("..") && XMRCLUB_URL_RE.matches(it) }
         val incident = obj.optBoolean("incident", false)
+        val incidentWhen = if (incident) obj.optString("incidentWhen", "").trim().take(48).takeIf { it.isNotEmpty() } else null
+        val incidentSummary = if (incident) obj.optString("incidentSummary", "").trim().take(240).takeIf { it.isNotEmpty() } else null
         val intern = obj.optBoolean("intern", false)
         val internHoldsFunds = obj.optBoolean("internHoldsFunds", false)
+        val internDay = if (!intern || obj.isNull("internDay")) null else obj.optInt("internDay", -1).takeIf { it in 1..3650 }
+        val internDaysRequired = if (!intern || obj.isNull("internDaysRequired")) null else obj.optInt("internDaysRequired", -1).takeIf { it in 1..3650 }
         val nkip01Level = if (obj.isNull("nkip01Level")) null else {
             val v = obj.optInt("nkip01Level", -1)
             if (v in 0..3) v else null
@@ -131,9 +143,14 @@ object SiteCatalog {
             name = name,
             category = category,
             grade = grade,
+            url = url,
             incident = incident,
+            incidentWhen = incidentWhen,
+            incidentSummary = incidentSummary,
             intern = intern,
             internHoldsFunds = internHoldsFunds,
+            internDay = internDay,
+            internDaysRequired = internDaysRequired,
             hosts = hosts,
             nkip01Level = nkip01Level,
             logOnly = logOnly,
@@ -158,10 +175,84 @@ object SiteCatalog {
     /** Exact host match (mirroring `sitesFor` + `leadSite` in src/sites/feed.ts). */
     fun matchUrl(sites: List<CatalogSite>, url: String?): CatalogSite? {
         val host = extractHost(url) ?: return null
-        if (host in PLATFORM_HOSTS) return null
+        return matchHost(sites, host)
+    }
+
+    /** Exact normalized host match (mirroring `sitesFor` + `leadSite` in src/sites/feed.ts). */
+    fun matchHost(sites: List<CatalogSite>, rawHost: String?): CatalogSite? {
+        val host = normalizeHost(rawHost ?: return null)
+        if (host.isEmpty() || "." !in host || host in PLATFORM_HOSTS) return null
         val matches = sites.filter { host in it.hosts }
         if (matches.isEmpty()) return null
         return leadSite(matches)
+    }
+
+    /**
+     * All verified sibling hosts belonging to any catalog listing that owns `rawHost`
+     * (e.g. `fixedfloat.com` -> `{"ff.io", "fixedfloat.com"}`), so Swap tab allowlists
+     * allow canonical redirects between a service's own listed domains.
+     */
+    fun siblingHostsFor(sites: List<CatalogSite>, rawHost: String): Set<String> {
+        val host = normalizeHost(rawHost)
+        if (host.isEmpty() || host in PLATFORM_HOSTS) return emptySet()
+        val out = LinkedHashSet<String>()
+        for (site in sites) {
+            if (host in site.hosts) {
+                for (h in site.hosts) {
+                    if (h !in PLATFORM_HOSTS) out.add(h)
+                }
+            }
+        }
+        return out
+    }
+
+    /** Mirrors desktop `needsBanner(sites)` in src/sites/feed.ts: open incident, D–F grade, or funds intern. */
+    fun needsWarning(site: CatalogSite): Boolean =
+        site.incident || site.internHoldsFunds || site.grade.firstOrNull() in listOf('D', 'E', 'F')
+
+    /** True for red alarms (open incident or D–F grade); false for amber caution (funds intern). */
+    fun isHighSeverityWarning(site: CatalogSite): Boolean =
+        site.incident || site.grade.firstOrNull() in listOf('D', 'E', 'F')
+
+    /** Short one-line warning chip for Swap autocomplete rows and sheet headers. */
+    fun shortWarningLine(site: CatalogSite): String? {
+        if (!needsWarning(site)) return null
+        return when {
+            site.incident -> if (site.incidentWhen != null) "⚠ Open incident (${site.incidentWhen})" else "⚠ Open incident on xmr.club"
+            site.grade.firstOrNull() in listOf('D', 'E', 'F') -> "⚠ Grade ${site.grade} on xmr.club"
+            site.internHoldsFunds -> "⚠ New on xmr.club · holds coins during swap"
+            else -> null
+        }
+    }
+
+    /** Dialog/card title for a warned site. */
+    fun warningTitle(site: CatalogSite): String = when {
+        site.incident -> if (site.incidentWhen != null) {
+            "⚠ Open incident · ${site.name} (${site.incidentWhen})"
+        } else {
+            "⚠ Open incident · ${site.name}"
+        }
+        site.grade.firstOrNull() in listOf('D', 'E', 'F') -> "⚠ ${site.name} · Grade ${site.grade}"
+        site.internHoldsFunds -> "⚠ ${site.name} · New on xmr.club"
+        else -> site.name
+    }
+
+    /** Full warning summary mirroring desktop `bannerText` in src/entrypoints/content/site.ts. */
+    fun warningBody(site: CatalogSite): String = when {
+        site.incident -> site.incidentSummary ?: "xmr.club lists an open incident for ${site.name}."
+        site.internHoldsFunds -> {
+            val d = site.internDay
+            val req = site.internDaysRequired
+            val dayPart = if (d != null && req != null) {
+                " (intern, day ${minOf(d, req)} of $req, not graded yet)"
+            } else {
+                " (intern, not graded yet)"
+            }
+            "${site.name} is new on xmr.club$dayPart. It holds your coins during a swap: keep amounts small."
+        }
+        site.grade.firstOrNull() in listOf('D', 'E', 'F') ->
+            "xmr.club grades ${site.name} ${site.grade}. Review its listing on xmr.club before sending funds."
+        else -> ""
     }
 
     /**
