@@ -19,6 +19,7 @@ from pathlib import Path
 REPO = 'KYC-rip/xmradar'
 CHROME_STORE_URL = 'https://chromewebstore.google.com/detail/xmradar/jkipcphnfilljjelfibblihhiegpgodj'
 FIREFOX_ADDON_URL = 'https://addons.mozilla.org/en-US/firefox/addon/xmradar/'
+FDROID_REPO_URL = 'https://fdroid.kyc.rip/'
 SITE = Path(__file__).resolve().parent
 ASSETS = ['style.css', 'app.js', 'logo', 'fonts', 'shots', 'signer.html', 'privacy.html', 'og.png']
 
@@ -120,6 +121,7 @@ def main() -> None:
         'CHROME_ZIP_URL': f'{dl}/{chrome}',
         'FIREFOX_URL': FIREFOX_ADDON_URL,
         'FIREFOX_ZIP_URL': f'{dl}/{firefox}',
+        'FDROID_URL': FDROID_REPO_URL,
         'ANDROID_URL': f'{dl}/{apk}' if apk else f'https://github.com/{REPO}/releases',
         'ANDROID_APK': apk or 'arm64-v8a APK (next release)',
         'ANDROID_META': (

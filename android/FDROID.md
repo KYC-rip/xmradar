@@ -6,10 +6,12 @@ The official F-Droid repository forbids pulling prebuilt `org.mozilla.geckoview`
 1. **GitHub Releases + Obtainium** (recommended on GrapheneOS):
    - Point Obtainium at `https://github.com/KYC-rip/xmradar` matching `xmradar-*-arm64-v8a.apk`.
    - Verify SHA-256 against `SHA256SUMS` attached to each release.
-2. **Custom F-Droid repository on Cloudflare R2** (e.g. `https://fdroid.xmradar.app/repo`):
-   - **Important:** Do NOT host the APK on Cloudflare Pages (Pages enforces a 25 MiB per-file limit, while a GeckoView `arm64-v8a` APK is ~55–65 MiB). Host the static `fdroidserver` output (`repo/` + `index-v2.json` + APKs) on Cloudflare R2 (or another static host without a 25 MiB cap).
-   - App metadata lives in `metadata/rip.kyc.xmradar/en-US/` (`summary.txt`, `description.txt`, `changelogs/<versionCode>.txt`).
-   - F-Droid AntiFeatures to declare in the repo metadata: `NonFreeNet` (connects to X, xmr.bio, xmr.club, GhostMail).
+2. **Official kyc.rip F-Droid repository (`https://fdroid.kyc.rip/repo`):**
+   - Maintained centrally in [`KYC-rip/fdroid-repo`](https://github.com/KYC-rip/fdroid-repo) for all `rip.kyc.*` Android apps (XMRadar, Ripley Vault, and future releases).
+   - Repo SHA-256 signing fingerprint: `9DA113F270E5200D7C7D175B6B48185FE8B585574A5AEB76EF9D6A3CF8BD0061`
+   - Served from Cloudflare R2 (`kyc-rip-fdroid` bucket behind the `kyc-rip-fdroid` Cloudflare Worker — no 25 MiB Pages limit, full HTTP Range streaming).
+   - App metadata is pulled automatically from `metadata/rip.kyc.xmradar/en-US/` (`summary.txt`, `description.txt`, `changelogs/<versionCode>.txt`, `images/`).
+   - F-Droid AntiFeatures declared in `KYC-rip/fdroid-repo/apps.json`: `NonFreeNet` (connects to X, xmr.bio, xmr.club, GhostMail).
 
 ## Versioning & Signing
 - `versionName` comes from `../package.json`.
