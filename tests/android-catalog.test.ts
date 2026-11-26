@@ -35,6 +35,21 @@ function sampleFeed(): SiteFeed {
         intern: { day: 3, daysRequired: 14, track: 'funds' },
       },
       {
+        id: 'fixedfloat',
+        name: 'FixedFloat',
+        category: 'swap',
+        grade: 'C',
+        incident: true,
+        incidentDetail: {
+          date: '2026-06-08',
+          severity: 'medium',
+          summary: 'Suspends funds for verification. Extra context here.',
+          sourceUrl: 'https://x.com/FixedFloat',
+        },
+        url: 'https://xmr.club/exchanges/fixedfloat',
+        hosts: ['ff.io', 'fixedfloat.com'],
+      },
+      {
         id: 'platform-only',
         name: 'GitHub Listing',
         category: 'tool',
@@ -58,7 +73,7 @@ describe('android-catalog', () => {
     const payload = buildAndroidSiteCatalogPayload(sampleFeed(), sampleLogoPack());
     expect(payload.type).toBe('sync_site_catalog');
     expect(payload.issuedAt).toBe(1_760_000_000);
-    expect(payload.sites).toHaveLength(2);
+    expect(payload.sites).toHaveLength(3);
 
     const trocador = payload.sites[0]!;
     expect(trocador).toEqual({
@@ -66,6 +81,7 @@ describe('android-catalog', () => {
       name: 'Trocador',
       category: 'swap-aggregator',
       grade: 'A',
+      url: 'https://xmr.club/trocador',
       incident: false,
       intern: false,
       internHoldsFunds: false,
@@ -81,7 +97,16 @@ describe('android-catalog', () => {
     const newswap = payload.sites[1]!;
     expect(newswap.intern).toBe(true);
     expect(newswap.internHoldsFunds).toBe(true);
+    expect(newswap.internDay).toBe(3);
+    expect(newswap.internDaysRequired).toBe(14);
     expect(newswap.logo).toBeUndefined();
+
+    const ff = payload.sites[2]!;
+    expect(ff.incident).toBe(true);
+    expect(ff.incidentWhen).toBe('medium, 2026-06-08');
+    expect(ff.incidentSummary).toBe('Suspends funds for verification.');
+    expect(ff.url).toBe('https://xmr.club/exchanges/fixedfloat');
+    expect(ff.hosts).toEqual(['ff.io', 'fixedfloat.com']);
   });
 
   it('emits an empty clearing payload when feed is null (site info disabled)', () => {

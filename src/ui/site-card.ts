@@ -34,7 +34,8 @@ export function renderSiteCard(root: HTMLElement, info: SiteInfo | null) {
     const checked = s.nkip01?.lastOkAt ? ` · checked ${new Date(s.nkip01.lastOkAt * 1000).toLocaleDateString()}` : '';
     if (level) row.append(el('div', level + checked, 'row-hint'));
     const d = s.incidentDetail;
-    if (s.incident) row.append(el('div', d ? `⚠ Open incident (${incidentWhen(d)}): ${firstSentence(d.summary, 240)}` : '⚠ Open incident on xmr.club', 'row-hint warn'));
+    const when = d ? incidentWhen(d) : '';
+    if (s.incident) row.append(el('div', d ? `⚠ Open incident${when ? ` (${when})` : ''}: ${firstSentence(d.summary, 240)}` : '⚠ Open incident on xmr.club', 'row-hint warn'));
     if (d?.sourceUrl) row.append(Object.assign(el('a', 'Incident source', 'link'), { href: d.sourceUrl, target: '_blank', rel: 'noopener noreferrer' }));
     const link = Object.assign(el('a', 'Listing on xmr.club', 'link'), { href: s.url, target: '_blank', rel: 'noopener noreferrer' });
     row.append(link);

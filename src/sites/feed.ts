@@ -191,9 +191,15 @@ function parseSite(v: unknown): SiteEntry | null {
   if (!hosts.length) return null;
   const site: SiteEntry = { id: v.id as string, name: v.name as string, category: v.category as string, grade: (v.grade as string) || '', incident: v.incident, url: v.url, hosts };
   const d = v.incident_detail;
-  if (site.incident && isObj(d) && typeof d.summary === 'string' && d.summary.trim() && typeof d.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d.date)) {
+  if (
+    site.incident &&
+    isObj(d) &&
+    typeof d.summary === 'string' &&
+    d.summary.trim() &&
+    (d.date === null || d.date === undefined || d.date === '' || (typeof d.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d.date)))
+  ) {
     site.incidentDetail = {
-      date: d.date,
+      date: typeof d.date === 'string' ? d.date : '',
       severity: typeof d.severity === 'string' && /^[a-z]{1,12}$/.test(d.severity) ? d.severity : '',
       summary: d.summary.trim().slice(0, 2000),
       // a link the popup opens: https only

@@ -85,7 +85,7 @@
                 android:background="@null"
                 android:completionThreshold="1"
                 android:dropDownAnchor="@id/swap_input_row"
-                android:dropDownHeight="240dp"
+                android:dropDownHeight="wrap_content"
                 android:dropDownVerticalOffset="6dp"
                 android:hint="@string/swap_dialog_hint"
                 android:imeOptions="actionGo"

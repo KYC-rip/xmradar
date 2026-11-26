@@ -42,10 +42,11 @@ button { font: inherit; border: 0; background: transparent; font-size: 16px; lin
 export function bannerText(sites: SiteEntry[]): { lead: string; rest: string; site: SiteEntry } {
   const site = leadSite(sites)!;
   const d = site.incidentDetail;
+  const when = d ? incidentWhen(d) : '';
   const i = site.intern;
   const lead = site.incident
     ? d
-      ? `Open incident for ${site.name} (${incidentWhen(d)}): ${firstSentence(d.summary)}`
+      ? `Open incident for ${site.name}${when ? ` (${when})` : ''}: ${firstSentence(d.summary)}`
       : `xmr.club lists an open incident for ${site.name}.`
     : i
       ? `${site.name} is new on xmr.club (intern, day ${Math.min(i.day, i.daysRequired)} of ${i.daysRequired}, not graded yet).${internCaution(i) ? ` ${internCaution(i)}` : ''}`

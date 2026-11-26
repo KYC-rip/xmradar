@@ -24,6 +24,10 @@ import { closeCurrentPage, openExtensionPage, resolveActiveSiteTabId } from '../
 import { ensureBrowserStorage } from '../../platform/storage-compat';
 
 ensureBrowserStorage(browser as unknown as { storage?: Parameters<typeof ensureBrowserStorage>[0] extends { storage?: infer S } ? S : never });
+// Standalone Android / mobile tab mode: expand popup to full viewport even when GeckoView reports pointer:fine.
+if (new URLSearchParams(location.search).has('siteUrl') || /Android|Mobile/i.test(navigator.userAgent)) {
+  document.documentElement.classList.add('full-tab');
+}
 
 const $ = (id: string) => document.getElementById(id)!;
 const closePopup = () => void closeCurrentPage({ tabs: browser.tabs, closeWindow: () => window.close() });
