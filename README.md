@@ -75,7 +75,7 @@ diff dist/SHA256SUMS release-SHA256SUMS
 - Firefox MV3 doesn't grant site access at install time. Open the extension's options page and click **Grant access**, or enable it under *about:addons → XMRadar → Permissions*.
 - For a local or release zip test: open `about:debugging#/runtime/this-firefox`, click *Load Temporary Add-on*, and pick `xmradar-<version>-firefox.zip` (or `output/firefox-mv3/manifest.json`). Temporary add-ons are removed when Firefox restarts.
 
-**Android / GrapheneOS (`arm64-v8a`):** download the signed `xmradar-<version>-arm64-v8a.apk` from [Releases](https://github.com/KYC-rip/xmradar/releases) (or track releases directly in Obtainium). Zero Google Play Services, zero Firebase, zero trackers. Fastlane store metadata lives under `metadata/rip.kyc.xmradar/`.
+**Android / GrapheneOS (`arm64-v8a`):** install via the official kyc.rip F-Droid repository at **[fdroid.kyc.rip](https://fdroid.kyc.rip/)** (F-Droid, Droid-ify, Neo Store), track GitHub Releases in **Obtainium**, or download the signed `xmradar-<version>-arm64-v8a.apk` directly from [Releases](https://github.com/KYC-rip/xmradar/releases). Zero Google Play Services, zero Firebase, zero trackers. Fastlane store metadata lives under `metadata/rip.kyc.xmradar/`.
 
 **Chrome / Brave / Edge:** install from the [Chrome Web Store](https://chromewebstore.google.com/detail/xmradar/jkipcphnfilljjelfibblihhiegpgodj).
 - To sideload a GitHub release or local build instead: download `xmradar-<version>-chrome.zip` from [Releases](https://github.com/KYC-rip/xmradar/releases) (or run `pnpm build`), unzip it, open `chrome://extensions`, turn on Developer mode, click *Load unpacked*, and pick the folder. XMRadar checks for updates automatically (see **Updates** below).
