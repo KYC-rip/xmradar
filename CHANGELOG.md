@@ -3,6 +3,11 @@
 What changed in each XMRadar release. Downloads, checksums and build provenance are on the
 [releases page](https://github.com/KYC-rip/xmradar/releases).
 
+## 0.6.20
+
+- **Android Private Swap autocomplete (`xmr.club` signed catalog).** The Private Swap / Browse input now filters XMRadar's Ed25519-verified `xmr.club` site feed and SHA-256-verified logo pack offline by site name, host, or category — displaying each site's logo, `NKIP-0001` / `LoG` proof status, and colored grade pill while filling the verified canonical host on tap.
+- **Android floating FAB site-recognition parity.** Per-tab badge tracking (`ActionDelegate.onBrowserAction`) now tints the FAB badge with desktop `badgeFor()` grade/receipt/warning colors and renders a colored status ring plus the verified site logo on exact host matches (never on unlisted lookalike/phishing warnings), reverting cleanly on X, Chat, and unrecognized hosts.
+
 ## 0.6.19
 
 - **Security & privacy hardening.** Filtered remote NIP-65 relays through `safeRelay()` across Xap/xo/setup paths, blocked single-label intranet hostnames and CGNAT `100.64.0.0/10` in media URL guards, hardened Blossom uploads (`no-referrer`, `redirect: error`, bounded reads), stopped passive X loads from signing or POSTing to `xmr.bio`, and tightened `siwm-open` / NIP-55 composer signing checks.

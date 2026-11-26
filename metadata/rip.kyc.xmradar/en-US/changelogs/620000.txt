@@ -1,0 +1,2 @@
+- Private Swap autocomplete powered offline by XMRadar's Ed25519-verified xmr.club site feed and SHA-256-verified logo pack (filter by name, host, or category with grade pill & NKIP-0001 / LoG proof tags).
+- Floating FAB site-recognition parity: per-tab colored grade/receipt/warning badges, colored status ring, and verified site logo on exact host matches (never on lookalike warnings).
