@@ -1,0 +1,3 @@
+- Security hardening: NIP-65 relay SSRF filtering, intranet/CGNAT URL guards, hardened Blossom uploads, passive X load privacy fix, and stricter SIWM / NIP-55 checks.
+- Performance & X fixes: rAF-coalesced timeline scanning, stale xo ring cleanup on recycled posts, cleaner quote screenshots, and X Article share support.
+- Android shell & UI polish: cleaner GeckoView lifecycle, off-main-thread downloads, fixed notification close races, Material 3 sheet insets, and WCAG AA contrast.

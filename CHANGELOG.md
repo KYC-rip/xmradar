@@ -3,6 +3,12 @@
 What changed in each XMRadar release. Downloads, checksums and build provenance are on the
 [releases page](https://github.com/KYC-rip/xmradar/releases).
 
+## 0.6.19
+
+- **Security & privacy hardening.** Filtered remote NIP-65 relays through `safeRelay()` across Xap/xo/setup paths, blocked single-label intranet hostnames and CGNAT `100.64.0.0/10` in media URL guards, hardened Blossom uploads (`no-referrer`, `redirect: error`, bounded reads), stopped passive X loads from signing or POSTing to `xmr.bio`, and tightened `siwm-open` / NIP-55 composer signing checks.
+- **Performance & X reliability.** Coalesced `MutationObserver` scans into `requestAnimationFrame` batches, short-circuited lookalike guard DNR IPC on normal navigations, cleared stale xo rings on recycled DOM nodes, hid all XMRadar overlays in quote screenshots, preserved Twemoji link text in Markdown extraction, and added X Article share-menu support.
+- **UI, accessibility & Android shell polish.** Upgraded light/dark WCAG AA tokens across extension UI and `xmradar.app`, fixed mobile touch/keyboard ergonomics and layout overflow, detached Android GeckoView extension delegates cleanly on destroy, offloaded download reads off the UI thread (16 MiB cap), fixed superseded notification close races, and polished Material 3 bottom sheets with edge-to-edge IME/nav-bar insets.
+
 ## 0.6.18
 
 - **Standalone GrapheneOS & Android app (`rip.kyc.xmradar`).** Hardened Mozilla GeckoView shell bundling XMRadar's Firefox MV3 WebExtension with isolated X, Chat, and Private Swap Guard compartments, zero Google Play Services / Firebase, zero-reload lock/unlock, opt-in `POST_NOTIFICATIONS`, an enriched Private Swap Guard modal with quick-pick hosts and protection checklist, and a native cert-pinned **NIP-55** Android signer bridge (Amber, Ripley Vault) supporting silent background Blossom uploads and explicit post approvals.
