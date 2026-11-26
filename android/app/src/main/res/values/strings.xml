@@ -19,7 +19,7 @@
     <string name="swap_dialog_title">Open swap or site</string>
     <string name="swap_dialog_subtitle">Enter a no-KYC exchange or site URL to launch inside XMRadar’s private Swap Guard.</string>
     <string name="swap_private_badge">Private tab</string>
-    <string name="swap_dialog_hint">kyc.rip or trocador.app</string>
+    <string name="swap_dialog_hint">Search xmr.club sites or enter domain</string>
     <string name="swap_clear_input">Clear URL</string>
     <string name="swap_dialog_open">Open in private tab</string>
     <string name="swap_invalid_host">Enter a valid HTTPS domain (e.g. kyc.rip or trocador.app).</string>

@@ -33,14 +33,22 @@
         android:elevation="8dp"
         android:focusable="true">
 
-        <ImageView
-            android:id="@+id/fab_icon"
+        <FrameLayout
+            android:id="@+id/fab_orb"
             android:layout_width="48dp"
             android:layout_height="48dp"
-            android:layout_gravity="center"
-            android:alpha="0.92"
-            android:contentDescription="@null"
-            android:src="@drawable/ic_xmradar" />
+            android:layout_gravity="center">
+
+            <ImageView
+                android:id="@+id/fab_icon"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:layout_gravity="center"
+                android:alpha="0.92"
+                android:contentDescription="@null"
+                android:scaleType="fitCenter"
+                android:src="@drawable/ic_xmradar" />
+        </FrameLayout>
 
         <TextView
             android:id="@+id/fab_badge"

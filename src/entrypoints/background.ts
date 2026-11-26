@@ -67,6 +67,7 @@ import { readRelaysOf, republishAllowed, resolvePostRelays } from '../nostr/post
 import { releaseUrl, UPDATE_NOTICE_ID, updateFor, updateKeeper } from '../update/check';
 import { setGlobalBadge, setTabBadge, updateBadge, type BadgeAction } from '../update/badge';
 import { logoKeeper } from '../sites/logos';
+import { syncAndroidSiteCatalog } from '../sites/android-catalog';
 import { INBOX_NOTICE_ID, inboxKeeper, MAX_RELAYS } from '../xap/inbox';
 import { KIND_XO, readRelaysFrom, undoTemplate, xoHandleValue, xoRelayOrder, xoTemplate } from '../xo/event';
 import { KIND_RECEIPT } from '../xap/events';
@@ -456,11 +457,30 @@ export default defineBackground(() => {
   void xmrSettingsItem.getValue().then((s) => applySiteInfoSetting(siteInfoOn(s)));
   // a pack missed while the worker was down (or kept by a version without logos)
   void siteFeedItem.getValue().then((f) => logos.sync(f));
+  // Push verified xmr.club catalog + logos to the standalone Android shell (no-op on desktop / AMO).
+  let androidCatalogSeq = 0;
+  const pushAndroidSiteCatalog = () => {
+    const seq = ++androidCatalogSeq;
+    void Promise.all([siteFeedItem.getValue(), logoPackItem.getValue()])
+      .then(([feed, pack]) => {
+        if (seq !== androidCatalogSeq) return;
+        return syncAndroidSiteCatalog(browser.runtime as unknown as NativeRuntimeLike, feed, pack);
+      })
+      .catch(() => {});
+  };
+  pushAndroidSiteCatalog();
   void applyGuard();
   // the guard page's address is new each browser session (use_dynamic_url): this listener starts the worker
   // at browser start, so the rules are rewritten to the new address before the first navigations
-  browser.runtime.onStartup.addListener(() => void applyGuard());
-  siteFeedItem.watch(() => void applyGuard());
+  browser.runtime.onStartup.addListener(() => {
+    void applyGuard();
+    pushAndroidSiteCatalog();
+  });
+  siteFeedItem.watch(() => {
+    void applyGuard();
+    pushAndroidSiteCatalog();
+  });
+  logoPackItem.watch(() => pushAndroidSiteCatalog());
   xmrSettingsItem.watch((s, old) => {
     if (siteInfoOn(s) !== siteInfoOn(old)) void applySiteInfoSetting(siteInfoOn(s));
     if (siteWarningsOn(s) !== siteWarningsOn(old)) void applyGuard();

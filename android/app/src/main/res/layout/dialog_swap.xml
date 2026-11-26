@@ -64,8 +64,9 @@
             android:textColor="@color/muted"
             android:textSize="13sp" />
 
-        <!-- Styled URL input row -->
+        <!-- Styled URL autocomplete input row -->
         <LinearLayout
+            android:id="@+id/swap_input_row"
             android:layout_width="match_parent"
             android:layout_height="48dp"
             android:layout_marginTop="14dp"
@@ -75,18 +76,23 @@
             android:paddingStart="14dp"
             android:paddingEnd="8dp">
 
-            <EditText
+            <AutoCompleteTextView
                 android:id="@+id/swap_url_input"
                 android:layout_width="0dp"
                 android:layout_height="match_parent"
                 android:layout_weight="1"
                 android:autofillHints=""
                 android:background="@null"
+                android:completionThreshold="1"
+                android:dropDownAnchor="@id/swap_input_row"
+                android:dropDownHeight="240dp"
+                android:dropDownVerticalOffset="6dp"
                 android:hint="@string/swap_dialog_hint"
                 android:imeOptions="actionGo"
                 android:importantForAutofill="no"
-                android:inputType="textUri"
+                android:inputType="textUri|textNoSuggestions"
                 android:maxLines="1"
+                android:popupBackground="@drawable/bg_swap_dropdown"
                 android:singleLine="true"
                 android:textColor="@color/fg"
                 android:textColorHint="@color/muted"
