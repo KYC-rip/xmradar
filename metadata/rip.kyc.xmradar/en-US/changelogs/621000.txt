@@ -1,0 +1,2 @@
+- Optional, progressive setup: removed unsolicited X setup popup and added 3 upfront choices (Just browse & view badges, Private key only in 1 click, or Public Monero tip badge on X).
+- Full Android incident warning & FAB parity: per-tab receipt/lookalike/site badges, inline autocomplete incident tags, pre-navigation incident confirmation, 1-tap FAB sheet warning card, sibling-host redirect support, and full-width mobile popup layout.

@@ -3,6 +3,11 @@
 What changed in each XMRadar release. Downloads, checksums and build provenance are on the
 [releases page](https://github.com/KYC-rip/xmradar/releases).
 
+## 0.6.21
+
+- **Optional, progressive, choice-first setup.** Removed the unsolicited 5-second setup nag on X so users who only want to view badges, tip others, or use Swap Guard get zero popups. Setup now opens with 3 clear choices (**Just browse & view badges**, **Private key only** with 1-click local key / signer / `nsec` import and no proof tweet, or **Public Monero tip badge on X**), tucks raw JSON event diffs inside expandable technical details, and defers any contextual setup offer until the user actively sends an `xo`.
+- **Android open-incident parity, per-tab FAB delegate & mobile popup layout.** Wired per-session `ActionDelegate` on every GeckoView tab so verified receipts (`✓`), receipt warnings (`!`), and lookalike alerts (`!` / `?`) reach the floating FAB; added inline `⚠ Open incident` / D–F / funds-intern warnings to Swap autocomplete rows, pre-navigation confirmation dialogs, and 1-tap FAB sheet warning cards; allowlisted verified sibling hosts for canonical Swap redirects (`fixedfloat.com` → `ff.io`); accepted date-optional `incident_detail` entries (`OctoSwap`, `SMSPool`); and expanded `popup.html` to full mobile viewport width on Android.
+
 ## 0.6.20
 
 - **Android Private Swap autocomplete (`xmr.club` signed catalog).** The Private Swap / Browse input now filters XMRadar's Ed25519-verified `xmr.club` site feed and SHA-256-verified logo pack offline by site name, host, or category — displaying each site's logo, `NKIP-0001` / `LoG` proof status, and colored grade pill while filling the verified canonical host on tap.
