@@ -77,7 +77,8 @@ diff dist/SHA256SUMS release-SHA256SUMS
 
 **Android / GrapheneOS (`arm64-v8a`):** download the signed `xmradar-<version>-arm64-v8a.apk` from [Releases](https://github.com/KYC-rip/xmradar/releases) (or track releases directly in Obtainium). Zero Google Play Services, zero Firebase, zero trackers. Fastlane store metadata lives under `metadata/rip.kyc.xmradar/`.
 
-**Chrome / Brave / Edge:** not in the Chrome Web Store yet. Download `xmradar-<version>-chrome.zip` from [Releases](https://github.com/KYC-rip/xmradar/releases) (or build it yourself), unzip it, open `chrome://extensions`, turn on Developer mode, click *Load unpacked*, and pick the unzipped folder (or `output/chrome-mv3` after `pnpm build`). To update, replace the folder's contents and click the reload icon on `chrome://extensions`; XMRadar tells you when a new version is out (see **Updates** below).
+**Chrome / Brave / Edge:** install from the [Chrome Web Store](https://chromewebstore.google.com/detail/xmradar/jkipcphnfilljjelfibblihhiegpgodj).
+- To sideload a GitHub release or local build instead: download `xmradar-<version>-chrome.zip` from [Releases](https://github.com/KYC-rip/xmradar/releases) (or run `pnpm build`), unzip it, open `chrome://extensions`, turn on Developer mode, click *Load unpacked*, and pick the folder. XMRadar checks for updates automatically (see **Updates** below).
 
 ## Standalone Android / GrapheneOS app
 
