@@ -17,6 +17,7 @@ import sys
 from pathlib import Path
 
 REPO = 'KYC-rip/xmradar'
+CHROME_STORE_URL = 'https://chromewebstore.google.com/detail/xmradar/jkipcphnfilljjelfibblihhiegpgodj'
 FIREFOX_ADDON_URL = 'https://addons.mozilla.org/en-US/firefox/addon/xmradar/'
 SITE = Path(__file__).resolve().parent
 ASSETS = ['style.css', 'app.js', 'logo', 'fonts', 'shots', 'signer.html', 'privacy.html', 'og.png']
@@ -115,7 +116,8 @@ def main() -> None:
         'VERSION': version,
         'VERSION_SHORT': tag.lstrip('v'),
         'RELEASE_URL': r['url'],
-        'CHROME_URL': f'{dl}/{chrome}',
+        'CHROME_URL': CHROME_STORE_URL,
+        'CHROME_ZIP_URL': f'{dl}/{chrome}',
         'FIREFOX_URL': FIREFOX_ADDON_URL,
         'FIREFOX_ZIP_URL': f'{dl}/{firefox}',
         'ANDROID_URL': f'{dl}/{apk}' if apk else f'https://github.com/{REPO}/releases',
