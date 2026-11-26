@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { npubEncode } from 'nostr-tools/nip19';
-import { cardAllowed, findProofTweet, handleFromNav, SNOOZE_MS } from '../src/entrypoints/content/x-setup-card';
+import { cardAllowed, findProofTweet, handleFromNav, nudgeAllowed, SNOOZE_MS } from '../src/entrypoints/content/x-setup-card';
 import { wizardSteps } from '../src/entrypoints/setup/steps';
 import { identitySteps } from '../src/identity/steps';
 import type { SetupStatus } from '../src/messaging';
@@ -19,6 +19,10 @@ describe('the setup card', () => {
     expect(cardAllowed(true, { dismissed: true }, now)).toBe(false);
     expect(cardAllowed(true, { snoozedUntil: now + SNOOZE_MS }, now)).toBe(false);
     expect(cardAllowed(true, { snoozedUntil: now - 1 }, now)).toBe(true);
+    expect(nudgeAllowed(true, {}, now)).toBe(true);
+    expect(nudgeAllowed(true, { nudged: true }, now)).toBe(false);
+    expect(nudgeAllowed(true, { dismissed: true }, now)).toBe(false);
+    expect(nudgeAllowed(false, {}, now)).toBe(false);
   });
   it('reads the signed-in handle from X’s Profile link, or none', () => {
     document.body.innerHTML = '<nav><a data-testid="AppTabBar_Profile_Link" href="/XBToshi">Profile</a></nav>';
