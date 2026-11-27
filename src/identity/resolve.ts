@@ -88,6 +88,18 @@ export function xoKey(b: Badge): string | null {
 export const xoPostsOf = (b: Badge | null | undefined, statusId: string): string[] =>
   b?.entries.find((e) => e.source === 'xmrbio' && e.verified && e.xoPosts)?.xoPosts?.[statusId] ?? [];
 export const xoCountOf = (b: Badge | null | undefined): number => b?.entries.find((e) => e.source === 'xmrbio' && e.verified && e.xoCount)?.xoCount ?? 0;
+/**
+ * Distinct Monero senders behind the xo total, from the 16-hex prefixes xmr.bio lists for recent
+ * posts. The `xo_count` itself is lifetime and may include older senders; this is the best count the
+ * signed directory carries today, and it is shown as “N xos from M people”.
+ */
+export const xoPeopleOf = (b: Badge | null | undefined): number => {
+  const xoPosts = b?.entries.find((e) => e.source === 'xmrbio' && e.verified && e.xoPosts)?.xoPosts;
+  if (!xoPosts) return 0;
+  const people = new Set<string>();
+  for (const senders of Object.values(xoPosts)) for (const sender of senders) people.add(sender);
+  return people.size;
+};
 
 export const withoutSelf = (b: Badge): Badge => (b.entries.some((e) => e.source === 'xself') ? mergeBadge(b.handle, b.entries.filter((e) => e.source !== 'xself')) : b);
 

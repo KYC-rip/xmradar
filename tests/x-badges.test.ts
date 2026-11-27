@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fakeBrowser } from 'wxt/testing/fake-browser';
 import { startBadges } from '../src/entrypoints/content/x-badges';
-import type { Badge } from '../src/identity/resolve';
+import { xoPeopleOf, type Badge } from '../src/identity/resolve';
 import { directoryStatusItem, myHandleItem, xClaimsChangedItem, xmrSettingsItem } from '../src/settings';
 
 const send = vi.hoisted(() => vi.fn());
@@ -29,6 +29,17 @@ const totals = { verified: '0.004', verifiedTippers: 1, verifying: '0', claimed:
 // the fixture tweet's own figure: different from the profile total, so a mix-up shows
 const postTotals = { ...totals, verified: '0', verifiedTippers: 0, claimed: '0.0016', claimedTippers: 1 };
 const STATUS = '2113662765525282909';
+
+describe('xo people', () => {
+  it('counts distinct senders across the recent posts', () => {
+    const withXos = (xoPosts: Record<string, string[]>) =>
+      ({ ...badge, entries: [{ ...entry, source: 'xmrbio', verified: true, xoCount: 10, xoPosts }] }) as unknown as Badge;
+    expect(xoPeopleOf(withXos({ a: ['07a384724320edd3'], b: ['07a384724320edd3'] }))).toBe(1);
+    expect(xoPeopleOf(withXos({ a: ['07a384724320edd3'], b: ['7dc18ff0eec57770', 'c'.repeat(16)] }))).toBe(3);
+    expect(xoPeopleOf(withXos({}))).toBe(0);
+    expect(xoPeopleOf(badge)).toBe(0);
+  });
+});
 
 describe('badges on X', () => {
   let invalidate: (() => void)[] = [];

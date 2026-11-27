@@ -2,7 +2,7 @@ import type { ContentScriptContext } from 'wxt/utils/content-script-context';
 import { badgeLook, mountBadge, type BadgeLook } from '../../identity/badge-look';
 import { PendingQueue } from '../../identity/bucket';
 import { normalizeHandle } from '../../identity/envelope';
-import { xapEntry, xoCountOf, xoKey, xoPostsOf, type Badge } from '../../identity/resolve';
+import { xapEntry, xoCountOf, xoKey, xoPeopleOf, xoPostsOf, type Badge } from '../../identity/resolve';
 import { clearForeignRing, postAvatar, profileAvatar, removeRings, removeRingsFor, RING_ATTR, setRing } from './x-xo-ring';
 import { articleViewSlot, hoverCardSlot, notificationSlots, pinnedPost, profileClaimScope, profileHeader, profileSlot, quotedTweetSlots, tweetSlot, userCellSlot, type AnyBadgeSlot, type BadgeSlot } from '../../identity/x-handle';
 import { emptyClaim, parseClaim, type ClaimPlace } from '../../identity/xclaims';
@@ -50,6 +50,7 @@ export function startBadges(ctx: ContentScriptContext) {
   // xo rings and counts (PLAN-XORINGS): from the directory, on unless switched off
   let rings = true;
   const xoShown = (b: Badge | null | undefined) => (rings ? xoCountOf(b) : 0);
+  const xoPeopleShown = (b: Badge | null | undefined) => (rings ? xoPeopleOf(b) : 0);
   // others' posts' counts from xmr.bio (PLAN-XOPOSTS): the same switch
   const xoPublic = (b: Badge | null | undefined, statusId: string) => (rings ? xoPostsOf(b, statusId) : []);
   const removeAll = () => {
@@ -268,7 +269,7 @@ export function startBadges(ctx: ContentScriptContext) {
     if (!slot.anchor) return;
     const host = document.createElement(HOST_TAG);
     host.dataset.key = slot.key;
-    const btn = mountBadge(host, look, slot.handle, xoShown(badge));
+    const btn = mountBadge(host, look, slot.handle, xoShown(badge), xoPeopleShown(badge));
     btn.addEventListener('click', (e) => {
       // the tweet itself is a link; don't let X navigate
       e.preventDefault();

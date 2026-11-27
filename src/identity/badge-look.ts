@@ -127,7 +127,7 @@ function styleRoot(root: ShadowRoot) {
 }
 
 /** The badge element: a button on X, a plain span for previews (they sit inside a radio's label). */
-export function buildBadge(doc: Document, look: BadgeLook, handle: string | null, xo = 0): HTMLElement {
+export function buildBadge(doc: Document, look: BadgeLook, handle: string | null, xo = 0, xoPeople = 0): HTMLElement {
   const { icon, label } = badgeLook({ badgeIcon: look.icon, badgeLabel: look.label });
   const el = doc.createElement(handle === null ? 'span' : 'button');
   el.className = ['badge', label ? 'pill' : 'round', icon !== 'none' ? `icon ${icon}` : '', handle === null ? 'preview' : ''].filter(Boolean).join(' ');
@@ -145,7 +145,8 @@ export function buildBadge(doc: Document, look: BadgeLook, handle: string | null
     el.setAttribute('aria-hidden', 'true');
   } else {
     (el as HTMLButtonElement).type = 'button';
-    const xos = xo > 0 ? `. ${xo} xo${xo === 1 ? '' : 's'} from Monero people (counted by xmr.bio, every 10 minutes)` : '';
+    const people = xoPeople > 0 ? ` from ${xoPeople} ${xoPeople === 1 ? 'person' : 'people'}` : ' from Monero people';
+    const xos = xo > 0 ? `. ${xo} xo${xo === 1 ? '' : 's'}${people} (counted by xmr.bio, every 10 minutes)` : '';
     el.setAttribute('aria-label', `Accepts Monero — tip @${handle}${xos}`);
     el.title = `Accepts Monero — tip @${handle}${xos}`;
   }
@@ -153,10 +154,10 @@ export function buildBadge(doc: Document, look: BadgeLook, handle: string | null
 }
 
 /** Puts the badge in a closed shadow root on `host`; returns the badge element. */
-export function mountBadge(host: HTMLElement, look: BadgeLook, handle: string | null, xo = 0): HTMLElement {
+export function mountBadge(host: HTMLElement, look: BadgeLook, handle: string | null, xo = 0, xoPeople = 0): HTMLElement {
   const root = host.attachShadow({ mode: 'closed' });
   styleRoot(root);
-  const el = buildBadge(host.ownerDocument, look, handle, xo);
+  const el = buildBadge(host.ownerDocument, look, handle, xo, xoPeople);
   root.append(el);
   return el;
 }

@@ -59,6 +59,19 @@ describe('buildBadge', () => {
       expect(fills).toEqual(icon === 'mono' ? ['currentColor', 'currentColor'] : ['#fff', '#f36e36', '#575757']);
     } else expect(svg).toBeNull();
   });
+  it('the tooltip says how many people gave the xos', () => {
+    const el = buildBadge(document, { icon: 'mono', label: true }, 'XBToshi', 10, 1);
+    expect(el.getAttribute('aria-label')).toContain('10 xos from 1 person');
+    expect(el.title).toContain('10 xos from 1 person');
+    expect(el.title).not.toContain('from Monero people');
+
+    const two = buildBadge(document, { icon: 'mono', label: true }, 'XBToshi', 9, 2);
+    expect(two.title).toContain('9 xos from 2 people');
+
+    // no sender data in the directory: keep the old wording instead of “from 0 people”
+    const unknown = buildBadge(document, { icon: 'mono', label: true }, 'XBToshi', 10, 0);
+    expect(unknown.title).toContain('10 xos from Monero people');
+  });
   it('previews are plain, hidden spans', () => {
     const el = buildBadge(document, { icon: 'mono', label: true }, null);
     expect(el.localName).toBe('span');
