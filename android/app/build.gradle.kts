@@ -15,6 +15,8 @@ val computedVersionCode = semverParts[0] * 10_000_000 + semverParts[1] * 100_000
 
 // Exact pinned Mozilla GeckoView release (matching Firefox 140+ MV3 requirement, API 36 / AGP 8.9 compatible).
 val geckoviewVersion = "151.0.20260608154138"
+// Release builds ship arm64-v8a. Local x86_64 emulator builds pass -PgeckoAbi=x86_64; no other value changes.
+val geckoAbi = (findProperty("geckoAbi") as String?) ?: "arm64-v8a"
 
 val extensionSourceDir = rootProject.file("../output/firefox-mv3")
 val extensionAssetsDir = file("src/main/assets/xmradar")
@@ -155,7 +157,7 @@ tasks.named("preBuild") {
 }
 
 dependencies {
-    implementation("org.mozilla.geckoview:geckoview-arm64-v8a:$geckoviewVersion")
+    implementation("org.mozilla.geckoview:geckoview-$geckoAbi:$geckoviewVersion")
     implementation("androidx.core:core-ktx:1.15.0")
     implementation("androidx.appcompat:appcompat:1.7.0")
     implementation("androidx.activity:activity-ktx:1.10.1")

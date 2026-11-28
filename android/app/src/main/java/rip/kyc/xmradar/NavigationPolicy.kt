@@ -25,6 +25,8 @@ object NavigationPolicy {
     }
 
     private val X_HOSTS = setOf("x.com", "twitter.com", "twimg.com")
+    /** X pages only (no twimg assets); used to validate external deep links and shares. */
+    private val X_PAGE_HOSTS = setOf("x.com", "twitter.com")
     private val X_AUTH_HOSTS = setOf(
         "accounts.google.com",
         "appleid.apple.com",
@@ -49,6 +51,19 @@ object NavigationPolicy {
         if (!matchesDomain(host, X_HOSTS)) return false
         val path = (u.rawPath ?: "").lowercase()
         return X_AUTH_PATH_PREFIXES.any { path.startsWith(it) }
+    }
+
+    /**
+     * True for a plain https X page URL with no userinfo and the default port.
+     * External intents are filtered through this before they reach the X compartment.
+     */
+    fun isXWebUrl(raw: String?): Boolean {
+        val u = parseUri(raw?.trim() ?: return false) ?: return false
+        if (u.scheme?.lowercase() != "https") return false
+        if (!u.rawUserInfo.isNullOrEmpty()) return false
+        if (u.port != -1 && u.port != 443) return false
+        val host = u.host?.lowercase()?.trimEnd('.') ?: return false
+        return matchesDomain(host, X_PAGE_HOSTS)
     }
 
     /** True when the X tab navigated to a normal (non-login) X page, so auth-flow hosts must close. */

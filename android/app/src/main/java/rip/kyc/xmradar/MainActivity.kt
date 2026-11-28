@@ -260,6 +260,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     private var pendingNotificationTap: NotificationBridge.ActiveNotification? = null
+    /** Validated X URL from a share/deep link, opened once the X tab exists. */
+    private var pendingExternalUrl: String? = null
     private val pendingNotifPermCallbacks = mutableListOf<(Boolean) -> Unit>()
     private val pendingOriginNotifResults = mutableMapOf<String, MutableList<GeckoResult<Int>>>()
     private val activeDialogs = mutableListOf<Dialog>()
@@ -382,6 +384,23 @@ class MainActivity : AppCompatActivity() {
         return NotificationRegistry.takeIfTokenMatches(id, token)
     }
 
+    /**
+     * Validates external entry points before they reach the X compartment:
+     * ACTION_VIEW with an https X link or `xmradar://open?url=...`, and ACTION_SEND text/plain.
+     */
+    private fun extractExternalLink(intent: Intent?): String? {
+        if (intent == null) return null
+        return when (intent.action) {
+            Intent.ACTION_VIEW -> ExternalLink.fromViewUri(intent.dataString).also {
+                Log.i(TAG, if (it != null) "Accepted external view link" else "Rejected external view link")
+            }
+            Intent.ACTION_SEND -> ExternalLink.fromSharedText(intent.getCharSequenceExtra(Intent.EXTRA_TEXT)).also {
+                Log.i(TAG, if (it != null) "Accepted shared X link" else "Rejected shared text (no X link)")
+            }
+            else -> null
+        }
+    }
+
     private fun dispatchNotificationTap(active: NotificationBridge.ActiveNotification) {
         when (active.target.compartment) {
             Compartment.X -> openOrFocusCompartment(Compartment.X, X_HOME_URL)
@@ -401,10 +420,21 @@ class MainActivity : AppCompatActivity() {
         currentActivity = this
         // Consume verified in-process notification taps before scrubbing external intent data.
         pendingNotificationTap = extractNotificationTap(intent)
+        // Deep links and shares are validated (https + X hosts only) before they may load.
+        // Only a fresh launch consumes them: a recreated Activity keeps the original Intent,
+        // and re-opening the link would undo wherever the user had navigated since.
+        val freshLaunch = savedInstanceState == null
+        pendingExternalUrl = if (freshLaunch) extractExternalLink(intent) else null
+        val sharedText = intent?.takeIf { freshLaunch && it.action == Intent.ACTION_SEND }
+            ?.getCharSequenceExtra(Intent.EXTRA_TEXT)
+        val rejectedShare = pendingExternalUrl == null && !sharedText.isNullOrBlank()
         // Security: never honor arbitrary external data/URLs pushed into MainActivity via Intent.
         intent?.data = null
 
         setContentView(R.layout.activity_main)
+        if (rejectedShare) {
+            Toast.makeText(this, R.string.external_link_not_x, Toast.LENGTH_LONG).show()
+        }
         createNotificationChannels()
         registerScreenUnlockReceiver()
         bindViews()
@@ -434,6 +464,8 @@ class MainActivity : AppCompatActivity() {
                 pendingNotificationTap = null
                 dispatchNotificationTap(tap)
             }
+            // A share/deep link that arrived while the Activity was being recreated.
+            if (pendingExternalUrl != null) openOrFocusCompartment(Compartment.X, X_HOME_URL)
         } else {
             installOrEnsureExtension(rt)
         }
@@ -490,6 +522,9 @@ class MainActivity : AppCompatActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         val tap = extractNotificationTap(intent)
+        val link = extractExternalLink(intent)
+        val rejectedShare = intent.action == Intent.ACTION_SEND && link == null &&
+            !intent.getCharSequenceExtra(Intent.EXTRA_TEXT).isNullOrBlank()
         // Ignore external intents pushing URLs into our trusted session.
         intent.data = null
         if (tap != null) {
@@ -498,6 +533,12 @@ class MainActivity : AppCompatActivity() {
             } else {
                 dispatchNotificationTap(tap)
             }
+        }
+        if (link != null) {
+            pendingExternalUrl = link
+            if (tabs.isNotEmpty()) openOrFocusCompartment(Compartment.X, X_HOME_URL)
+        } else if (rejectedShare) {
+            Toast.makeText(this, R.string.external_link_not_x, Toast.LENGTH_LONG).show()
         }
     }
 
@@ -1121,7 +1162,7 @@ class MainActivity : AppCompatActivity() {
 
         val launchXIfNeeded = {
             runOnUiThread {
-                if (tabs.isEmpty()) {
+                if (tabs.isEmpty() || pendingExternalUrl != null) {
                     openOrFocusCompartment(Compartment.X, X_HOME_URL)
                 }
                 pendingNotificationTap?.let { tap ->
@@ -1703,13 +1744,18 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun openOrFocusCompartment(compartment: Compartment, defaultUrl: String) {
+        // A share/deep link waiting at startup replaces the X landing page.
+        val externalUrl = if (compartment == Compartment.X) pendingExternalUrl else null
+        if (compartment == Compartment.X) pendingExternalUrl = null
+        if (externalUrl != null) Log.i(TAG, "Opening external X link: $externalUrl")
         val existing = tabs.lastOrNull { it.compartment == compartment }
         if (existing != null) {
             focusTab(existing)
+            if (externalUrl != null) existing.session.loadUri(externalUrl)
             return
         }
         val entry = createTab(compartment, openImmediately = true)
-        entry.session.loadUri(defaultUrl)
+        entry.session.loadUri(externalUrl ?: defaultUrl)
     }
 
     private fun openExtensionUi(page: String) {

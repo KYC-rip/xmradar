@@ -42,4 +42,6 @@
     <string name="monero_no_wallet">No Monero wallet app installed to open monero: links.</string>
     <string name="external_no_browser">No external browser installed to open this link.</string>
     <string name="ext_loading">Starting XMRadar extension…</string>
+    <string name="open_in_xmradar">Open in XMRadar</string>
+    <string name="external_link_not_x">Only x.com or twitter.com links open in XMRadar.</string>
 </resources>

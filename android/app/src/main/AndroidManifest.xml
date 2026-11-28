@@ -39,6 +39,39 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+
+            <!-- Share sheet: "Open in XMRadar" for a post link. MainActivity validates text/plain,
+                 accepts only x.com / twitter.com URLs, and ignores everything else. -->
+            <intent-filter android:label="@string/open_in_xmradar">
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+
+            <!-- Explicit "Open with XMRadar" for X web links. Android 12+ only routes taps here
+                 automatically with verified App Links, which x.com cannot do for us, so this mainly
+                 serves explicit chooser picks, adb, and launchers. The share target above is the
+                 reliable path; the xmradar:// scheme below is for apps that construct links. -->
+            <intent-filter android:label="@string/open_in_xmradar">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="x.com" />
+                <data android:scheme="https" android:host="www.x.com" />
+                <data android:scheme="https" android:host="mobile.x.com" />
+                <data android:scheme="https" android:host="twitter.com" />
+                <data android:scheme="https" android:host="www.twitter.com" />
+                <data android:scheme="https" android:host="mobile.twitter.com" />
+                <data android:scheme="https" android:host="m.twitter.com" />
+            </intent-filter>
+
+            <!-- xmradar://open?url=<percent-encoded https X URL> -->
+            <intent-filter android:label="@string/open_in_xmradar">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="xmradar" android:host="open" />
+            </intent-filter>
         </activity>
 
         <receiver
